@@ -1,0 +1,31 @@
+{
+  "name": "verify-nuxt",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "build": "nuxt build"
+  },
+  "dependencies": {
+    "@pinia/colada": "^1.4.8",
+    "@pinia/colada-nuxt": "^1.2.0",
+    "@pinia/nuxt": "^1.0.3",
+    "@tresjs/cientos": "^5.9.3",
+    "@tresjs/core": "^5.9.3",
+    "@types/three": "^0.186.0",
+    "@vue/devtools-api": "^8.0.0",
+    "@vueuse/core": "^15.0.0",
+    "axios": "^1.20.0",
+    "gsap": "^3.15.0",
+    "nuxt": "^4.6.0",
+    "pinia": "^4.1.0",
+    "three": "^0.186.1",
+    "vue": "^3.5.41",
+    "zod": "^4.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vue-tsc": "^3.0.0"
+  }
+}

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Validate marketplace and plugin manifests
+        run: |
+          claude plugin validate .
+          claude plugin validate ./plugins/frontend-architect
+      - name: Check SKILL.md frontmatter
+        run: |
+          for f in plugins/frontend-architect/skills/*/SKILL.md; do
+            head -1 "$f" | grep -q '^---$' || { echo "missing frontmatter: $f"; exit 1; }
+            grep -q '^name: ' "$f" && grep -q '^description: ' "$f" || { echo "name/description missing: $f"; exit 1; }
+            lines=$(wc -l < "$f"); [ "$lines" -le 500 ] || { echo "$f has $lines lines (max 500)"; exit 1; }
+          done
+
+  verify-examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Install verification projects
+        run: |
+          cd verification
+          for p in vue react next creative; do (cd $p && npm install --no-audit --no-fund); done
+          (cd nuxt && pnpm install)
+      - name: Install nginx
+        run: sudo apt-get update && sudo apt-get install -y nginx
+      - name: Run all verifications
+        run: ./verification/run-all.sh

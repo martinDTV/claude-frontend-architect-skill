@@ -1,0 +1,21 @@
+{
+  "name": "frontend-architect",
+  "owner": {
+    "name": "Martín De La Torre",
+    "url": "https://github.com/martinDTV"
+  },
+  "metadata": {
+    "description": "Right-sized architecture, state, API layers, UI, motion and 3D guidance for Nuxt and Next.js.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "frontend-architect",
+      "source": "./plugins/frontend-architect",
+      "description": "Two skills and a read-only reviewer agent for Nuxt/Vue and Next.js/React: architecture stages, folder structure, state (Pinia, Pinia Colada, Zustand, TanStack Query), API layers (Axios, fetch), microfrontends, design systems, accessibility, security, performance, GSAP and Three.js.",
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": ["nuxt", "vue", "nextjs", "react", "frontend", "architecture", "pinia", "axios", "microfrontends", "gsap", "threejs"]
+    }
+  ]
+}

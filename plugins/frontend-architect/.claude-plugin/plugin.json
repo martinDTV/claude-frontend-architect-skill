@@ -1,0 +1,13 @@
+{
+  "name": "frontend-architect",
+  "version": "1.0.0",
+  "description": "Two skills and a read-only reviewer agent for Nuxt/Vue and Next.js/React: architecture stages, folder structure, state (Pinia, Pinia Colada, Zustand, TanStack Query), API layers (Axios, fetch), microfrontends, design systems, accessibility, security, performance, GSAP and Three.js.",
+  "author": {
+    "name": "Martín De La Torre",
+    "url": "https://github.com/martinDTV"
+  },
+  "homepage": "https://github.com/martinDTV/claude-frontend-architect-skill",
+  "repository": "https://github.com/martinDTV/claude-frontend-architect-skill",
+  "license": "MIT",
+  "keywords": ["nuxt", "vue", "nextjs", "react", "frontend", "architecture", "pinia", "axios", "microfrontends", "gsap", "threejs"]
+}

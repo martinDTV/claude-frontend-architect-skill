@@ -1,0 +1,16 @@
+node_modules/
+.nuxt/
+.output/
+.next/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+plugins/frontend-architect/evals/results/
+# generated from the references by verification/extract.mjs
+verification/vue/src/
+verification/react/src/
+verification/creative/src/
+verification/next/src/
+verification/nuxt/app/
+verification/nuxt/nuxt.config.ts
