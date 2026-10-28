@@ -6,6 +6,9 @@
 - Stages and the signals that move a project between them
 - Patterns: when to use and when not
 - Design principles applied pragmatically
+- Modular monolith by default
+- DDD and Clean Architecture in the frontend
+- Related decisions
 - ADRs
 
 ## Decision principles
@@ -83,6 +86,27 @@ See `microfrontends.md`. Requires independent teams owning separate business are
 - **KISS / YAGNI**: no layer, abstraction or library for a requirement nobody has stated.
 - **Design by contract**: types at compile time plus runtime validation at the boundaries (API responses, URL params, storage, `postMessage`).
 - **High cohesion, low coupling**: a feature's files change together; features talk through public entry points only.
+
+## Modular monolith by default
+
+Between stage 1 and stage 4 there is a long, productive plateau: **one application whose business modules have enforced boundaries** (core → shell → modules, public entries, dependency rules). Most enterprise frontends between 20k and 200k lines belong there and never need to leave. The full pattern, its Nuxt and Next.js specifics, the enforcement tooling and an incremental migration plan are in `modular-monolith.md`. The plugin's audit scripts (`domain-deps.mjs`, `contracts-check.mjs`, `state-audit.mjs`) measure whether a codebase is actually there or only looks like it ("stage 1.5": grouped by folder, no boundary enforced).
+
+Signals that a project is at stage 1.5 rather than 1: no `index.ts` per module, flat auto-imported composables named after domains, a layout or middleware calling domain code, one types file imported by every domain.
+
+## DDD and Clean Architecture in the frontend
+
+Apply domain-driven design vocabulary (bounded contexts, ubiquitous language, aggregates) when the frontend **holds business rules**: pricing and discounts computed client-side, scheduling constraints, eligibility, offline-first editors that must stay consistent without the server. Then a feature earns a pure `domain/` layer (stage 2), ports for its data sources and tests without a browser.
+
+Do not apply it when the frontend **displays and submits** what the backend decides, which is most screens of most products: the "domain" would be DTO mappers, the "use cases" one-line service calls, and every screen would pay for files that never change independently. Bounded contexts still matter at that scale, but as module boundaries (`modular-monolith.md`), not as layers inside each module.
+
+Clean/hexagonal architecture follows the same rule: dependency direction (UI → application → domain, infrastructure behind ports) is valuable where there is a domain to protect; elsewhere it is ceremony. A frontend can have two or three stage-2 features inside an otherwise stage-1 application, and that is the expected shape, not an inconsistency.
+
+## Related decisions
+
+- Per-route rendering, caching and hydration cost: `rendering-strategies.md`.
+- Every expensive decision in one format (context, alternatives, costs, benefits, risks, anti-patterns, adoption conditions, review triggers): `decision-catalog.md`.
+- Composition across builds and Nuxt-specific sharing: `nuxt-layers.md`, `microfrontends.md`.
+- Modernizing what already exists before changing its structure: `legacy-modernization.md`.
 
 ## ADRs
 
