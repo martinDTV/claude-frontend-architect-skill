@@ -1,7 +1,7 @@
 // Findings model, output formats and exit codes shared by every audit script.
 // Levels: `confirmed` = the pattern is present in the code as stated (an import exists, a literal
 // key is written); `heuristic` = lexical signal worth a human look; `info` = inventory.
-export const TOOL_VERSION = '1.1.0'
+export const TOOL_VERSION = '1.2.0'
 
 export function parseArgs(argv, { booleans = [] } = {}) {
   const out = { _: [] }
@@ -23,6 +23,28 @@ export function parseArgs(argv, { booleans = [] } = {}) {
     } else out._.push(a)
   }
   return out
+}
+
+/** Engine flags shared by the graph-based tools: --engine lexical|semantic|auto, --typescript, --vue-compiler. */
+export const ENGINE_HELP = `
+  --engine <mode>      lexical | semantic | auto (default auto: semantic when the project's TypeScript
+                       compiler API is loadable, lexical otherwise; semantic fails instead of falling back)
+  --typescript <dir>   directory whose node_modules (or itself) provides typescript 5.x/6.x
+  --vue-compiler <dir> directory providing vue/compiler-sfc (for .vue files)
+  --format <f>         text | json | markdown (same as --json / --md)`
+
+export function engineOptionsFrom(args) {
+  const engine = String(args.engine ?? 'auto')
+  if (!['lexical', 'semantic', 'auto'].includes(engine)) throw new Error(`--engine must be lexical, semantic or auto (got ${engine})`)
+  return { engine, typescript: args.typescript ? String(args.typescript) : undefined, vueCompiler: args['vue-compiler'] ? String(args['vue-compiler']) : undefined }
+}
+
+/** Normalizes --format into the json/md flags the formatters use. */
+export function applyFormat(args) {
+  if (args.format === 'json') args.json = true
+  else if (args.format === 'markdown' || args.format === 'md') args.md = true
+  else if (args.format && args.format !== 'text') throw new Error(`--format must be text, json or markdown (got ${args.format})`)
+  return args
 }
 
 export function createReport(tool, project) {
@@ -73,10 +95,23 @@ function location(f) {
   return f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : ''
 }
 
+function analysisLine(report) {
+  const a = report.analysis
+  if (!a) return null
+  const parts = [`engine: ${a.engine}${a.requested && a.requested !== a.engine ? ` (requested ${a.requested})` : ''}`]
+  if (a.typescript?.version) parts.push(`typescript ${a.typescript.version} (${a.typescript.source})`)
+  if (a.vueCompiler?.version) parts.push(`vue/compiler-sfc ${a.vueCompiler.version} (${a.vueCompiler.source})`)
+  if (a.engine === 'lexical' && a.reason) parts.push(`reason: ${a.reason}`)
+  if (a.fallbacks?.length) parts.push(`${a.fallbacks.length} file(s) fell back to lexical parsing`)
+  return parts.join(' · ')
+}
+
 export function formatText(report, { sections = [] } = {}) {
   const out = []
   out.push(`${report.tool} (frontend-architect tools ${report.version}) — ${report.framework} project at ${report.root}`)
   if (report.config) out.push(`config: ${report.config}`)
+  const al = analysisLine(report)
+  if (al) out.push(al)
   for (const [k, v] of Object.entries(report.summary)) out.push(`${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
   for (const s of sections) {
     out.push('', `## ${s.title}`)
@@ -104,6 +139,8 @@ export function formatText(report, { sections = [] } = {}) {
 export function formatMarkdown(report, { sections = [] } = {}) {
   const out = [`# ${report.tool}`, '', `Project: \`${report.root}\` (${report.framework}). Generated ${report.generatedAt}.`]
   if (report.config) out.push(`Config: \`${report.config}\`.`)
+  const al = analysisLine(report)
+  if (al) out.push(`Analysis: ${al}.`)
   if (Object.keys(report.summary).length) {
     out.push('', '## Summary', '', mdTable(['Metric', 'Value'], Object.entries(report.summary).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : v])))
   }
@@ -126,6 +163,7 @@ export function formatMarkdown(report, { sections = [] } = {}) {
  * 0 = nothing to fail on; 1 = findings matched `--fail-on` (default: confirmed); 2 = tool error.
  */
 export function finish(report, args, options = {}) {
+  applyFormat(args)
   const failOn = args['fail-on'] ?? 'confirmed'
   const output = args.json ? JSON.stringify(report, null, 2) : args.md ? formatMarkdown(report, options) : formatText(report, options)
   if (!args.quiet) process.stdout.write(`${output}\n`)

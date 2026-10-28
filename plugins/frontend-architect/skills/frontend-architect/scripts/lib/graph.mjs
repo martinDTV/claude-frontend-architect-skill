@@ -10,6 +10,7 @@
 // package-provided when the metadata says so); they never become edges.
 import { statSync } from 'node:fs'
 import { readText } from './fs.mjs'
+import { buildSemanticGraph, createSemanticHost } from './semantic/graph-semantic.mjs'
 import { classify, mergedCatalog, resolveImport, sourceFiles } from './project.mjs'
 import {
   countLines, declaredNames, extractExports, extractImports, findIdentifier, identifiers, splitSfc, stripCode,
@@ -54,6 +55,8 @@ export function analyzeFile(project, { abs, rel }) {
     classification: classify(project, rel),
     unknown: [],
     packageUses: [],
+    engine: 'lexical',
+    semantic: null,
   }
   info.importedNames = new Set(info.imports.flatMap((i) => i.names))
   return info
@@ -82,7 +85,27 @@ function lineAt(text, index) {
  * Analyzes every source file and returns { files: Map<rel, info>, edges, catalog, unknown, packageUses }.
  * Edge: { from, to, via: 'import'|'auto-import'|'component', confidence, name, line, typeOnly, specifier }.
  */
-export function buildGraph(project, { autoImports = true } = {}) {
+export function buildGraph(project, { autoImports = true, engine = 'auto', typescript, vueCompiler } = {}) {
+  const requested = engine
+  if (engine !== 'lexical') {
+    const host = createSemanticHost(project, { typescript, vueCompiler })
+    if (host.available) {
+      const g = buildSemanticGraph(project, host, { autoImports, builtins: { composables: BUILTIN_COMPOSABLES, components: BUILTIN_COMPONENTS } })
+      g.analysis.requested = requested
+      return g
+    }
+    if (engine === 'semantic') throw new Error(`semantic engine requested but unavailable: ${host.typescript.reason}`)
+    const g = buildLexicalGraph(project, { autoImports })
+    g.analysis = { engine: 'lexical', requested, reason: host.typescript.reason, typescript: host.typescript, vueCompiler: host.vueCompiler, fallbacks: [], filesSemantic: 0, filesPartial: g.files.size }
+    return g
+  }
+  const g = buildLexicalGraph(project, { autoImports })
+  g.analysis = { engine: 'lexical', requested, reason: null, typescript: null, vueCompiler: null, fallbacks: [], filesSemantic: 0, filesPartial: g.files.size }
+  return g
+}
+
+/** Lexical graph (the v1.1 engine): regex-based parsing and alias resolution. */
+export function buildLexicalGraph(project, { autoImports = true } = {}) {
   const files = new Map()
   let newestSourceMtime = 0
   for (const f of sourceFiles(project)) {
@@ -111,7 +134,7 @@ export function buildGraph(project, { autoImports = true } = {}) {
     for (const imp of info.imports) {
       const target = resolveImport(project, info.rel, imp.source)
       if (!target || target === info.rel) continue
-      edges.push({ from: info.rel, to: target, via: 'import', confidence: 'verified', name: imp.names.join(', ') || imp.kind, line: imp.line, typeOnly: imp.typeOnly, specifier: imp.source })
+      edges.push({ from: info.rel, to: target, via: 'import', confidence: 'verified', kind: imp.typeOnly ? 'type' : 'runtime', importKind: imp.kind, resolution: 'lexical-alias', name: imp.names.join(', ') || imp.kind, line: imp.line, col: null, typeOnly: imp.typeOnly, specifier: imp.source })
     }
     if (!autoImports) continue
     const resolvedSymbols = new Set()
@@ -120,7 +143,7 @@ export function buildGraph(project, { autoImports = true } = {}) {
       resolvedSymbols.add(name)
       const scriptLines = findIdentifier(info.stripped, name)
       const line = scriptLines.length ? scriptLines[0] + (info.isVue ? info.scriptLine - 1 : 0) : info.templateLine || 1
-      edges.push({ from: info.rel, to: entry.file, via: 'auto-import', confidence: entry.confidence ?? 'inferred', name, line, typeOnly: false, specifier: null, kind: entry.kind })
+      edges.push({ from: info.rel, to: entry.file, via: 'auto-import', confidence: entry.confidence ?? 'inferred', kind: 'runtime', importKind: 'auto-import', resolution: entry.confidence === 'verified' ? 'nuxt-metadata' : 'lexical-catalog', name, line, col: null, typeOnly: false, specifier: null, symbolKind: entry.kind })
     }
     for (const [name, line] of composableCalls(info)) {
       if (resolvedSymbols.has(name) || info.declared.has(name) || info.importedNames.has(name) || BUILTIN_COMPOSABLES.has(name) || catalog.symbols.has(name)) continue
@@ -138,7 +161,7 @@ export function buildGraph(project, { autoImports = true } = {}) {
       const line = (lines[0] ?? 1) + (info.templateLine ? info.templateLine - 1 : 0)
       const entry = catalog.components.get(name)
       if (entry) {
-        if (entry.file !== info.rel) edges.push({ from: info.rel, to: entry.file, via: 'component', confidence: entry.confidence ?? 'inferred', name: tag, line, typeOnly: false, specifier: null })
+        if (entry.file !== info.rel) edges.push({ from: info.rel, to: entry.file, via: 'component', confidence: entry.confidence ?? 'inferred', kind: 'runtime', importKind: 'component', resolution: entry.confidence === 'verified' ? 'nuxt-metadata' : 'lexical-catalog', name: tag, line, col: null, typeOnly: false, specifier: null })
         continue
       }
       if (BUILTIN_COMPONENTS.has(name) || BUILTIN_COMPONENTS.has(tag)) continue
@@ -153,7 +176,8 @@ export function buildGraph(project, { autoImports = true } = {}) {
     }
   }
   const toList = (map) => [...map.values()].map((e) => ({ ...e, files: [...e.files].sort() })).sort((a, b) => b.files.length - a.files.length || a.name.localeCompare(b.name))
-  return { files, edges, catalog, unknown: toList(unknownByName), packageUses: toList(packageByName) }
+  for (const info of files.values()) info.engine = 'lexical'
+  return { files, edges, catalog, unknown: toList(unknownByName), packageUses: toList(packageByName), unknownImports: [], packageImports: [] }
 }
 
 /** Root directory of a module when the path follows a modules convention, else null. */
