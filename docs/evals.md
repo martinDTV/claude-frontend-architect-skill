@@ -1,6 +1,6 @@
 # Evaluation suite
 
-`plugins/frontend-architect/evals/` holds 48 cases for `claude plugin eval`. The suite exists to answer four questions: does the right skill activate (and only then), does the answer apply the references, does it refuse what should be refused, and does the reviewer use the scripts. Structure is validated offline by `verification/plugin-check.mjs`; scores exist only after a run, and a run costs money.
+`plugins/frontend-architect/evals/` holds 54 cases for `claude plugin eval` (48 through 1.1.0; cases 49–54 were added in 1.2.0 and have not been run). The suite exists to answer four questions: does the right skill activate (and only then), does the answer apply the references, does it refuse what should be refused, and does the reviewer use the scripts. Structure is validated offline by `verification/plugin-check.mjs`; scores exist only after a run, and a run costs money.
 
 ## Taxonomy
 
@@ -163,3 +163,53 @@ Two smoke invocations before the one above produced score 0 in every arm for env
 ### What is still not measured
 
 The remaining 40 cases have never been scored. The structure of every case is validated offline by `plugin-check.mjs`; nothing about their pass rates is known until someone runs `./verification/evals/run-evals.sh full` with an explicit budget (estimate from the smoke run: about 0.06 USD per case per arm with Haiku, several times more with Sonnet or Opus and the default 3 runs).
+
+## Cases added in 1.2.0 (structure validated, not run)
+
+| Case | Activation | What it checks |
+|---|---|---|
+| 49 `hidden-coupling-through-aliases` | architect | Coupling through `tsconfig` `paths` aliases that bypass a module's public entry; expects `domain-deps`/`contracts-check` evidence, not guesses |
+| 50 `nuxt-auto-import-dependency-mapping` | architect | Mapping auto-imported composables and components to domains; expects the verified/inferred/unknown distinction and `nuxt prepare` as the user's step |
+| 51 `server-only-code-reaching-client` | architect | Next.js: server-only modules and private env reachable from `'use client'` code; expects the transitive chain, not a ban on `'use client'` |
+| 52 `vue-sfc-cleanup-false-positive` | architect (say no) | A listener removed in `onBeforeUnmount` must not be reported as a leak; checks that the answer reads the code instead of trusting a lexical hit |
+| 53 `ssr-state-and-late-responses-tenant` | architect | SSR state isolation plus late responses after a tenant switch; expects identity epochs and request-scoped state |
+| 54 `public-contract-breaking-change` | architect | A breaking change in a module's public entry; expects `contracts-check --baseline` style evidence and a migration plan |
+
+They follow the 1.1 conventions (positive and negative criteria, tags in the frontmatter) and are included in the `tag` and `full` suites of `verification/evals/run-evals.sh`. No paid run was authorized for this pass, so they have no scores yet.
+
+## Case 48: activation analysis
+
+Facts from the 2026-10-28 runs: with the original prompt (concrete paths, no repository in the sandbox) Sonnet activated both skills in 1 of 2 with-plugin runs and the other run went straight to exploring the empty directory; with the clarified prompt Haiku answered in a single turn and activated neither; the single-skill cases activated the expected skill in 7 of 7 with-plugin runs. Four runs of one case, split across two prompts and two models, support an observation, not a measurement.
+
+### What belongs to the activation mechanism
+
+- A skill fires only when the model decides, during a turn, to call the `Skill` tool. A prompt the model believes it can answer directly in one turn gets no skill call at all; that is exactly what the clarified-prompt Haiku run did (1 turn, rubric PASS, no `Skill` call). Smaller models take this shortcut more often than larger ones.
+- A combined prompt needs two independent decisions, one per skill, so its activation rate is bounded by the product of the two; a case tagged `activation:both` will always show a lower rate than the single-skill cases even with identical descriptions.
+- When the model starts by exploring the filesystem (the original prompt invited it), the turn budget is spent on `Glob`/`Read` and on asking for the code; skills are evaluated later or never. The 2 of 4 figure therefore mixes a prompt-design defect (now fixed) with the one-turn shortcut.
+- The indicator grader measures the `Skill` tool call, not whether reference content shaped the answer; an answer that passes the rubric without the call (the Haiku run) says the rubric is satisfiable from general knowledge for this case, not that the skills were useless.
+
+### What belongs to the descriptions
+
+The prompt's trigger terms against each description (quotes are verbatim fragments of the current frontmatter):
+
+| Prompt term | `frontend-architect` description | `creative-frontend` description |
+|---|---|---|
+| "Restructure" / "module" | "whenever the user creates, structures, refactors, audits or reviews a Nuxt, Vue, Next.js or React project, including folder layout and module boundaries" | not covered (correct: structure is the architect's) |
+| "dashboard" | "data tables, charts" (dashboards are not named) | "dashboards and dense enterprise screens" |
+| "look professional" | not covered (correct) | "\"make it look professional\" or \"less generic\"" |
+| "all-day desktop use" | not covered | not covered literally; "dense enterprise screens" is the closest |
+| "filters live in component state", "fetched into a Pinia store" | "where state lives (Pinia, Pinia Colada, useState, …)" | not covered (correct) |
+| "Nuxt 4 + Nuxt UI" | "Nuxt" named | "Nuxt/Vue" named |
+
+Both descriptions contain literal triggers for their half of the prompt; the architect's description does not name "dashboard" and neither names desktop-use density, which is a small gap, not an absence. Nothing in the descriptions explains why a run would skip both skills; the one-turn shortcut does.
+
+### What cannot be concluded from four runs
+
+Not the activation rate of the combined prompt for any model, not whether the gap is description-related, not whether Sonnet is systematically better than Haiku at double activation, and not whether the rubric is too lenient in general (one case, one judge model). Two of the four runs also used the old prompt, so they are not comparable with the other two.
+
+### Proposed A/B for v1.3 (not run; needs an explicit budget)
+
+- Design: case 48 only, clarified prompt, `--runs 10` per arm, agent `sonnet` and a second series with `haiku`, judge haiku, two variants: current descriptions versus descriptions with one clarifying addition each (`frontend-architect`: "dashboards and back-office modules" next to "data tables, charts"; `creative-frontend`: "dense screens used all day" next to "dense enterprise screens"). Four series of 10 runs; estimated cost from this pass: about 0.06 USD per Haiku run and 0.2–0.4 USD per Sonnet run, so roughly 10–15 USD total.
+- Read-outs: activation of each skill (indicator graders), rubric pass rate, turns, and how often the model answered in one turn without any tool call.
+- Legitimate tweak: adding missing trigger vocabulary that describes real use (the two fragments above). Illegitimate: copying rubric phrases into the descriptions, instructing the skill to always fire, or loosening the rubric so one-turn answers pass; those raise scores without improving routing or answers and are out of bounds for this suite.
+- Decision rule: adopt a description change only if it improves activation on case 48 without changing the out-of-scope results (cases 44–47 must stay at zero activation in both arms).
