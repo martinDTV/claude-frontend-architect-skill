@@ -3,10 +3,12 @@
 # Requires: Node 22+, pnpm 10 (for Nuxt), python3 (mock backend), nginx (optional).
 set -euo pipefail
 cd "$(dirname "$0")"
+node plugin-check.mjs
+node --test tools/*.test.mjs
 node extract.mjs
 (cd vue && npx tsc --noEmit && npx vitest run)
 (cd react && npx tsc --noEmit)
-(cd creative && npx tsc --noEmit)
+(cd creative && npx tsc --noEmit && npx vitest run)
 (cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build)
 (cd nuxt && npx nuxt prepare && npx nuxt typecheck)
 ./ssr-test/run.sh

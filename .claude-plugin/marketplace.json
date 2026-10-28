@@ -5,17 +5,34 @@
     "url": "https://github.com/martinDTV"
   },
   "metadata": {
-    "description": "Right-sized architecture, state, API layers, UI, motion and 3D guidance for Nuxt and Next.js.",
-    "version": "1.0.0"
+    "description": "Right-sized architecture, state, API layers, UI, visual design, motion, 3D and read-only audit tooling for Nuxt and Next.js.",
+    "version": "1.1.0"
   },
   "plugins": [
     {
       "name": "frontend-architect",
       "source": "./plugins/frontend-architect",
-      "description": "Two skills and a read-only reviewer agent for Nuxt/Vue and Next.js/React: architecture stages, folder structure, state (Pinia, Pinia Colada, Zustand, TanStack Query), API layers (Axios, fetch), microfrontends, design systems, accessibility, security, performance, GSAP and Three.js.",
-      "version": "1.0.0",
+      "description": "Two skills, a read-only reviewer agent and seven audit scripts for Nuxt/Vue and Next.js/React: architecture stages and modular monoliths, rendering strategies, state (Pinia, Pinia Colada, Zustand, TanStack Query), API layers (Axios, fetch), TypeScript, forms, tables, charts, i18n, auth and multi-tenancy, security, performance, observability, deployment, testing, legacy modernization, microfrontends and Nuxt Layers, visual design, GSAP and Three.js.",
+      "version": "1.1.0",
       "category": "development",
-      "keywords": ["nuxt", "vue", "nextjs", "react", "frontend", "architecture", "pinia", "axios", "microfrontends", "gsap", "threejs"]
+      "keywords": [
+        "nuxt",
+        "vue",
+        "nextjs",
+        "react",
+        "frontend",
+        "architecture",
+        "pinia",
+        "axios",
+        "microfrontends",
+        "gsap",
+        "threejs",
+        "audit",
+        "typescript",
+        "security",
+        "performance",
+        "design"
+      ]
     }
   ]
 }

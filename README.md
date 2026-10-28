@@ -1,6 +1,6 @@
 # claude-frontend-architect-skill
 
-A Claude Code plugin that makes Claude design **right-sized** Nuxt/Vue and Next.js/React frontends: it evaluates requirements first, then chooses the folder structure, state management, API layer, component library, rendering strategy, and when (rarely) a monorepo or microfrontends are justified. It also covers accessible, performant motion and 3D (GSAP, Three.js, TresJS, React Three Fiber).
+A Claude Code plugin that makes Claude design, audit and refactor **right-sized** Nuxt/Vue and Next.js/React frontends: it evaluates requirements first, then chooses the folder structure and module boundaries, rendering strategy, state management, API layer, component library, and when (rarely) a monorepo or microfrontends are justified. It covers TypeScript strictness, forms, tables, charts, i18n, authentication and multi-tenancy, security, performance, observability, deployment, testing and legacy modernization, plus visual design, accessible motion and 3D (GSAP, Three.js, TresJS, React Three Fiber). It ships read-only audit scripts that measure what reading cannot: domain coupling through Nuxt auto-imports, state placement, unguarded routes, leaks and bundle budgets.
 
 > 🇲🇽 **Español** más abajo.
 
@@ -10,12 +10,15 @@ Companion to [claude-fastapi-architect-skill](https://github.com/martinDTV/claud
 
 Most frontend skills teach an API. Few teach **when not to use it**. This plugin encodes decisions:
 
-- **Five architecture stages** (simple app → feature-based → layered features → monorepo → microfrontends) with explicit signals and anti-signals.
-- **State classified before choosing tools**: server data in a query cache (Pinia Colada, TanStack Query), client state in small stores, navigation state in the URL, never copies of server data in Pinia/Zustand.
+- **Five architecture stages** (simple app → feature-based → layered features → monorepo → microfrontends) with explicit signals and anti-signals, and a modular monolith as the enterprise default.
+- **One decision format** (context, alternatives, costs, benefits, risks, anti-patterns, adoption conditions, review triggers) so different references never give incompatible advice on the same problem.
+- **State classified before choosing tools**: server data in a query cache (Pinia Colada, TanStack Query), client state in small stores, navigation state in the URL, tenant in every key, never copies of server data in Pinia/Zustand.
 - **API layer by layers**: HTTP instance → domain services → query cache → composables/hooks → components. Axios only with a concrete reason; `$fetch` in Nuxt and `fetch` in Next.js server code by default.
-- **SSR safety**: per-request clients, no module-level user state, hydration rules.
-- **Microfrontends only with criteria**, route-based composition by default, and a verified warning that `@module-federation/nextjs-mf` does not support the App Router or Next 16.
-- **Verified code**: every example marked `@verify` is extracted and compiled, tested or built in CI against current versions (see [Validation](#validation)).
+- **SSR safety**: per-request clients, no module-level user state, hydration rules; `ssr: false` apps treated as legitimate, with their blockers named.
+- **Authorization in the backend**: guards, hidden buttons and literal role checks are UX; Server Functions, Route Handlers and Nitro routes validate and authorize.
+- **Microfrontends only with criteria**, route-based composition by default, verified status of Module Federation for Next.js (`@module-federation/nextjs-mf`: Pages Router, Next ≤ 15) and Nuxt 4 (`@module-federation/nuxt`: 0.x beta, Nuxt ≥ 4.5.1).
+- **Measured audits**: seven scripts with findings tagged confirmed, heuristic or info; reports separate what is demonstrated, measured and hypothetical.
+- **Verified code**: every example marked `@verify` is extracted and compiled, tested or built in CI against current versions; the scripts have their own test suites (see [Validation](#validation)).
 
 ## Install
 
@@ -26,20 +29,21 @@ Most frontend skills teach an API. Few teach **when not to use it**. This plugin
 
 From the terminal: `claude plugin marketplace add martinDTV/claude-frontend-architect-skill` and `claude plugin install frontend-architect@frontend-architect`. Use `--scope project` to install for one project only.
 
-Manual install (skills only, no agent): copy `plugins/frontend-architect/skills/frontend-architect` and `plugins/frontend-architect/skills/creative-frontend` into `~/.claude/skills/` or `.claude/skills/`.
+Manual install (skills only, no agent): copy `plugins/frontend-architect/skills/frontend-architect` and `plugins/frontend-architect/skills/creative-frontend` into `~/.claude/skills/` or `.claude/skills/`. The audit scripts travel inside the `frontend-architect` skill folder.
 
-Requirements: Claude Code with plugin support. The skills are framework guidance; they install nothing into your project.
+Requirements: Claude Code with plugin support; Node 18+ for the audit scripts (no npm dependencies). The skills are framework guidance; they install nothing into your project.
 
 ## What's inside
 
 | Component | Purpose |
 |---|---|
-| Skill `frontend-architect` | Architecture stages, folder structure, Nuxt 4, Next.js 16, Vue Composition API, React, state (Pinia, Pinia Colada, Zustand, TanStack Query, Redux Toolkit, Jotai), persistence, API clients and Axios, microfrontends and monorepos, component libraries, design systems, accessibility, security, performance, testing |
-| Skill `creative-frontend` | Tool selection for motion and 3D, GSAP, Lenis and scroll, Three.js, TresJS, React Three Fiber, shaders and WebGPU, with reduced-motion and cleanup rules |
-| Agent `frontend-reviewer` | Read-only audit of an existing codebase with prioritized findings |
-| `evals/` | 20 scenarios with positive and negative criteria for `claude plugin eval` |
+| Skill `frontend-architect` | Architecture stages and modular monoliths, decision catalog, folder structure, rendering strategies, Nuxt 4 and Nuxt Layers, Next.js 16, Vue Composition API, React, TypeScript, state (Pinia, Pinia Colada, Zustand, TanStack Query, Redux Toolkit, Jotai), realtime and cache sync, persistence, API clients and Axios, error handling, forms, data tables, charts, i18n, auth, sessions and multi-tenancy, security, accessibility, performance, observability, deployment, testing and adversarial scenarios, legacy modernization, auditing, microfrontends and monorepos, component libraries, design systems |
+| Skill `creative-frontend` | Visual design (art direction, typography, color, layout and responsive, enterprise UI patterns), motion design, tool selection for motion and 3D, GSAP, Lenis and scroll, Three.js, TresJS, React Three Fiber, shaders and WebGPU, animation lifecycle with leak tests |
+| Agent `frontend-reviewer` | Read-only audit of an existing codebase: runs the scripts, verifies leads in the code, returns prioritized findings by evidence tier |
+| Audit scripts (7) | `domain-deps`, `component-complexity`, `state-audit`, `routes-audit`, `leak-patterns`, `contracts-check`, `bundle-budget` (see below) |
+| `evals/` | 43 scenarios with positive and negative criteria for `claude plugin eval`, including "say no" cases and a scaffolded audit |
 
-The skills load progressively: `SKILL.md` holds the decision workflow; 27 reference files load only when a task needs them.
+The skills load progressively: `SKILL.md` holds the workflow and a task → references selection table; 49 reference files load only when a task needs them; scripts and assets are read only when used.
 
 ## Usage
 
@@ -47,32 +51,51 @@ Skills activate from the task. Examples:
 
 - "Structure a new Nuxt 4 app for a clinic: patients, appointments, billing."
 - "Do we need Pinia here, or is useFetch enough?"
+- "Our 80k-line Nuxt app has flat auto-imported composables. Should we split it into microfrontends?"
 - "Set up Axios with services per domain and Pinia Colada, SSR-safe."
-- "Our Next.js app is big. Should we use microfrontends?"
-- "Integrate our Nuxt storefront and Next.js dashboard under one domain."
+- "Users get redirected to login three times when the session expires mid-page. Fix the design and test it."
+- "Design the visual direction for this landing page without making it look generic."
 - "Build a GSAP scroll hero that respects reduced motion."
-- "Review this frontend and tell me what to fix first." (delegates to `frontend-reviewer`)
+- "Review this frontend and tell me what to fix first." (delegates to `frontend-reviewer`, which runs the scripts)
+
+## Audit scripts
+
+Read-only, dependency-free Node scripts inside the skill (`plugins/frontend-architect/skills/frontend-architect/scripts/`, documented in its `README.md`). Claude runs them when the skill or the agent calls for it; you can run them yourself:
+
+```bash
+S=~/.claude/plugins/.../frontend-architect/skills/frontend-architect/scripts   # or the path of a manual install
+node $S/domain-deps.mjs . --suggest-config > .frontend-audit.json  # group folders into business domains, then:
+node $S/domain-deps.mjs . --md          # domain matrix incl. Nuxt auto-imports and template components
+node $S/component-complexity.mjs .      # pages and components with too many responsibilities
+node $S/state-audit.mjs .               # stores, useState keys, tokens in storage, module-level SSR state
+node $S/routes-audit.mjs .              # guards, Server Actions and handlers without visible authorization
+node $S/leak-patterns.mjs .             # listeners, intervals, observers, GSAP, Three.js without cleanup
+node $S/contracts-check.mjs .           # module entry points, internal imports, cycles, breaking changes
+node $S/bundle-budget.mjs .             # gzip sizes of an existing build against budgets (never builds)
+```
+
+Every script supports `--json`, `--md` and `--fail-on confirmed|any|none`. Findings are **confirmed** (the pattern is present as stated), **heuristic** (lexical signal to verify) or **info**. The tools do not parse TypeScript, do not execute code and do not prove security; they tell a reviewer where to look first.
 
 ## Validation
 
-`verification/` extracts every `@verify` code block from the references into real projects and checks them. Results of the last run (2026-10-17):
+`verification/` extracts every `@verify` code block from the references into real projects and checks them, tests the scripts against fixture apps, and checks the plugin's own consistency. Results of the last run (2026-10-28, see [`docs/validation-report.md`](docs/validation-report.md)):
 
 | Check | Result |
 |---|---|
-| Vue + Pinia 4 + Pinia Colada + Axios: `tsc --strict` + Vitest (HTTP errors, single-flight 401 refresh, contract validation, stores, persistence) | Pass, 6/6 tests |
+| `plugin-check.mjs`: manifests in sync, references linked both ways, cross-references, scripts documented and executable, 43 eval cases well formed | Pass |
+| Audit scripts: `node --test verification/tools/*.test.mjs` against a Nuxt 4 and a Next.js 16 fixture app | Pass (see report for counts) |
+| Scripts on real code: an 80k-line Nuxt 4 app and a Nuxt 4 + Pinia Colada app, read-only | Each tool under one second; findings reviewed in the report |
+| Vue + Pinia 4 + Pinia Colada + Axios: `tsc --strict` + Vitest | Pass (see report) |
 | React + TanStack Query + Zustand + React Three Fiber: `tsc --strict` | Pass |
-| Next.js 16.4: `tsc` + `next build` (Server Functions, `proxy.ts`, Route Handler) | Pass |
-| Nuxt 4.6: `nuxt typecheck` (plugins, composables, generic SFC, TresJS 5) | Pass; negative test confirms errors are detected |
-| Nuxt SSR runtime, 40 concurrent requests from 20 sessions | Documented pattern: 0 leaks. Module-level client anti-pattern: 38/40 responses leaked another user's data |
-| GSAP, Lenis, Three.js, shaders: `tsc --strict` | Pass |
-| dependency-cruiser boundary rules | Detects both intentional violations, allows public imports |
-| Nginx reverse-proxy example | `nginx -t` passes |
+| Next.js 16.4: `tsc` + `next build` | Pass |
+| Nuxt 4.6: `nuxt typecheck` | Pass |
+| Nuxt SSR runtime, 40 concurrent requests from 20 sessions | Documented pattern: 0 leaks |
+| Creative: `tsc --strict` + Vitest (Three.js disposal, cleanup stack) | Pass (see report) |
+| dependency-cruiser boundary rules; Nginx reverse-proxy example | Pass; `nginx -t` not run on this machine (no nginx) |
 | `claude plugin validate` (marketplace and plugin) | Pass |
-| `claude plugin eval` (20 scenarios) | **Not run here** (requires an authenticated Claude account); suite structure accepted by the CLI |
+| `claude plugin eval` (43 scenarios) | **Not run here** (requires an authenticated Claude account); suite structure validated by `plugin-check.mjs` |
 
-Full report: [`docs/validation-report.md`](docs/validation-report.md). Run it yourself: `./verification/run-all.sh` (Node 22, pnpm 10, python3; nginx optional).
-
-Run the evals with your account: `claude plugin eval ./plugins/frontend-architect` (each run consumes tokens).
+Run it yourself: `./verification/run-all.sh` (Node 22, pnpm 10, python3; nginx optional). Run the evals with your account: `claude plugin eval ./plugins/frontend-architect` (each run consumes tokens; the audit case needs `--allow-tools Bash`).
 
 ## Updating
 
@@ -82,6 +105,8 @@ After installing: `claude plugin update frontend-architect@frontend-architect`. 
 
 - **Skill does not activate**: mention the framework explicitly ("in this Nuxt app…"), or check `/plugin` shows the plugin enabled.
 - **Advice does not match your version**: the skill checks `node_modules` versions; if you are on Nuxt 3 or Next 15, say so. Version-specific notes are in each reference.
+- **A script reports many "unclassified" files**: flat Nuxt composables cannot be mapped to domains by convention; run `domain-deps.mjs --suggest-config` and group the folders in `.frontend-audit.json`.
+- **`bundle-budget` exits 2**: it needs an existing production build; it never builds. For Nuxt 4 node-server builds it reads `client.precomputed.mjs`; otherwise pass `--html` with a saved rendered page.
 - **Corporate Claude Code blocks marketplaces**: use the manual install.
 - **`npm install` fails on Nuxt 4.6 + Pinia 4 with `reading 'edgesOut'`**: an npm 10 resolver bug; use pnpm.
 
@@ -97,7 +122,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Research notes and complementary skills:
 
 ## 🇲🇽 Español
 
-Plugin para Claude Code que hace que Claude diseñe frontends en Nuxt/Vue y Next.js/React **a la medida del proyecto**. Primero evalúa requisitos y después decide estructura de carpetas, manejo de estado, capa de APIs, librería de componentes, renderizado y, solo si se justifica, monorepo o microfrontends. Incluye además animación y 3D accesibles y eficientes: GSAP, Three.js, TresJS y React Three Fiber.
+Plugin para Claude Code que hace que Claude diseñe, audite y refactorice frontends en Nuxt/Vue y Next.js/React **a la medida del proyecto**. Primero evalúa requisitos y después decide estructura de carpetas y límites entre módulos, estrategia de renderizado, manejo de estado, capa de APIs, librería de componentes y, solo si se justifica, monorepo o microfrontends. Cubre TypeScript estricto, formularios, tablas, gráficas, i18n, autenticación y multi-tenancy, seguridad, rendimiento, observabilidad, despliegue, pruebas y modernización de código heredado, además de diseño visual, animación accesible y 3D (GSAP, Three.js, TresJS, React Three Fiber).
 
 **Instalación:**
 
@@ -106,4 +131,4 @@ Plugin para Claude Code que hace que Claude diseñe frontends en Nuxt/Vue y Next
 /plugin install frontend-architect@frontend-architect
 ```
 
-**Qué la hace diferente:** clasifica el estado antes de elegir herramientas, usa Axios solo con una razón concreta y crea un cliente HTTP por request en SSR. Los microfrontends son el último recurso, y todo el código de ejemplo está compilado y probado en CI. En una prueba real con 40 requests concurrentes, el patrón documentado tuvo 0 fugas de datos entre usuarios, mientras que el antipatrón común filtró datos en 38 de 40 respuestas.
+**Qué la hace diferente:** clasifica el estado antes de elegir herramientas, usa Axios solo con una razón concreta y crea un cliente HTTP por request en SSR. Los microfrontends son el último recurso (y los microservicios del backend no son un motivo). Incluye siete scripts de auditoría de solo lectura que miden lo que la lectura no ve: el acoplamiento entre dominios a través de los auto-imports de Nuxt, la ubicación del estado, rutas sin guard, fugas de recursos y presupuestos de bundle; cada hallazgo se etiqueta como confirmado, heurístico o informativo. Todo el código de ejemplo está compilado y probado en CI. En una prueba real con 40 requests concurrentes, el patrón documentado tuvo 0 fugas de datos entre usuarios, mientras que el antipatrón común filtró datos en 38 de 40 respuestas.

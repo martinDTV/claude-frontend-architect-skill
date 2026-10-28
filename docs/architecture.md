@@ -8,32 +8,42 @@ plugins/frontend-architect/
 ├── .claude-plugin/plugin.json
 ├── skills/
 │   ├── frontend-architect/               core skill
-│   │   ├── SKILL.md                      workflow, stages, core decisions, rules, reference index
-│   │   ├── references/ (21 files)        loaded on demand
-│   │   └── assets/adr-template.md
-│   └── creative-frontend/                motion and 3D skill
+│   │   ├── SKILL.md                      workflow, stages, reference selection, core decisions, rules, scripts index, reference index
+│   │   ├── references/ (38 files)        capability packs loaded on demand
+│   │   ├── scripts/ (7 tools + lib/)     read-only audit scripts, dependency-free Node
+│   │   └── assets/                       ADR template, audit report template, audit config example, Lighthouse budgets
+│   └── creative-frontend/                visual design, motion and 3D skill
 │       ├── SKILL.md
-│       └── references/ (6 files)
-├── agents/frontend-reviewer.md           read-only audit subagent
-└── evals/ (20 scenarios)                 claude plugin eval suite
-verification/                             compiles and tests the documented code (not installed)
+│       └── references/ (11 files)
+├── agents/frontend-reviewer.md           read-only audit subagent (runs the scripts)
+└── evals/ (43 scenarios)                 claude plugin eval suite; one scaffolded audit case
+verification/                             compiles and tests the documented code and the scripts (not installed)
+├── extract.mjs, vue/ react/ next/ nuxt/ creative/   @verify extraction and real compilers
+├── ssr-test/                             SSR cross-request leak test
+├── depcruise/                            boundary rules fixture
+├── tools/                                node:test suites and two fixture apps for the scripts
+└── plugin-check.mjs                      manifests, references, scripts and evals consistency
 docs/                                     research, this document, validation report
 ```
 
 ## Decisions
 
-**Two skills instead of one or many.** Architecture/state/API work and motion/3D work have different triggers and audiences. Separating them keeps the core skill's description precise and avoids loading creative guidance into architecture tasks. A separate `architecture-review` skill was rejected: reviewing is the same knowledge applied differently, so it is a workflow in the core skill plus an agent.
+**Two skills, still.** The 1.1 evolution added twenty new capability areas and the question of splitting into many skills came back. The answer stayed: a skill is a *trigger surface* (its description is always in context; several overlapping descriptions make selection ambiguous and double the loaded context), while a capability is a *knowledge module* loaded on demand. So the new areas are reference files behind a selection table in `SKILL.md` ("Selecting references": task → two or three files), and `creative-frontend` widened from motion/3D to visual design because visual judgment has a distinct trigger ("make it look professional") and a distinct audience. `disable-model-invocation` was considered for a user-only audit skill and rejected: Claude Code accepts the field but does not enforce it for plugin skills, and the audit is a workflow of the core skill plus the agent.
 
-**One agent instead of fifteen.** The brief proposed many specialist agents (nuxt-expert, pinia-specialist, gsap-specialist…). Agents are justified when they need **context isolation** or **different tool permissions**. Only the reviewer qualifies: audits read many files (isolation keeps the main conversation clean) and must not edit (restricted tools). Specialist agents would duplicate reference content and create conflicting instructions; their knowledge lives in references instead.
+**Boundaries between the two skills.** `frontend-architect` owns structure: tokens architecture, component libraries, accessibility rules, performance budgets, charts engineering. `creative-frontend` owns judgment: art direction, typography, color, layout craft, density, enterprise UI patterns, motion design, animation lifecycle, 3D. Each file points to the other skill by bare filename where the topics meet (`design-systems.md` ↔ `visual-design.md`; `data-tables.md` ↔ `enterprise-ui-patterns.md`; `charts.md` is the single home for charts with both engineering and encoding rules).
 
-**Progressive disclosure.** `SKILL.md` files hold the workflow and the decisions that apply to most tasks (~140 lines each). References are one level deep, each with a "read when" entry in the index.
+**One agent, now with instruments.** `frontend-reviewer` keeps context isolation and read-only tools; it runs the audit scripts first and must report evidence tiers (demonstrated in code, measured by a tool or command, hypothetical). Specialist agents were again rejected: they would duplicate reference content and produce conflicting instructions.
 
-**Companion skills, not copies.** Official GSAP skills, Emil Kowalski's motion skills, Vue/Nuxt and Vercel skills are recommended for deep API detail. No third-party content is redistributed.
+**Scripts inside the skill, tests outside the plugin.** Executable tools live in `skills/frontend-architect/scripts/` so they ship with the plugin and are referenced as `${CLAUDE_SKILL_DIR}/scripts/<tool>.mjs` (works for marketplace installs and for manual copies of the skill). They are dependency-free Node ESM, read-only by construction (one explicit `--write-baseline` exception), and lexical: they never parse TypeScript, so every output is tagged `confirmed`, `heuristic` or `info`. Their tests and fixture apps live in `verification/tools/` and are not installed. The motivating gap was real: an audit of an 80k-line Nuxt app had to build its domain dependency graph by hand because dependency-cruiser cannot see auto-imported composables or components used in templates; `domain-deps.mjs` resolves both using Nuxt's own naming rules.
 
-**Verified examples.** Code examples carry `@verify` markers; `verification/extract.mjs` writes them into five projects (vue, react, next, nuxt, creative) that run real compilers, tests and builds. This caught real errors during development (an invented Three.js API, an undeclared VueUse dependency).
+**Progressive disclosure, three layers.** `SKILL.md` (~5k tokens on invoke) holds the workflow, stage table, the task → references selection table, core decisions, rules and the script index. References are one level deep with a `Contents` section when longer than 100 lines. Scripts, assets and the README of the scripts are read only when used.
 
-**Evals in the native format.** `claude plugin eval` discovers `evals/<case>/prompt.md` and `graders/*.md`, runs with and without the plugin, and scores with an LLM judge. Every case includes negative criteria to catch over-engineering and unsafe patterns.
+**Decision format.** Big decisions follow one format (context → alternatives → costs → benefits → risks → anti-patterns → adoption conditions → review triggers) in `decision-catalog.md`, and ADRs reuse it. This is what keeps different references from giving incompatible advice on the same problem: the catalog is the single place where trade-offs are stated, and topic references point to it.
+
+**Verified examples.** Code examples carry `@verify` markers; `verification/extract.mjs` writes them into five projects (vue, react, next, nuxt, creative) that run real compilers, tests and builds. New in 1.1: Vitest in the creative project (Three.js disposal and cleanup-stack tests), concurrency and tenant tests in the vue project, and `plugin-check.mjs`, which fails when a reference is unlinked, a cross-reference is dangling, a script is undocumented or not executable, manifests disagree, or an eval case is malformed (things `claude plugin validate` does not check).
+
+**Evals in the native format.** `claude plugin eval` discovers `evals/<case>/prompt.md` + `graders/*.md` and `case.yaml`. Every case includes negative criteria; the 1.1 cases add explicit "say no" scenarios (no microfrontends with `@module-federation/nuxt`, no Redux for four pages, no Three.js for a tilt effect, no framework migration for performance) and one scaffolded audit case that requires `--allow-tools Bash` to exercise the scripts.
 
 ## Namespacing and activation
 
-Skills activate from their `description` when a task matches. Plugin components are namespaced by the plugin name (`frontend-architect`). The agent is selected by Claude from its description or can be requested explicitly ("use the frontend-reviewer agent").
+Skills activate from their `description` when a task matches. Plugin components are namespaced by the plugin name (`frontend-architect`). The agent is selected by Claude from its description or can be requested explicitly ("use the frontend-reviewer agent"). Scripts are never loaded into context; Claude runs them through Bash when the skill or the agent says so.

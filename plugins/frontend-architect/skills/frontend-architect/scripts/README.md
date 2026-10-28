@@ -71,4 +71,4 @@ node $S/contracts-check.mjs . --write-baseline audit/contracts.json
 pnpm build && node $S/bundle-budget.mjs . --md > audit/bundle.md
 ```
 
-Tests and fixtures live in the repository under `verification/tools/` (not shipped with the plugin): `node --test verification/tools/`.
+Tests and fixtures live in the repository under `verification/tools/` (not shipped with the plugin): `node --test verification/tools/*.test.mjs`.
