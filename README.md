@@ -41,9 +41,9 @@ Requirements: Claude Code with plugin support; Node 18+ for the audit scripts (n
 | Skill `creative-frontend` | Visual design (art direction, typography, color, layout and responsive, enterprise UI patterns), motion design, tool selection for motion and 3D, GSAP, Lenis and scroll, Three.js, TresJS, React Three Fiber, shaders and WebGPU, animation lifecycle with leak tests |
 | Agent `frontend-reviewer` | Read-only audit of an existing codebase: runs the scripts, verifies leads in the code, returns prioritized findings by evidence tier |
 | Audit scripts (7) | `domain-deps`, `component-complexity`, `state-audit`, `routes-audit`, `leak-patterns`, `contracts-check`, `bundle-budget` (see below) |
-| `evals/` | 43 scenarios with positive and negative criteria for `claude plugin eval`, including "say no" cases and a scaffolded audit |
+| `evals/` | 48 scenarios with positive and negative criteria for `claude plugin eval`, tagged by expected activation and domain, including "say no" cases, out-of-scope cases that must not activate the skills, and a scaffolded audit |
 
-The skills load progressively: `SKILL.md` holds the workflow and a task → references selection table; 49 reference files load only when a task needs them; scripts and assets are read only when used.
+The skills load progressively: `SKILL.md` holds the workflow, a task → references selection table and the defaults (about 2.7k tokens when it fires, measured with `claude plugin details`); `references/index.md` is the full catalog; 49 reference files load only when a task needs them; scripts and assets are read only when used.
 
 ## Usage
 
@@ -82,20 +82,20 @@ Every script supports `--json`, `--md` and `--fail-on confirmed|any|none`. Findi
 
 | Check | Result |
 |---|---|
-| `plugin-check.mjs`: manifests in sync, references linked both ways, cross-references, scripts documented and executable, 43 eval cases well formed | Pass |
-| Audit scripts: `node --test verification/tools/*.test.mjs` against a Nuxt 4 and a Next.js 16 fixture app | Pass (see report for counts) |
-| Scripts on real code: an 80k-line Nuxt 4 app and a Nuxt 4 + Pinia Colada app, read-only | Each tool under one second; findings reviewed in the report |
-| Vue + Pinia 4 + Pinia Colada + Axios: `tsc --strict` + Vitest | Pass (see report) |
+| `plugin-check.mjs`: manifests in sync, references linked (directly or via `references/index.md`), cross-references, scripts documented and executable, 48 eval cases well formed | Pass |
+| Audit scripts: `node --test verification/tools/*.test.mjs` against a Nuxt 4 and a Next.js 16 fixture app, including `.nuxt` metadata (verified vs inferred edges) and large piped JSON | 31/31 |
+| Scripts on real code: an 80k-line Nuxt 4 app (all 1,488 edges verified through its `.nuxt` metadata) and a Nuxt 4 + Pinia Colada app, read-only | Findings with file and line in the report |
+| Vue + Pinia 4 + Pinia Colada + Axios: `tsc --strict` + Vitest (HTTP, refresh, contracts, stores, race guards, tenant scope, logout protocol, identity epochs, public serialization) | 31/31 |
 | React + TanStack Query + Zustand + React Three Fiber: `tsc --strict` | Pass |
 | Next.js 16.4: `tsc` + `next build` | Pass |
-| Nuxt 4.6: `nuxt typecheck` | Pass |
-| Nuxt SSR runtime, 40 concurrent requests from 20 sessions | Documented pattern: 0 leaks |
+| Nuxt 4.6: `nuxt prepare` + `check-layers.mjs` (the `layers/base` example registers its component, composable and typed config) + `nuxt typecheck` | Pass, 7/7 |
+| Nuxt SSR runtime, 40 concurrent requests from 20 sessions over 3 tenants with slow responses | Documented pattern: 0 leaks; negative control leaks 39/40 (the test is not vacuous) |
 | Creative: `tsc --strict` + Vitest (Three.js disposal, cleanup stack) | Pass (see report) |
 | dependency-cruiser boundary rules; Nginx reverse-proxy example | Pass; `nginx -t` not run on this machine (no nginx) |
 | `claude plugin validate` (marketplace and plugin) | Pass |
-| `claude plugin eval` (43 scenarios) | **Not run here** (requires an authenticated Claude account); suite structure validated by `plugin-check.mjs` |
+| `claude plugin eval` (48 scenarios) | Smoke subset run under a cost ceiling (see `docs/evals.md` for scores and limits); the full suite is not run in CI |
 
-Run it yourself: `./verification/run-all.sh` (Node 22, pnpm 10, python3; nginx optional). Run the evals with your account: `claude plugin eval ./plugins/frontend-architect` (each run consumes tokens; the audit case needs `--allow-tools Bash`).
+Run it yourself: `./verification/run-all.sh` (Node 22, pnpm 10, python3; nginx optional). Run the evals with your account through `./verification/evals/run-evals.sh smoke|activation|tag <tag>|full`, which always sets a cost ceiling (details and results in [`docs/evals.md`](docs/evals.md); the audit case needs `--allow-tools Bash`).
 
 ## Updating
 

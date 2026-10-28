@@ -12,15 +12,16 @@ nuxt 4.6.x · vue 3.5.44 · pinia 4.1.0 · @pinia/colada 1.4.8 · @pinia/colada-
 | # | Check | Result |
 |---|---|---|
 | 1 | `verification/plugin-check.mjs`: manifests in sync (1.1.0), both SKILL.md frontmatters and line budgets (frontend-architect 166 lines, creative-frontend 89), 38 + 11 references linked both ways, cross-references resolvable, 7 scripts documented and executable, 63 `@verify` markers consistent, 43 eval cases well formed | Pass, 0 warnings |
-| 2 | Audit scripts: `node --test verification/tools/*.test.mjs` (domain-deps, component-complexity, state-audit, routes-audit, leak-patterns, contracts-check, bundle-budget) against the Nuxt 4 and Next.js 16 fixture apps | 23/23 pass |
-| 3 | 79 code blocks extracted from the references into 5 projects (`extract.mjs`; 58 in 1.0.0) | OK |
+| 2 | Audit scripts: `node --test verification/tools/*.test.mjs` against the Nuxt 4 and Next.js 16 fixture apps, including the `.nuxt` metadata suite (verified vs inferred edges, stale entries, package and unknown symbols), the server-data-copied-to-store rule, absolute `--config` paths and a 64 KiB+ JSON output piped through stdout | 31/31 pass (23 in the first 1.1.0 run) |
+| 3 | 90 code blocks extracted from the references into 5 projects (`extract.mjs`; 58 in 1.0.0, 79 before stabilization) | OK |
 | 4 | Vue project: `tsc` strict (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`) | Pass |
-| 5 | Vitest (vue): HTTP errors and single-flight refresh, contract validation, cart store, persisted state, plus the new UI-state union, server-error mapping, error → UI mapper, stale-response guards (`latest`, `latestOnly`, `singleFlight`), tenant-scoped state, forbidden handler | 11 files, 22/22 tests pass |
+| 5 | Vitest (vue): HTTP errors and single-flight refresh, contract validation, cart store, persisted state, UI-state union, server-error mapping, error → UI mapper, stale-response guards (`latest`, `latestOnly`, `singleFlight`), tenant-scoped state, forbidden handler, logout protocol, identity epochs (late responses dropped after logout or tenant switch), public-user serialization | 14 files, 31/31 tests pass |
 | 6 | React project: `tsc` strict (HTTP provider, TanStack Query hooks, Zustand persist with migration, R3F components) | Pass |
 | 7 | Next.js 16.4: `tsc` and `next build` (Server Function with `useActionState` and `updateTag`, HMAC webhook Route Handler, `proxy.ts`) | Pass, 5 static pages |
-| 8 | Nuxt 4.6: `nuxt prepare` + `nuxt typecheck` (Axios and `$fetch` plugins, `useApiFetch`, Pinia Colada composables, generic `UiSelect`, `UserList.vue`, TresJS 5 components) | Pass |
+| 8 | Nuxt 4.6: `nuxt prepare` + `check-layers.mjs` (7 assertions on the generated types: the `layers/base` layer registers `BaseTag`/`LazyBaseTag` and `useLayerInfo` from the layer path, `runtimeConfig.public.layerName` and the merged `app.config` are typed) + `nuxt typecheck` (Axios and `$fetch` plugins, `useApiFetch`, Pinia Colada composables, generic `UiSelect`, `UserList.vue`, TresJS 5 components, `LayerDemo.vue`) | Pass, 7/7 |
 | 9 | Creative project: `tsc` strict (GSAP context + matchMedia, Vue composable, `@gsap/react`, Lenis + ScrollTrigger, Three.js scene, ShaderMaterial, cleanup stack) + Vitest (Three.js `disposeObject` disposes every geometry, material and texture; cleanup stack runs once, newest first, isolates errors) | Pass; 2 files, 6/6 tests |
-| 10 | SSR runtime: production Nuxt build + mock backend on free ports; 40 concurrent requests from 20 sessions | Documented pattern: **40/40 correct, 0 leaks** |
+| 10 | SSR runtime: production Nuxt build + mock backend on free ports; 40 concurrent requests from 20 sessions over 3 tenants, every 7th request slowed by 1.2 s; each page must contain only its own user+tenant pair and the layer component | Documented pattern: **40/40 correct, 0 leaks, 6/6 slow requests correct, layer rendered 40/40** |
+| 10b | SSR negative control (`run.sh --negative`): the module-level-client anti-pattern is installed, rebuilt and must leak; sources restored afterwards | **39/40 responses leaked another user's data**: the test detects the bug it claims to detect |
 | 11 | dependency-cruiser rules from `folder-structure.md` on the fixture | Both intentional violations reported |
 | 12 | Nginx reverse-proxy example | **Skipped** (nginx not installed on this machine; unchanged since the 1.0.0 run that passed `nginx -t`) |
 | 13 | `claude plugin validate` (marketplace and plugin) | Pass (one informational warning: no plugin icon) |
@@ -28,7 +29,53 @@ nuxt 4.6.x · vue 3.5.44 · pinia 4.1.0 · @pinia/colada 1.4.8 · @pinia/colada-
 
 Wall time of `./verification/run-all.sh` on this machine: 28 s (dependencies pre-installed).
 
-## Audit scripts on real code (read-only)
+## Context cost of the skills (measured, not estimated)
+
+Method: the plugin installed from the local marketplace at user scope (`claude plugin marketplace add ./`, `claude plugin install frontend-architect@frontend-architect --scope user`) and `claude plugin details frontend-architect@frontend-architect` run before and after the SKILL.md restructuring of the stabilization pass, same CLI (2.1.312). `plugin-check.mjs` prints a chars/4 estimate as a secondary signal.
+
+| Component | Always-on before → after | On-invoke before → after |
+|---|---|---|
+| `frontend-architect` skill | ~250 → ~230 tokens | ~5.1k → ~2.7k tokens |
+| `creative-frontend` skill | ~210 → ~180 tokens | ~2k → ~2k tokens |
+| `frontend-reviewer` agent | ~160 → ~170 tokens | ~1.3k → ~1.3k tokens |
+| Plugin total always-on | ~623 → ~580 tokens | |
+
+What changed: the full reference catalog (38 rows) moved to `references/index.md`; `SKILL.md` keeps the workflow, the stage table, the task → references selection table, a defaults table that condenses the former "core decisions" prose, the rules and a one-paragraph list of the seven scripts. The two descriptions were shortened without removing trigger terms (`frontend-architect` 1,022 → 934 characters; `creative-frontend` 837 → 706). The chars/4 estimate of `SKILL.md` went from ~5,390 to ~2,930 tokens. Nothing was removed from the references themselves.
+
+## Field validation on real code (read-only, stabilization pass)
+
+Two local Nuxt 4 applications, not modified. Classification files lived in `/tmp`, never in the projects. Confidence is the tools' own label: **verified** = an explicit import or an auto-import resolved by the project's `.nuxt/types/imports.d.ts` / `.nuxt/components.d.ts`; **inferred** = resolved only by the lexical catalog; findings keep the level the tool assigned. Mechanism = how the dependency or defect was detected. Every row was read in the source before being listed here.
+
+**Application A: back-office panel (Nuxt 4.4, `ssr: false`, 288 source files, ~80k lines, flat auto-imported composables; `.nuxt` present from `nuxt dev`).** Classification: nine business domains grouped from the folder names (sales, pre-construction, operations, works administration, HR, administration, project hub) plus shell and shared.
+
+| Tool | Result | Confidence / level |
+|---|---|---|
+| `domain-deps` | 1,488 edges: 488 imports, 582 auto-imports, 418 template components. **All 1,488 verified** through the generated metadata (`catalogSource: nuxt-metadata+lexical`); 302 symbols and 236 components resolved; 2 unknown symbols; 30 package-provided symbols used | measured |
+| `domain-deps` | Horizontal coupling dominated by two files: `app/types/crm.ts` (25 imports from operations, 16 from works administration) and `app/composables/useCrm.ts` (9 and 5 auto-imports) — the same two files the manual audit of this app had identified as a misnamed core | verified edges; interpretation demonstrated by reading the files |
+| `domain-deps` | `shared-imports-domain` ×14, e.g. `app/composables/useApi.ts:1` imports `Paginated` from `app/types/crm.ts`; `app/composables/useFormatters.ts:1-2` imports status enums from two domain type files; `app/components/SelectorProyecto.vue:2,3,118` uses the hub composable; `app/components/MfaTarjeta.vue:2,3,21` uses administration composables; `app/components/TrendSparkline.vue:46` renders `ProgramaGraficaBase` from operations | confirmed (verified edges) |
+| `domain-deps` | `shell-depends-on-domain` ×20 (layout, middleware and shell pages using sales permissions and domain clients); `domain-cycle` ×7 between business domains; hotspots used by 7–9 domains: `app/stores/auth.ts`, `app/utils/errores.ts`, `EstadoCargando.vue`, `EstadoError.vue`, `useEstadoLista.ts`, `PaginacionBarra.vue`, `utils/texto.ts`, `useListaDatos.ts` (the de facto shared core) | confirmed / heuristic as labeled |
+| `component-complexity` | 205 components, 67,910 lines, median 245; 55 files ≥ 400 lines, largest `app/pages/organigrama/index.vue` (2,766); 8 with mixed responsibilities, 19 god templates | heuristic |
+| `state-audit` | `token-in-web-storage` at `app/stores/auth.ts:179` and `:180` (access and refresh tokens written to `localStorage`); 17 `useState` keys; 26 module-level mutable states reported as low because `ssr: false`; 3 logout paths without visible cache clearing; 1 god store | confirmed / heuristic as labeled |
+| `routes-audit` | 83 pages: 65 guarded by the `auth` middleware, 8 public by classification, 10 without any guard; one global middleware that is not an auth guard | heuristic (declared guards only) |
+| `leak-patterns` | 21 files with tracked resources; 2 candidates (an observer and a listener without visible cleanup) | heuristic |
+| `contracts-check` | 0 modules: the app has no `features/`/`modules/` layout, so there are no contracts to check yet | measured |
+| `bundle-budget` | Startup assets from `client.precomputed.mjs`: entry JS 148.2 KB gzip, entry CSS 37.4 KB, total JS 1,457.8 KB gzip, largest chunk 264.5 KB gzip | measured |
+
+**Application B: clinic SaaS panel (Nuxt 4.6, Pinia 4 + Pinia Colada + Nuxt UI, `app/features/*` with public entries, 151 files).** Classification by convention plus `coreDomains: [auth, organizations]`.
+
+| Tool | Result | Confidence / level |
+|---|---|---|
+| `domain-deps` | 473 edges, all explicit imports, all verified; `.nuxt` metadata present but older than the sources (note emitted); 1 unknown symbol, 23 package-provided | measured |
+| `domain-deps` | `shell-depends-on-domain` ×2: `app/layouts/panel.vue:6-7` imports route helpers (`agendaPath`, `patientsPath`) from two feature entries. Read: navigation links built from published path helpers, an accepted pattern; the finding is correct as a dependency and benign as a design | confirmed (verified edges); benign on reading |
+| `contracts-check` | 5 modules, 5 with `index.ts`, 0 internal imports, 311 public exports of which 200 are not imported from outside (large public surface to prune) | measured / info |
+| `routes-audit` | 16 pages, all protected by two global middlewares (`auth`, `organization`), `/app/**` client-only by route rules | heuristic |
+| `state-audit` | `token-in-web-storage` at `app/features/auth/adapters/fake.ts:80` downgraded to low: a test double for Playwright (`FAKE_SESSION_MARKER`); 13 module-level states (low, `ssr: false`); query cache detected (`@pinia/colada`) | confirmed, low |
+| `leak-patterns` | 3 candidates: 2 listeners, 1 subscription without visible cleanup | heuristic |
+| `bundle-budget` | Entry JS unknown (static `.output` without manifest or rendered HTML; `--html` accepted), entry CSS 26.5 KB gzip, total JS 379.1 KB gzip | measured |
+
+Defects fixed during this pass because of these runs: `--config` with an absolute path was joined to the project root (fixed, tested); `--json` outputs above 64 KiB were truncated when piped because the tools called `process.exit` before stdout drained (fixed in all seven tools, tested with a synthetic 600-edge project). No Next.js application exists on this machine; the Next.js paths were exercised only through the fixture and the `verification/next` harness.
+
+## Audit scripts on real code (first 1.1.0 run, read-only)
 
 Two local Nuxt 4 applications were used as smoke targets without modifying them. Numbers are what the tools printed; each tool finished in well under one second.
 
