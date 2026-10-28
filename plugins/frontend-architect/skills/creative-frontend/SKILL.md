@@ -1,14 +1,12 @@
 ---
 name: creative-frontend
-description: Visual design, motion and 3D guide for frontends built with Nuxt/Vue or Next.js/React. Use this skill whenever the user asks how an interface should look or feel, including art direction, typography, color, spacing, layout and responsive design, dashboards and dense enterprise screens, a design critique or redesign, "make it look professional / less generic", avoiding template-looking UI, dark mode decisions, and whenever the user wants animation, microinteractions, page transitions, scroll-driven or cinematic motion, GSAP or ScrollTrigger, Motion, Lenis smooth scroll, Three.js, TresJS, React Three Fiber, WebGL, WebGPU, shaders or GLSL, particles, 3D models (GLTF/GLB), Lottie, Rive or Spline, an award-style landing page, or creative coding. Also use it when the user asks whether an effect, an animation or 3D is needed at all.
+description: Visual design, motion and 3D guide for Nuxt/Vue and Next.js/React frontends. Use it whenever the user asks how an interface should look or feel: art direction, typography, color, spacing, layout and responsive design, dashboards and dense enterprise screens, a design critique or redesign, "make it look professional" or "less generic", dark mode decisions; and whenever the user wants animation, microinteractions, page transitions, scroll-driven or cinematic motion, GSAP or ScrollTrigger, Motion, Lenis, Three.js, TresJS, React Three Fiber, WebGL, WebGPU, shaders, particles, 3D models, Lottie, Rive or Spline, an award-style landing page, or asks whether an effect, an animation or 3D is needed at all.
 license: MIT
 ---
 
 # Creative Frontend
 
-Decide how a product looks and moves so that the result fits the product, the user and the context, and stays fast, accessible and maintainable. Ambition is welcome; decoration without purpose, a heavy engine for an effect CSS can do, or a marketing aesthetic on an operational tool are not.
-
-This skill owns visual judgment, motion and 3D. Structure, tokens architecture, component libraries, accessibility rules and performance budgets live in the `frontend-architect` skill (`design-systems.md`, `component-libraries.md`, `accessibility.md`, `performance.md`); read them from there instead of restating them.
+Decide how a product looks and moves so the result fits the product, the user and the context, and stays fast, accessible and maintainable. Ambition is welcome; decoration without purpose, a heavy engine for an effect CSS can do, or a marketing aesthetic on an operational tool are not. This skill owns visual judgment, motion and 3D; structure, token architecture, component libraries, accessibility rules and performance budgets live in the `frontend-architect` skill (`design-systems.md`, `component-libraries.md`, `accessibility.md`, `performance.md`).
 
 ## Visual design workflow
 

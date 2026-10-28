@@ -8,8 +8,8 @@ plugins/frontend-architect/
 ├── .claude-plugin/plugin.json
 ├── skills/
 │   ├── frontend-architect/               core skill
-│   │   ├── SKILL.md                      workflow, stages, reference selection, core decisions, rules, scripts index, reference index
-│   │   ├── references/ (38 files)        capability packs loaded on demand
+│   │   ├── SKILL.md                      workflow, stages, task → references selection, defaults, rules, scripts (~2.7k tokens on invoke)
+│   │   ├── references/ (38 files + index.md)  capability packs loaded on demand; index.md is the full catalog
 │   │   ├── scripts/ (7 tools + lib/)     read-only audit scripts, dependency-free Node
 │   │   └── assets/                       ADR template, audit report template, audit config example, Lighthouse budgets
 │   └── creative-frontend/                visual design, motion and 3D skill
@@ -36,7 +36,7 @@ docs/                                     research, this document, validation re
 
 **Scripts inside the skill, tests outside the plugin.** Executable tools live in `skills/frontend-architect/scripts/` so they ship with the plugin and are referenced as `${CLAUDE_SKILL_DIR}/scripts/<tool>.mjs` (works for marketplace installs and for manual copies of the skill). They are dependency-free Node ESM, read-only by construction (one explicit `--write-baseline` exception), and lexical: they never parse TypeScript, so every output is tagged `confirmed`, `heuristic` or `info`. Their tests and fixture apps live in `verification/tools/` and are not installed. The motivating gap was real: an audit of an 80k-line Nuxt app had to build its domain dependency graph by hand because dependency-cruiser cannot see auto-imported composables or components used in templates; `domain-deps.mjs` resolves both using Nuxt's own naming rules.
 
-**Progressive disclosure, three layers.** `SKILL.md` (~5k tokens on invoke) holds the workflow, stage table, the task → references selection table, core decisions, rules and the script index. References are one level deep with a `Contents` section when longer than 100 lines. Scripts, assets and the README of the scripts are read only when used.
+**Progressive disclosure, four layers.** The frontmatter description (~230 tokens, always on) is the trigger. `SKILL.md` (~2.7k tokens on invoke, measured with `claude plugin details`; it was ~5.1k before the full reference catalog moved out) holds the workflow, the stage table, a task → references selection table, a defaults table, the rules and the one-paragraph script list. `references/index.md` is the complete catalog with a "read when" line per file, read only when a task fits no selection row. References are one level deep with a `Contents` section when longer than 100 lines; scripts, assets and the scripts' README are read only when used. `plugin-check.mjs` accepts references linked from the index as linked.
 
 **Decision format.** Big decisions follow one format (context → alternatives → costs → benefits → risks → anti-patterns → adoption conditions → review triggers) in `decision-catalog.md`, and ADRs reuse it. This is what keeps different references from giving incompatible advice on the same problem: the catalog is the single place where trade-offs are stated, and topic references point to it.
 

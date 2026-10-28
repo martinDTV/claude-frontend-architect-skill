@@ -46,6 +46,7 @@ const skillsDir = join(pluginDir, 'skills')
 const skillNames = readdirSync(skillsDir).filter((d) => statSync(join(skillsDir, d)).isDirectory())
 for (const name of ['frontend-architect', 'creative-frontend']) if (!skillNames.includes(name)) fail(`public skill ${name} is missing`)
 const verifyMarkers = new Map()
+const allSkillRefs = () => new Set(skillNames.flatMap((s) => (existsSync(join(skillsDir, s, 'references')) ? readdirSync(join(skillsDir, s, 'references')) : [])))
 for (const name of skillNames) {
   const dir = join(skillsDir, name)
   const skillFile = join(dir, 'SKILL.md')
@@ -63,15 +64,28 @@ for (const name of skillNames) {
   }
   const lines = text.split('\n').length
   if (lines > 500) fail(`${name}: SKILL.md has ${lines} lines (max 500)`)
-  else pass(`${name}: SKILL.md ${lines} lines, ~${Math.round(text.length / 4)} tokens`)
+  else {
+    const fmLen = (/^---\n[\s\S]*?\n---/.exec(text)?.[0].length ?? 0)
+    pass(`${name}: SKILL.md ${lines} lines, ~${Math.round(text.length / 4)} tokens (chars/4; frontmatter ~${Math.round(fmLen / 4)}, body ~${Math.round((text.length - fmLen) / 4)})`)
+  }
 
-  // references linked both ways
+  // references linked both ways: from SKILL.md directly, or from an index file that SKILL.md links
+  // (SKILL.md also names files bare, as `nuxt.md`, inside its selection table)
   const refDir = join(dir, 'references')
   const refs = existsSync(refDir) ? readdirSync(refDir).filter((f) => f.endsWith('.md')) : []
   const linked = new Set([...text.matchAll(/references\/([a-z0-9-]+\.md)/g)].map((m) => m[1]))
-  for (const l of linked) if (!refs.includes(l)) fail(`${name}: SKILL.md links references/${l} which does not exist`)
-  for (const r of refs) if (!linked.has(r)) fail(`${name}: references/${r} is not linked from SKILL.md`)
-  if (refs.length) pass(`${name}: ${refs.length} references, all linked`)
+  for (const m of text.matchAll(/`([a-z0-9-]+\.md)`/g)) if (refs.includes(m[1])) linked.add(m[1])
+  const indexes = [...linked].filter((l) => /index/.test(l) && refs.includes(l))
+  for (const idx of indexes) {
+    const body = read(join(refDir, idx))
+    for (const m of body.matchAll(/references\/([a-z0-9-]+\.md)/g)) linked.add(m[1])
+  }
+  for (const l of linked) if (!refs.includes(l)) fail(`${name}: SKILL.md or its index links references/${l} which does not exist`)
+  for (const r of refs) if (!linked.has(r)) fail(`${name}: references/${r} is not linked from SKILL.md${indexes.length ? ` or ${indexes.join(', ')}` : ''}`)
+  if (refs.length) pass(`${name}: ${refs.length} references, all linked${indexes.length ? ` (via ${indexes.join(', ')})` : ''}`)
+  // selection table must only name existing references
+  const selectionNames = [...text.matchAll(/`([a-z0-9-]+\.md)`/g)].map((m) => m[1]).filter((n) => !/^(README|CHANGELOG|CONTRIBUTING|SKILL)\.md$/i.test(n))
+  for (const n of selectionNames) if (!refs.includes(n) && !allSkillRefs().has(n)) fail(`${name}: SKILL.md mentions \`${n}\` which is not a reference file`)
   // cross references inside references: `x.md` must exist in this skill (or be qualified with a path)
   const allRefNames = new Set(skillNames.flatMap((s) => (existsSync(join(skillsDir, s, 'references')) ? readdirSync(join(skillsDir, s, 'references')) : [])))
   for (const r of refs) {
