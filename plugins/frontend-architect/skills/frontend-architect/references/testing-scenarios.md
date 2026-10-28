@@ -9,6 +9,7 @@
 - Performance and security
 - Concurrency and races (tested guards)
 - Sessions, permissions and tenants
+- SSR isolation and session security: what this repository runs
 - Rendering: hydration and SSR
 - Failure recovery and resources
 - Fixtures and factories
@@ -231,6 +232,24 @@ describe('permission revoked mid-session', () => {
 ```
 
 The implementations under test (`scoped-state.ts`, `forbidden-handler.ts`) are in `auth-session-tenant.md`.
+
+## SSR isolation and session security: what this repository runs
+
+Each row names the test or harness in this repository that covers the scenario, and what a pass does **not** prove. Passing all of them is evidence of isolation discipline, not a security certification: they do not replace a threat model, a penetration test or the backend's own authorization tests.
+
+| Scenario | Covered by | A pass proves | A pass does not prove |
+|---|---|---|---|
+| **Concurrent identities on SSR (positive)** | `verification/ssr-test/run.sh`: production Nuxt build, 40 concurrent requests from 20 sessions over 3 tenants, some deliberately slow; every page must contain only its own `user`+`tenant` pair | The documented per-request client pattern does not leak between requests under interleaving | Anything about other server code paths (Nitro routes, server middleware, module-level caches you added later) |
+| **Negative control** | `run.sh --negative`: installs the module-level client anti-pattern and must observe leaks | The test can detect the bug it claims to detect (a passing positive run is not vacuous) | That every leak pattern looks like this one |
+| **Tenant switch** | `scoped-state.test.ts` (`TenantScopedState`), `identity-scope.test.ts` | Switching clears scoped state and stale work is dropped | That every store, query key and socket in the app is registered with the scope |
+| **Late responses** | `identity-scope.test.ts`, `latest.test.ts`, `latest-only.test.ts` | Responses resolving after logout, tenant switch or a newer call never apply | That imperative code in the app uses the guards |
+| **Singleton and module caches** | `state-audit.mjs` (`module-level-mutable-state`, `module-level-http-client-mutable-auth`), SSR negative control | The pattern is detectable and demonstrably leaks under SSR | That `ssr: false` apps are safe forever (they are safe until SSR, a layer or a Nitro route reuses the code) |
+| **Accidental shared state** | `domain-deps.mjs` (`raw-state-key-shared` in `state-audit.mjs`), `logout-protocol.test.ts` (module caches step) | Shared keys are listed; logout clears registered caches | That unregistered caches are cleared (a full reload after logout is the honest fallback) |
+| **Hydration and serialized data** | `public-user.test.ts`; SSR test asserts the rendered HTML (which includes the serialized payload) contains only the requester's data | Public shapes carry no tokens, hashes, secrets or other users' emails; payloads are per request | That every loader uses the public schema; grep `useState(`/payload writers and review them |
+| **Permission revocation** | `forbidden-handler.test.ts` | One reaction per burst of 403s: invalidate, notify, redirect | That the backend returns 403 everywhere it should |
+| **Logout cleanup** | `logout-protocol.test.ts` | Ordered, idempotent, error-isolated cleanup; only scoped storage keys removed; device preferences kept | That the app calls it on every logout path (expiry, revocation, manual, other tab) and that the server revokes the session |
+
+Run the Vitest rows with `npx vitest run` in `verification/vue`; the SSR rows with `./verification/ssr-test/run.sh` and `./verification/ssr-test/run.sh --negative` (free ports by default, `MOCK_PORT`/`APP_PORT` to pin them).
 
 ## Rendering: hydration and SSR
 

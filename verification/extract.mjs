@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const pluginRoot = join(here, '..', 'plugins', 'frontend-architect', 'skills')
 const srcRoots = { vue: 'src', react: 'src', next: 'src', nuxt: 'app', creative: 'src' }
-const generatedDirs = { vue: ['src'], react: ['src'], next: ['src'], nuxt: ['app', 'server', 'shared'], creative: ['src'] }
+const generatedDirs = { vue: ['src'], react: ['src'], next: ['src'], nuxt: ['app', 'server', 'shared', 'layers'], creative: ['src'] }
 
 function* markdownFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

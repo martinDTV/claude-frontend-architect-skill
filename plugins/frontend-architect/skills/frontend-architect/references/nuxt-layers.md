@@ -11,7 +11,8 @@ Written against Nuxt 4 documentation; the exact resolution rules changed between
 - Use cases
 - What layers do not give
 - Caveats reported by users (verify in your version)
-- Minimal example
+- Minimal example (verified)
+- What this repository verifies
 - Layers vs packages vs microfrontends
 - Checklist before adopting
 
@@ -69,34 +70,95 @@ These were open or recently closed issues in the Nuxt tracker when this referenc
 
 A one-hour spike that creates the layer, consumes it from two apps, runs `nuxt typecheck` and `nuxt build` in both and exercises plugin order answers all of these for the installed versions.
 
-## Minimal example
+## Minimal example (verified)
 
-Structure of a base layer published from a monorepo:
+A local layer under `layers/base/` and the app that consumes it. Every block below is extracted into this repository's Nuxt 4 verification project, where `nuxt prepare` + `check-layers.mjs` confirm the generated registrations, `nuxt typecheck` proves the typing of the merged `runtimeConfig` and `app.config`, and the production build serves the page in the SSR concurrency test. Nuxt 4 registers directories under `layers/` automatically; no `extends` entry is needed for them.
 
 ```
-packages/nuxt-base/
-├── nuxt.config.ts          # modules: ['@nuxt/ui'], css: ['./app/assets/css/tokens.css'], runtimeConfig defaults
-├── app.config.ts           # ui: { colors: { primary: 'brand' } }
-├── app/
-│   ├── layouts/default.vue
-│   ├── middleware/auth.ts
-│   ├── plugins/api.ts      # per-request HTTP client (axios.md / nuxt.md)
-│   ├── composables/useSession.ts
-│   └── components/shell/AppHeader.vue
-└── server/utils/errors.ts
+layers/base/
+├── nuxt.config.ts                       # runtimeConfig defaults the layer contributes (layer root)
+└── app/                                 # the layer's source directory, like the app's own app/
+    ├── app.config.ts                    # app.config defaults (merged with the app's); NOT at the layer root
+    ├── components/base/BaseTag.vue      # registered as <BaseTag> (dir prefix deduplicated)
+    └── composables/useLayerInfo.ts      # auto-imported in the app
+app/components/LayerDemo.vue             # consumer in the application
 ```
-
-Consuming app (`apps/admin/nuxt.config.ts`):
 
 ```ts
+// @verify nuxt:/layers/base/nuxt.config.ts
+// Defaults contributed by the layer. The consuming app's nuxt.config.ts is merged on top
+// (defu semantics: the app wins for scalars, arrays such as `modules` and `css` are concatenated).
 export default defineNuxtConfig({
-  extends: ['../../packages/nuxt-base'],
-  runtimeConfig: { public: { apiBase: '/api/v1' } },
+  runtimeConfig: {
+    public: { layerName: 'base' },
+  },
   compatibilityDate: '2026-10-01',
 })
 ```
 
-With an npm-published layer the `extends` entry becomes the package name and the app's `package.json` pins its version. (Not compiled by this repository's harness: layer resolution needs a Nuxt build; verify in a spike.)
+```ts
+// @verify nuxt:/layers/base/app/app.config.ts
+export default defineAppConfig({
+  base: { title: 'Base layer' },
+})
+```
+
+```vue
+<!-- @verify nuxt:/layers/base/app/components/base/BaseTag.vue -->
+<script setup lang="ts">
+withDefaults(defineProps<{ label: string; tone?: 'neutral' | 'accent' }>(), { tone: 'neutral' })
+</script>
+
+<template>
+  <span :data-tone="tone">{{ label }}</span>
+</template>
+```
+
+```ts
+// @verify nuxt:/layers/base/app/composables/useLayerInfo.ts
+/** Reads values the layer contributed; both are typed from the merged configs, so a rename fails `nuxt typecheck`. */
+export function useLayerInfo() {
+  const config = useRuntimeConfig()
+  const appConfig = useAppConfig()
+  return {
+    layerName: config.public.layerName,
+    title: appConfig.base.title,
+  }
+}
+```
+
+```vue
+<!-- @verify nuxt:components/LayerDemo.vue -->
+<script setup lang="ts">
+// Both the component and the composable come from layers/base through auto-imports.
+const { layerName, title } = useLayerInfo()
+</script>
+
+<template>
+  <section aria-label="Layer demo">
+    <BaseTag :label="title" tone="accent" />
+    <p>Rendered with layer {{ layerName }}</p>
+  </section>
+</template>
+```
+
+For a layer shared across repositories the same directory is published as an npm package and listed in `extends: ['@company/nuxt-base']`, with the version pinned in the consuming app's `package.json`.
+
+## What this repository verifies
+
+For the installed version of the verification project (Nuxt 4.6.x, see `docs/validation-report.md`):
+
+| Verified by the harness | How |
+|---|---|
+| A directory under `layers/` is registered without `extends` | `check-layers.mjs` after `nuxt prepare` |
+| A component in the layer (`app/components/base/BaseTag.vue`) is registered as `BaseTag` and `LazyBaseTag`, pointing at the layer path | `.nuxt/components.d.ts` |
+| A composable in the layer (`useLayerInfo`) is auto-imported in app code, pointing at the layer path | `.nuxt/types/imports.d.ts` |
+| `runtimeConfig.public` keys declared by the layer are typed in the app (`layerName`) | `.nuxt/types/runtime-config.d.ts` + `nuxt typecheck` of `useLayerInfo` |
+| `app.config.ts` of the layer is merged and typed (`appConfig.base.title`) when it lives in the layer's `app/` directory | `.nuxt/types/app.config.d.ts` + `nuxt typecheck` |
+| An `app.config.ts` at the layer **root** is ignored in Nuxt 4 (the layer's source directory is `app/`, like the application's); `appConfig.base` then types as `unknown` and `nuxt typecheck` fails | Observed while building this example; the Nuxt 3 layout silently stops contributing app config |
+| The production build with the layer serves the page | SSR concurrency test (`verification/ssr-test`) |
+
+Not verified here (check in a spike for your versions): layers consumed from npm or git (`extends`), precedence between several layers defining the same component or key, HMR when editing layer files, plugin and middleware ordering across layers, and module-specific behavior inside layers (Nuxt UI theme, i18n resources).
 
 ## Layers vs packages vs microfrontends
 

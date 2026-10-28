@@ -98,6 +98,8 @@ CDN rules: cache key must include the headers that change the response (`Accept-
 - Graceful shutdown: stop accepting connections, finish in-flight renders, then exit; configure the platform's drain timeout above the slowest render.
 - Timeouts: an upstream API timeout in SSR must be shorter than the proxy's timeout, and the page must degrade (render with an error state for that block) instead of failing the whole request.
 
+**Container sketches (illustrative, not validated by this repository).** The two sketches below show the shape, not a production template: this repository does not build them, scan them or run them. Before adopting one, a team must (1) build it with the project's own package manager and Node version and run the image locally against the health endpoint, (2) confirm it runs as a non-root user with a read-only filesystem where possible, (3) add a `HEALTHCHECK` or the platform's probe pointing at `/health`, (4) check the image size and layer cache behavior (`pnpm fetch`/`pnpm install --offline` or `npm ci` with a separate dependency layer), (5) scan it with the registry's or CI's vulnerability scanner and pin the base image digest, and (6) verify that build-time secrets never enter a layer (`--mount=type=secret`, no `.env` in the context).
+
 Container sketch for Nuxt (adjust Node and package manager to the project):
 
 ```dockerfile
@@ -117,7 +119,7 @@ EXPOSE 3000
 CMD ["node", ".output/server/index.mjs"]
 ```
 
-Next.js standalone: build with `output: 'standalone'`, then copy `.next/standalone` to the runtime image root, `.next/static` to `./.next/static` and `public` to `./public`, and run `node server.js`. Check the installed version's docs for the exact files.
+Next.js standalone (same caveat: illustrative): build with `output: 'standalone'`, then copy `.next/standalone` to the runtime image root, `.next/static` to `./.next/static` and `public` to `./public`, and run `node server.js`. Check the installed version's docs for the exact files, and apply the six checks above before using it.
 
 ## CI gates in order
 

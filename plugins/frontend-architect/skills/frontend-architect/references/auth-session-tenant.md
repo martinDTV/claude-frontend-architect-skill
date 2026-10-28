@@ -13,6 +13,7 @@ How a frontend holds a session, reacts to its end, adapts to permissions and kee
 - Permission revoked mid-session
 - Multi-tenancy in the frontend
 - Sensitive data (PHI, PII, financial)
+- Logout protocol, identity epochs and public serialization (tested)
 - Nuxt and Next.js specifics
 - Anti-patterns and migration from tokens in localStorage
 
@@ -235,6 +236,400 @@ Cross-tenant leak checklist (review and test):
 - **Telemetry and logs** never contain record contents, names or identifiers in URLs when avoidable (`/patients/:id` is acceptable in traces only if the id is opaque and the tool masks it; names in query strings are not). See `observability.md`.
 - **Screens**: idle lock, masking of identifiers in lists (`****1234`), explicit "show" actions for secrets, a print stylesheet that strips what must not be printed, and no sensitive data in the document title (it lands in browser history and window switchers).
 - **Exports and uploads** go through signed, short-lived URLs issued by the server for the specific resource (`security.md`, uploads section).
+
+## Logout protocol, identity epochs and public serialization (tested)
+
+Three small helpers encode the rules above so they can be unit-tested and reused. They are compiled and run in this repository's CI; adapt the dependency shapes to your app instead of copying the surrounding code.
+
+**Logout as a protocol.** The order matters: revoke on the server first (so a failure there still ends with caches cleared), clear caches and stores before navigating (so the login page never renders the previous user's data), remove only tenant/user-scoped storage keys, close connections, tell other tabs, then navigate. Idempotent and error-isolated: a singleton that refuses to clear is reported, and the rest still runs.
+
+```ts
+// @verify vue:lib/auth/logout-protocol.ts
+/**
+ * Logout as a protocol, not a redirect: ordered steps, run once, errors isolated so one failing
+ * step cannot leave the next user with the previous user's caches. Each app registers what it
+ * owns (query cache, stores, module caches, connections); the protocol decides the order and
+ * removes only user- and tenant-scoped storage keys (`app:<tenant>:<user>:*`), keeping device
+ * preferences such as theme or locale.
+ */
+export const LOGOUT_STEPS = ['revoke', 'query-cache', 'stores', 'module-caches', 'storage', 'connections', 'broadcast', 'navigate'] as const
+export type LogoutStep = (typeof LOGOUT_STEPS)[number]
+
+export interface LogoutDeps {
+  /** Server-side revocation; the response clears the HttpOnly cookies. */
+  revokeOnServer: () => Promise<void>
+  clearQueryCache: () => void
+  resetStores: () => void
+  /** Module-level Maps, memoized promises, singletons that kept user data. */
+  clearModuleCaches: () => void
+  storage: Pick<Storage, 'length' | 'key' | 'removeItem'>
+  /** EventSource, WebSocket, polling timers. */
+  closeConnections: () => void
+  broadcast: (message: { type: 'logout'; reason: string }) => void
+  navigate: (to: string) => void
+}
+
+export interface LogoutOptions {
+  loginPath?: string
+  /** Called for a failing step; the protocol continues with the next step. */
+  onError?: (step: LogoutStep, error: unknown) => void
+}
+
+const SCOPED_KEY = /^app:[^:]+:[^:]+:/
+
+/** Keys that belong to a user inside a tenant (see `storageKey` in scoped-state.ts). */
+export function scopedStorageKeys(storage: Pick<Storage, 'length' | 'key'>): string[] {
+  const keys: string[] = []
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i)
+    if (key && SCOPED_KEY.test(key)) keys.push(key)
+  }
+  return keys
+}
+
+export function createLogoutProtocol(deps: LogoutDeps, { loginPath = '/login', onError = () => {} }: LogoutOptions = {}) {
+  let running: Promise<readonly LogoutStep[]> | null = null
+
+  async function execute(reason: string): Promise<readonly LogoutStep[]> {
+    const executed: LogoutStep[] = []
+    const step = async (name: LogoutStep, fn: () => void | Promise<void>) => {
+      try {
+        await fn()
+      } catch (error) {
+        onError(name, error)
+      }
+      executed.push(name)
+    }
+    await step('revoke', () => deps.revokeOnServer())
+    await step('query-cache', () => deps.clearQueryCache())
+    await step('stores', () => deps.resetStores())
+    await step('module-caches', () => deps.clearModuleCaches())
+    await step('storage', () => {
+      for (const key of scopedStorageKeys(deps.storage)) deps.storage.removeItem(key)
+    })
+    await step('connections', () => deps.closeConnections())
+    await step('broadcast', () => deps.broadcast({ type: 'logout', reason }))
+    await step('navigate', () => deps.navigate(`${loginPath}?reason=${encodeURIComponent(reason)}`))
+    return executed
+  }
+
+  return {
+    /** Runs the protocol once; concurrent and later calls share the first run's result. */
+    run(reason = 'user'): Promise<readonly LogoutStep[]> {
+      running ??= execute(reason)
+      return running
+    },
+    get started(): boolean {
+      return running !== null
+    },
+  }
+}
+```
+
+```ts
+// @verify vue:lib/auth/logout-protocol.test.ts
+import { describe, expect, it, vi } from 'vitest'
+import { LOGOUT_STEPS, createLogoutProtocol, scopedStorageKeys } from './logout-protocol'
+
+function memoryStorage(entries: Record<string, string>): Storage {
+  const data = new Map(Object.entries(entries))
+  return {
+    get length() {
+      return data.size
+    },
+    clear: () => data.clear(),
+    getItem: (k) => data.get(k) ?? null,
+    key: (i) => [...data.keys()][i] ?? null,
+    removeItem: (k) => void data.delete(k),
+    setItem: (k, v) => void data.set(k, v),
+  }
+}
+
+function fakeDeps(order: string[], storage: Storage, overrides: Partial<Parameters<typeof createLogoutProtocol>[0]> = {}) {
+  const record = (name: string) => () => void order.push(name)
+  return {
+    revokeOnServer: vi.fn(async () => void order.push('revoke')),
+    clearQueryCache: vi.fn(record('query-cache')),
+    resetStores: vi.fn(record('stores')),
+    clearModuleCaches: vi.fn(record('module-caches')),
+    storage,
+    closeConnections: vi.fn(record('connections')),
+    broadcast: vi.fn(record('broadcast')),
+    navigate: vi.fn(record('navigate')),
+    ...overrides,
+  }
+}
+
+describe('logout protocol', () => {
+  it('runs every step in order and removes only tenant/user scoped keys', async () => {
+    const order: string[] = []
+    const storage = memoryStorage({
+      'app:acme:u1:draft': '{}',
+      'app:acme:u1:filters': '{}',
+      'app:globex:u2:draft': '{}',
+      theme: 'dark',
+      'preferences:v1': '{}',
+    })
+    const deps = fakeDeps(order, storage)
+    const logout = createLogoutProtocol(deps)
+
+    const executed = await logout.run('expired')
+
+    expect(executed).toEqual([...LOGOUT_STEPS])
+    expect(order).toEqual(['revoke', 'query-cache', 'stores', 'module-caches', 'connections', 'broadcast', 'navigate'])
+    expect(scopedStorageKeys(storage)).toEqual([])
+    expect(storage.getItem('theme')).toBe('dark')
+    expect(storage.getItem('preferences:v1')).toBe('{}')
+    expect(deps.broadcast).toHaveBeenCalledWith({ type: 'logout', reason: 'expired' })
+    expect(deps.navigate).toHaveBeenCalledWith('/login?reason=expired')
+  })
+
+  it('is idempotent: a second call shares the first run and does not repeat side effects', async () => {
+    const order: string[] = []
+    const deps = fakeDeps(order, memoryStorage({}))
+    const logout = createLogoutProtocol(deps)
+    const [a, b] = await Promise.all([logout.run(), logout.run()])
+    await logout.run('again')
+    expect(a).toBe(b)
+    expect(deps.revokeOnServer).toHaveBeenCalledTimes(1)
+    expect(deps.navigate).toHaveBeenCalledTimes(1)
+    expect(logout.started).toBe(true)
+  })
+
+  it('isolates a failing step and still clears caches, closes connections and navigates', async () => {
+    const order: string[] = []
+    const onError = vi.fn()
+    const deps = fakeDeps(order, memoryStorage({ 'app:acme:u1:draft': '{}' }), {
+      clearModuleCaches: () => {
+        throw new Error('singleton refused to clear')
+      },
+    })
+    const logout = createLogoutProtocol(deps, { onError })
+    const executed = await logout.run()
+    expect(onError).toHaveBeenCalledWith('module-caches', expect.any(Error))
+    expect(executed).toEqual([...LOGOUT_STEPS])
+    expect(scopedStorageKeys(deps.storage)).toEqual([])
+    expect(deps.navigate).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+**Identity epochs for late responses.** A request started as user A (or in tenant X) may resolve after logout or a tenant switch. The scope stamps work with the epoch it started under, aborts in-flight signals on change, and reports late results as stale so no writer applies them. Query libraries do this per key when the key includes the identity; this helper covers imperative calls, streams and callbacks.
+
+```ts
+// @verify vue:lib/auth/identity-scope.ts
+/**
+ * Identity epochs: every piece of async work is stamped with the identity (user + tenant) it
+ * started under. When the user logs out or switches tenant the epoch changes, in-flight work is
+ * aborted and any result that still resolves is reported as stale, so a late response can never
+ * write another identity's data into the current session's state.
+ */
+export interface Identity {
+  userId: string | null
+  tenant: string | null
+}
+
+export type ScopedResult<T> = { stale: false; value: T } | { stale: true }
+
+export function createIdentityScope(initial: Identity = { userId: null, tenant: null }) {
+  let epoch = 0
+  let current: Identity = initial
+  const inFlight = new Set<AbortController>()
+
+  function set(next: Identity): void {
+    if (next.userId === current.userId && next.tenant === current.tenant) return
+    epoch++
+    current = next
+    for (const controller of inFlight) controller.abort()
+    inFlight.clear()
+  }
+
+  return {
+    get identity(): Identity {
+      return current
+    },
+    get epoch(): number {
+      return epoch
+    },
+    set,
+    logout(): void {
+      set({ userId: null, tenant: null })
+    },
+    /** Runs `work`; the value is returned only if the identity did not change meanwhile. */
+    async run<T>(work: (identity: Identity, signal: AbortSignal) => Promise<T>): Promise<ScopedResult<T>> {
+      const started = epoch
+      const controller = new AbortController()
+      inFlight.add(controller)
+      try {
+        const value = await work(current, controller.signal)
+        return started === epoch ? { stale: false, value } : { stale: true }
+      } catch (error) {
+        if (started !== epoch) return { stale: true }
+        throw error
+      } finally {
+        inFlight.delete(controller)
+      }
+    },
+    /** Wraps a state writer so writes from a stale epoch are ignored (for callbacks you cannot await). */
+    guard<Args extends unknown[]>(write: (...args: Args) => void): (...args: Args) => boolean {
+      const started = epoch
+      return (...args) => {
+        if (epoch !== started) return false
+        write(...args)
+        return true
+      }
+    },
+  }
+}
+```
+
+```ts
+// @verify vue:lib/auth/identity-scope.test.ts
+import { describe, expect, it, vi } from 'vitest'
+import { createIdentityScope } from './identity-scope'
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+describe('identity scope', () => {
+  it('drops a response that resolves after logout and aborts its signal', async () => {
+    const scope = createIdentityScope({ userId: 'u1', tenant: 'acme' })
+    const slow = deferred<{ owner: string }>()
+    let seenSignal: AbortSignal | undefined
+    const pending = scope.run(async (_identity, signal) => {
+      seenSignal = signal
+      return slow.promise
+    })
+
+    scope.logout()
+    slow.resolve({ owner: 'u1' })
+
+    expect(await pending).toEqual({ stale: true })
+    expect(seenSignal?.aborted).toBe(true)
+    expect(scope.identity).toEqual({ userId: null, tenant: null })
+  })
+
+  it('applies a late response within the same epoch and drops one across a tenant switch', async () => {
+    const scope = createIdentityScope({ userId: 'u1', tenant: 'acme' })
+    const sameEpoch = scope.run(async (identity) => `${identity.tenant}:patients`)
+    expect(await sameEpoch).toEqual({ stale: false, value: 'acme:patients' })
+
+    const slow = deferred<string>()
+    const crossing = scope.run(async () => slow.promise)
+    scope.set({ userId: 'u1', tenant: 'globex' })
+    slow.resolve('acme:patients')
+    expect(await crossing).toEqual({ stale: true })
+    expect(scope.epoch).toBe(1)
+  })
+
+  it('guards non-awaitable writers and swallows errors of superseded work only', async () => {
+    const scope = createIdentityScope({ userId: 'u1', tenant: 'acme' })
+    const write = vi.fn()
+    const guarded = scope.guard(write)
+    expect(guarded('fresh')).toBe(true)
+    scope.logout()
+    expect(guarded('late')).toBe(false)
+    expect(write).toHaveBeenCalledTimes(1)
+
+    const failing = deferred<never>()
+    const superseded = scope.run(async () => failing.promise)
+    scope.set({ userId: 'u2', tenant: 'acme' })
+    failing.resolve(Promise.reject(new Error('network')) as never)
+    expect(await superseded).toEqual({ stale: true })
+    await expect(scope.run(async () => Promise.reject(new Error('boom')))).rejects.toThrow('boom')
+  })
+})
+```
+
+**Public serialization by explicit pick.** Anything serialized for the browser (Nuxt payload, `useState`, Server Component props, SSR JSON) is public. Derive the public shape with `pick` from the full record schema; Zod strips unknown keys, so passing a full record through the public schema removes tokens, hashes and secrets by construction, and a new sensitive column never ships by default.
+
+```ts
+// @verify vue:lib/auth/public-user.ts
+import { z } from 'zod'
+
+/**
+ * Serialized payloads are public: everything placed in `useState`, Nuxt payloads, Server Component
+ * props or an SSR-rendered JSON reaches the browser. Pick the public shape explicitly; never omit
+ * from the full record (a new sensitive column would ship by default). Zod strips unknown keys,
+ * so passing the full record through the public schema removes everything not listed.
+ */
+export const userRecordSchema = z.object({
+  id: z.string(),
+  email: z.email(),
+  fullName: z.string(),
+  tenantId: z.string(),
+  roles: z.array(z.string()),
+  passwordHash: z.string(),
+  accessToken: z.string().optional(),
+  refreshToken: z.string().optional(),
+  mfaSecret: z.string().optional(),
+})
+export type UserRecord = z.infer<typeof userRecordSchema>
+
+/** What the current user may see about themselves in the client. */
+export const publicUserSchema = userRecordSchema.pick({ id: true, fullName: true, tenantId: true, roles: true })
+export type PublicUser = z.infer<typeof publicUserSchema>
+
+/** What other users may see about a user (team lists, assignees): no email, no roles, no tenant. */
+export const publicTeamMemberSchema = userRecordSchema.pick({ id: true, fullName: true })
+export type PublicTeamMember = z.infer<typeof publicTeamMemberSchema>
+
+export function publicUser(record: unknown): PublicUser {
+  return publicUserSchema.parse(record)
+}
+
+export function publicTeamMembers(records: readonly unknown[]): PublicTeamMember[] {
+  return records.map((r) => publicTeamMemberSchema.parse(r))
+}
+```
+
+```ts
+// @verify vue:lib/auth/public-user.test.ts
+import { describe, expect, it } from 'vitest'
+import { publicTeamMembers, publicUser, type UserRecord } from './public-user'
+
+const ana: UserRecord = {
+  id: 'u1',
+  email: 'ana@acme.example',
+  fullName: 'Ana',
+  tenantId: 'acme',
+  roles: ['doctor'],
+  passwordHash: '$argon2id$hash',
+  accessToken: 'eyJhbGciOi.access',
+  refreshToken: 'eyJhbGciOi.refresh',
+  mfaSecret: 'JBSWY3DPEHPK3PXP',
+}
+const luis: UserRecord = { ...ana, id: 'u2', email: 'luis@acme.example', fullName: 'Luis', roles: ['admin'] }
+
+describe('public serialization', () => {
+  it('a serialized public user never carries tokens, hashes, secrets or the email', () => {
+    const json = JSON.stringify(publicUser(ana))
+    for (const secret of ['accessToken', 'refreshToken', 'passwordHash', 'mfaSecret', 'eyJhbGciOi', '$argon2id', 'JBSWY3DPEHPK3PXP', 'ana@acme.example']) {
+      expect(json).not.toContain(secret)
+    }
+    expect(JSON.parse(json)).toEqual({ id: 'u1', fullName: 'Ana', tenantId: 'acme', roles: ['doctor'] })
+  })
+
+  it('a team list exposes only ids and names, never other users\' emails, roles or tenants', () => {
+    const json = JSON.stringify(publicTeamMembers([ana, luis]))
+    expect(JSON.parse(json)).toEqual([{ id: 'u1', fullName: 'Ana' }, { id: 'u2', fullName: 'Luis' }])
+    expect(json).not.toContain('luis@acme.example')
+    expect(json).not.toContain('admin')
+    expect(json).not.toContain('acme')
+  })
+
+  it('rejects malformed records instead of serializing them', () => {
+    expect(() => publicUser({ id: 1, fullName: 'x' })).toThrow()
+  })
+})
+```
+
+What these tests do **not** prove: that your app calls the protocol on every logout path (cover it with the E2E "logout clears everything" scenario in `testing-scenarios.md`), that the server actually revokes the session, or that no other code path serializes the full record. They prove the helpers behave as documented.
 
 ## Nuxt and Next.js specifics
 

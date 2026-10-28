@@ -10,8 +10,9 @@ node extract.mjs
 (cd react && npx tsc --noEmit)
 (cd creative && npx tsc --noEmit && npx vitest run)
 (cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build)
-(cd nuxt && npx nuxt prepare && npx nuxt typecheck)
+(cd nuxt && npx nuxt prepare && node check-layers.mjs && npx nuxt typecheck)
 ./ssr-test/run.sh
+./ssr-test/run.sh --negative
 (cd depcruise && ../vue/node_modules/.bin/depcruise src --config .dependency-cruiser.cjs > /tmp/depcruise.txt 2>&1 || true; grep -q "2 dependency violations" /tmp/depcruise.txt)
 if command -v nginx >/dev/null; then ./nginx-test.sh; fi
 echo "All verifications passed."

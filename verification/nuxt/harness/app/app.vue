@@ -3,5 +3,8 @@ import UserList from '~/features/users/components/UserList.vue'
 </script>
 
 <template>
-  <UserList />
+  <div>
+    <LayerDemo />
+    <UserList />
+  </div>
 </template>
