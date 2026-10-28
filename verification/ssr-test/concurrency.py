@@ -1,8 +1,10 @@
-import concurrent.futures as cf, re, sys, urllib.request
+import concurrent.futures as cf, os, re, sys, urllib.request
+
+APP_PORT = os.environ.get('APP_PORT', '3000')
 
 def get(i):
     who = f"user{i % 20}"
-    req = urllib.request.Request("http://127.0.0.1:3000/", headers={"Cookie": f"session={who}"})
+    req = urllib.request.Request(f"http://127.0.0.1:{APP_PORT}/", headers={"Cookie": f"session={who}"})
     html = urllib.request.urlopen(req, timeout=20).read().decode()
     return who, set(re.findall(r"User of (user\d+)", html))
 

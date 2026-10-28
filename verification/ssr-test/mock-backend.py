@@ -1,6 +1,6 @@
 # Fake API: returns a user page whose name reveals which session cookie it received,
 # with a random delay so concurrent SSR requests interleave.
-import json, random, time
+import json, os, random, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 class H(BaseHTTPRequestHandler):
@@ -14,4 +14,4 @@ class H(BaseHTTPRequestHandler):
         self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(data)
     def log_message(self, *a): pass
 
-ThreadingHTTPServer(('127.0.0.1', 8000), H).serve_forever()
+ThreadingHTTPServer(('127.0.0.1', int(os.environ.get('MOCK_PORT', '8000'))), H).serve_forever()
