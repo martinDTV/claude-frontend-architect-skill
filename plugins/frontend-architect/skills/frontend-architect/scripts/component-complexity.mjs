@@ -5,10 +5,10 @@
 // Usage: component-complexity.mjs <project-root> [--top 20] [--threshold-lines 400] [--json|--md]
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { analyzeFile } from './lib/graph.mjs'
-import { detectProject, loadConfig, sourceFiles } from './lib/project.mjs'
+import { buildGraph } from './lib/graph.mjs'
+import { detectProject, loadConfig } from './lib/project.mjs'
 import { countMatches } from './lib/source.mjs'
-import { addFinding, createReport, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
 
 const HELP = `
 component-complexity — which components and pages carry too many responsibilities.
@@ -18,7 +18,11 @@ usage: node component-complexity.mjs <project-root> [options]
   --threshold-lines <n>   size above which a component is reported (default 400; 2x = high)
   --config <file>         classification file (default: .frontend-audit.json)
   --json | --md           output format
-  --fail-on <level>       exit 1 on: confirmed | any | none (default confirmed; this tool emits heuristics only)
+  --fail-on <level>       exit 1 on: confirmed | any | none (default confirmed; this tool emits heuristics only)${ENGINE_HELP}
+
+With the semantic engine, .vue metrics (props, emits, refs, computed, watchers, lifecycle hooks,
+template depth, components used) come from vue/compiler-sfc bindings and the template AST
+(metricsSource: ast); otherwise from regular expressions (metricsSource: lexical).
 
 Metrics per file: lines, script/template lines, reactive state, watchers/effects, HTTP calls,
 composables/hooks, stores, modals, forms, tables, template depth; responsibility flags and a score.
@@ -27,6 +31,8 @@ composables/hooks, stores, modals, forms, tables, template depth; responsibility
 const BUILTIN_COMPOSABLES = new Set(['useRoute', 'useRouter', 'useState', 'useHead', 'useSeoMeta', 'useNuxtApp', 'useRuntimeConfig', 'useId', 'useAttrs', 'useSlots', 'useTemplateRef', 'useCssModule', 'useFetch', 'useAsyncData', 'useLazyFetch', 'useLazyAsyncData', 'useCookie', 'useRequestHeaders', 'useRequestEvent', 'useRequestURL', 'useError', 'useNuxtData', 'useAppConfig', 'useLoadingIndicator', 'useRouteAnnouncer', 'usePreviewMode', 'useHydration', 'useEffect', 'useLayoutEffect', 'useMemo', 'useCallback', 'useRef', 'useContext', 'useReducer', 'useTransition', 'useDeferredValue', 'useActionState', 'useOptimistic', 'useFormStatus', 'useSyncExternalStore', 'useSearchParams', 'usePathname', 'useParams', 'useSelectedLayoutSegment', 'useI18n', 'useLocalePath', 'useSwitchLocalePath', 'useToast', 'useOverlay', 'useColorMode', 'useModel', 'useQueryClient'])
 
 const HTTP_RE = /(?:\$fetch|useFetch|useLazyFetch|useAsyncData|useLazyAsyncData|apiFetch|useQuery|useMutation|useInfiniteQuery|fetch)\s*\(|\b(?:\$?api|http|axios|client|request|ky)\.(?:get|post|put|patch|delete|request)\s*\(/g
+
+const STATE_CALLS = ['ref', 'reactive', 'shallowRef', 'shallowReactive', 'useState', 'useReducer']
 
 export function metricsFor(info) {
   const s = info.stripped
@@ -63,10 +69,25 @@ export function metricsFor(info) {
   if (files) flags.push('files')
   if (charts) flags.push('charts')
   if (navigation >= 3) flags.push('navigation')
+  // AST-backed structural metrics replace the regex counts when the semantic engine parsed the file:
+  //   ast         .vue parsed by vue/compiler-sfc (bindings + template AST)
+  //   ast-script  .ts/.tsx parsed by TypeScript (calls and JSX tags; no template depth beyond the lexical count)
+  //   lexical     regular expressions (v1.1)
+  const sem = info.semantic
+  const ast = sem?.sfc
+  const callCount = (names) => names.reduce((n, c) => n + (sem.calls.get(c)?.length ?? 0), 0)
+  const lifecycleLexical = countMatches(s, /\bon(?:Mounted|BeforeMount|BeforeUnmount|Unmounted|Activated|Deactivated|Updated)\s*\(/g)
+  const structural = ast ? {
+    props: ast.props ?? props, emits: ast.emits ?? emits, state: callCount(STATE_CALLS), computed: ast.computed ?? computed, watchers: ast.watchers ?? watchers,
+    templateDepth: ast.templateDepth ?? templateDepth, componentsUsed: ast.templateComponents.length, lifecycleHooks: Object.keys(ast.lifecycle).length, imports: info.imports.length, metricsSource: 'ast',
+  } : sem ? {
+    props, emits, state: callCount(STATE_CALLS), computed: callCount(['computed', 'useMemo', 'useCallback']), watchers: callCount(['watch', 'watchEffect', 'watchPostEffect', 'watchSyncEffect', 'useEffect', 'useLayoutEffect']),
+    templateDepth, componentsUsed: sem.jsxTags.size, lifecycleHooks: lifecycleLexical, imports: info.imports.length, metricsSource: 'ast-script',
+  } : { props, emits, state, computed, watchers, templateDepth, componentsUsed: info.tags.size, lifecycleHooks: lifecycleLexical, imports: info.imports.length, metricsSource: 'lexical' }
   const score = Math.round(
-    info.lines / 100 + state / 5 + watchers / 2 + httpCalls * 1.5 + modals * 1.5 + composables.size / 2 + stores.size + flags.length * 3 + Math.max(0, templateDepth - 8),
+    info.lines / 100 + structural.state / 5 + structural.watchers / 2 + httpCalls * 1.5 + modals * 1.5 + composables.size / 2 + stores.size + flags.length * 3 + Math.max(0, structural.templateDepth - 8),
   )
-  return { lines: info.lines, scriptLines: info.scriptLines, templateLines: info.templateLines, props, emits, state, computed, watchers, httpCalls, functions, modals, forms, vModel, tables, conditionals, templateDepth, composables: [...composables].sort(), stores: [...stores].sort(), flags, score }
+  return { lines: info.lines, scriptLines: info.scriptLines, templateLines: info.templateLines, ...structural, httpCalls, functions, modals, forms, vModel, tables, conditionals, composables: [...composables].sort(), stores: [...stores].sort(), flags, score }
 }
 
 const VOID = new Set(['img', 'input', 'br', 'hr', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'])
@@ -117,8 +138,14 @@ export function run(argv) {
   const top = Number(args.top ?? 20)
 
   const rows = []
-  for (const f of sourceFiles(project)) {
-    const info = analyzeFile(project, f)
+  let graph
+  try {
+    graph = buildGraph(project, { autoImports: false, ...engineOptionsFrom(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
+  report.analysis = graph.analysis
+  for (const info of graph.files.values()) {
     if (!isComponentFile(info)) continue
     const m = metricsFor(info)
     rows.push({ file: info.rel, page: isPage(info.rel), domain: info.classification.domain, ...m, suggestions: suggestions(m, info.rel) })
@@ -160,8 +187,8 @@ export function run(argv) {
   const sections = [{
     title: `Top ${top} by score (heuristic: size, state, watchers, HTTP, modals, composables, responsibilities)`,
     table: {
-      headers: ['score', 'lines', 'script', 'tpl', 'state', 'watch', 'http', 'modals', 'comps', 'flags', 'file'],
-      rows: rows.slice(0, top).map((r) => [r.score, r.lines, r.scriptLines, r.templateLines, r.state, r.watchers, r.httpCalls, r.modals, r.composables.length, r.flags.join(','), r.file]),
+      headers: ['score', 'lines', 'script', 'tpl', 'state', 'watch', 'http', 'modals', 'comps', 'src', 'flags', 'file'],
+      rows: rows.slice(0, top).map((r) => [r.score, r.lines, r.scriptLines, r.templateLines, r.state, r.watchers, r.httpCalls, r.modals, r.composables.length, r.metricsSource === 'ast' ? 'ast' : r.metricsSource === 'ast-script' ? 'ast-s' : 'lex', r.flags.join(','), r.file]),
     },
   }]
   return finish(report, args, { sections })

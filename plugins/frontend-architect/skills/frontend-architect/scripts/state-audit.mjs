@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { buildGraph } from './lib/graph.mjs'
 import { detectProject, loadConfig } from './lib/project.mjs'
-import { addFinding, createReport, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
 import { countMatches, findIdentifier, topLevelStatements } from './lib/source.mjs'
 
 const HELP = `
@@ -17,7 +17,7 @@ state-audit — where state lives and which placements are risky.
 usage: node state-audit.mjs <project-root> [options]
   --config <file>     classification file (default: .frontend-audit.json)
   --json | --md       output format
-  --fail-on <level>   exit 1 on: confirmed (default) | any | none
+  --fail-on <level>   exit 1 on: confirmed (default) | any | none${ENGINE_HELP}
 
 Findings:
   token-in-web-storage                 localStorage/sessionStorage/cookie writes of tokens or secrets (confirmed)
@@ -54,7 +54,14 @@ export function run(argv) {
   const config = loadConfig(root, args.config)
   const project = detectProject(root, config)
   const report = createReport('state-audit', project)
-  const { files, edges } = buildGraph(project)
+  let graph
+  try {
+    graph = buildGraph(project, engineOptionsFrom(args))
+  } catch (error) {
+    return fail(error.message)
+  }
+  const { files, edges, analysis } = graph
+  report.analysis = analysis
   const coreStores = new Set((config.coreStores ?? []).map((s) => s.toLowerCase()))
   const ssrOff = project.nuxt ? project.nuxt.ssr === false : false
   const hasQueryCache = Boolean(project.deps['@pinia/colada'] || project.deps['@tanstack/vue-query'] || project.deps['@tanstack/react-query'])

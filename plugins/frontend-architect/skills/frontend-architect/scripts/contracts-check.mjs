@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path'
 import { readJson, rel as relPath, walk } from './lib/fs.mjs'
 import { buildGraph, moduleRootOf } from './lib/graph.mjs'
 import { detectProject, loadConfig } from './lib/project.mjs'
-import { addFinding, createReport, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
 
 const HELP = `
 contracts-check — public entry points, boundary violations, module cycles and breaking changes.
@@ -20,7 +20,7 @@ usage: node contracts-check.mjs <project-root> [options]
   --baseline <file>        JSON written by --write-baseline; removed exports are reported as breaking
   --write-baseline <file>  write the current public surface (the only write this tool performs)
   --json | --md            output format
-  --fail-on <level>        exit 1 on: confirmed (default) | any | none
+  --fail-on <level>        exit 1 on: confirmed (default) | any | none${ENGINE_HELP}
 
 Findings:
   module-without-entry       other modules import it but it has no index.ts (heuristic)
@@ -41,7 +41,14 @@ export function run(argv) {
   if (!existsSync(join(root, 'package.json'))) return fail(`no package.json in ${root}`)
   const project = detectProject(root, loadConfig(root, args.config))
   const report = createReport('contracts-check', project)
-  const { files, edges } = buildGraph(project)
+  let graph
+  try {
+    graph = buildGraph(project, engineOptionsFrom(args))
+  } catch (error) {
+    return fail(error.message)
+  }
+  const { files, edges, analysis } = graph
+  report.analysis = analysis
 
   // Module roots
   const roots = new Set()
@@ -91,7 +98,7 @@ export function run(argv) {
     } else {
       mod.internalImports.push({ from: e.from, line: e.line, to: e.to, specifier: e.specifier })
       if (mod.index) {
-        addFinding(report, { id: 'internal-import', level: 'confirmed', severity: 'high', file: e.from, line: e.line, message: `imports ${e.to} directly; the public entry of ${mod.root} is ${mod.index}`, fix: `re-export from ${mod.index} and import from there; add a dependency-cruiser rule so it cannot regress` })
+        addFinding(report, { id: 'internal-import', level: e.confidence === 'verified' ? 'confirmed' : 'heuristic', severity: e.kind === 'type' ? 'medium' : 'high', file: e.from, line: e.line, message: `imports ${e.to} directly${e.kind === 'type' ? ' (type-only)' : ''}; the public entry of ${mod.root} is ${mod.index}`, evidence: `${e.specifier ?? ''} resolved by ${e.resolution ?? 'lexical'}`, fix: `re-export from ${mod.index} and import from there; add a dependency-cruiser rule so it cannot regress` })
       }
     }
   }

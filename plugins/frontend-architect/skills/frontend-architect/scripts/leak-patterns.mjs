@@ -7,9 +7,9 @@
 // Usage: leak-patterns.mjs <project-root> [--json|--md] [--fail-on confirmed|any|none]
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { analyzeFile } from './lib/graph.mjs'
-import { detectProject, loadConfig, sourceFiles } from './lib/project.mjs'
-import { addFinding, createReport, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { buildGraph } from './lib/graph.mjs'
+import { detectProject, loadConfig } from './lib/project.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
 import { countMatches, lineOf } from './lib/source.mjs'
 
 const HELP = `
@@ -17,7 +17,7 @@ leak-patterns — resources created without a visible cleanup.
 
 usage: node leak-patterns.mjs <project-root> [options]
   --json | --md       output format
-  --fail-on <level>   exit 1 on: confirmed | any | none (default confirmed; this tool emits heuristics only)
+  --fail-on <level>   exit 1 on: confirmed | any | none (default confirmed; this tool emits heuristics only)${ENGINE_HELP}
 
 Each finding names the resource, the first line that creates it and what cleanup was expected.
 Verify by reading the file: cleanup may live in a helper, a VueUse composable or a parent.
@@ -45,6 +45,8 @@ function isCandidate(info) {
   return /(^|\/)(?:composables|hooks|plugins|components|features|modules|modulos|app|pages|src)\//.test(info.rel) && /\.[cm]?[jt]sx?$/.test(info.rel)
 }
 
+const CLEANUP_CALLS = new Set(['onBeforeUnmount', 'onUnmounted', 'onScopeDispose', 'onDeactivated', 'tryOnScopeDispose', 'tryOnUnmounted', 'effectScope'])
+
 export function scanFile(info) {
   const code = info.stripped
   const out = []
@@ -55,7 +57,10 @@ export function scanFile(info) {
     const offset = info.isVue ? info.scriptLine : 0
     out.push({ id: r.id, label: r.label, creates: creates.length, cleanups, firstLine: lineOf(code, creates[0].index) + offset, expected: r.expected, severity: r.severity })
   }
-  return { resources: out, hasCleanupHook: CLEANUP_HOOK_RE.test(code) }
+  // With the AST available, a cleanup hook is a real call (not a word in a comment or a string);
+  // React effects count when a `return () =>` exists inside a useEffect body (lexical check kept).
+  const astHook = info.semantic ? [...info.semantic.calls.keys()].some((name) => CLEANUP_CALLS.has(name)) || (info.semantic.calls.has('useEffect') && /return\s*\(\)\s*=>/.test(code)) || info.semantic.memberCalls.some((m) => m.name === 'dispose') : null
+  return { resources: out, hasCleanupHook: astHook ?? CLEANUP_HOOK_RE.test(code), cleanupSource: astHook === null ? 'lexical' : 'ast' }
 }
 
 export function run(argv) {
@@ -68,14 +73,20 @@ export function run(argv) {
   const rows = []
   let scanned = 0
   const byResource = {}
-  for (const f of sourceFiles(project)) {
-    const info = analyzeFile(project, f)
+  let graph
+  try {
+    graph = buildGraph(project, { autoImports: false, ...engineOptionsFrom(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
+  report.analysis = graph.analysis
+  for (const info of graph.files.values()) {
     if (!isCandidate(info)) continue
     scanned++
-    const { resources, hasCleanupHook } = scanFile(info)
+    const { resources, hasCleanupHook, cleanupSource } = scanFile(info)
     for (const r of resources) {
       byResource[r.id] = (byResource[r.id] ?? 0) + r.creates
-      rows.push({ file: info.rel, ...r, hasCleanupHook })
+      rows.push({ file: info.rel, ...r, hasCleanupHook, cleanupSource })
       if (r.cleanups === 0) {
         addFinding(report, { id: `leak-${r.id}`, level: 'heuristic', severity: r.severity, file: info.rel, line: r.firstLine, message: `${r.label} created ${r.creates}x with no visible cleanup${hasCleanupHook ? '' : ' (file has no unmount/dispose hook at all)'}`, fix: r.expected })
       } else if (r.id === 'event-listener' && r.creates - r.cleanups >= 2) {

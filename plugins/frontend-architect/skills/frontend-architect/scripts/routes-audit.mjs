@@ -7,9 +7,9 @@
 // Usage: routes-audit.mjs <project-root> [--config file] [--json|--md] [--fail-on confirmed|any|none]
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { analyzeFile } from './lib/graph.mjs'
-import { detectProject, loadConfig, sourceFiles } from './lib/project.mjs'
-import { addFinding, createReport, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { buildGraph } from './lib/graph.mjs'
+import { detectProject, loadConfig } from './lib/project.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
 import { lineOf } from './lib/source.mjs'
 
 const HELP = `
@@ -18,7 +18,7 @@ routes-audit — routes, guards, Server Actions and handlers.
 usage: node routes-audit.mjs <project-root> [options]
   --config <file>     .frontend-audit.json with publicRoutes [globs] and authPatterns [strings]
   --json | --md       output format
-  --fail-on <level>   exit 1 on: confirmed (default) | any | none
+  --fail-on <level>   exit 1 on: confirmed (default) | any | none${ENGINE_HELP}
 
 Findings:
   page-without-guard            Nuxt page with no page middleware and no global auth middleware (heuristic)
@@ -84,7 +84,15 @@ export function run(argv) {
   const project = detectProject(root, config)
   const report = createReport('routes-audit', project)
   const authRe = config.authPatterns?.length ? new RegExp(`${AUTH_RE_BASE.source}|${config.authPatterns.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}`) : AUTH_RE_BASE
-  const infos = sourceFiles(project).map((f) => analyzeFile(project, f))
+  let graph
+  try {
+    graph = buildGraph(project, { autoImports: false, ...engineOptionsFrom(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
+  const infos = [...graph.files.values()]
+  report.analysis = graph.analysis
+  const hasDirective = (info, name) => (info.semantic ? info.semantic.directives.includes(name) : new RegExp(`^\\s*['"]${name}['"]`).test(info.code))
   const sections = []
 
   // Fixed role checks (both frameworks)
@@ -147,7 +155,7 @@ export function run(argv) {
         const kind = file.replace(/\.[jt]sx?$/, '')
         if (!['page', 'layout', 'route', 'loading', 'error', 'template', 'default', 'not-found'].includes(kind)) continue
         const path = nextRoutePath(fromApp)
-        const useClient = /^\s*['"]use client['"]/.test(info.code)
+        const useClient = hasDirective(info, 'use client')
         routes.push({ path, kind, file: info.rel, useClient, covered: covered(path) })
         if (useClient && (kind === 'page' || kind === 'layout')) {
           addFinding(report, { id: 'client-boundary-too-high', level: 'confirmed', severity: kind === 'layout' ? 'high' : 'medium', file: info.rel, line: 1, message: `'use client' at the top of ${kind} ${path}: the whole subtree ships and renders as client JavaScript`, fix: 'keep the page/layout as a Server Component and move interactivity into small client leaves' })
@@ -163,7 +171,7 @@ export function run(argv) {
     // Server Actions: file-level 'use server'
     const actions = []
     for (const info of infos) {
-      const fileLevel = /^\s*['"]use server['"]/.test(info.code)
+      const fileLevel = hasDirective(info, 'use server')
       const inline = [...info.stripped.matchAll(/(?:async\s+)?function\s+([\w$]+)\s*\([^)]*\)\s*\{\s*['"]use server['"]/g)]
       if (!fileLevel && !inline.length) continue
       const exported = fileLevel ? [...info.stripped.matchAll(/export\s+(?:async\s+)?function\s+([\w$]+)\s*\(|export\s+const\s+([\w$]+)\s*=\s*(?:async\s*)?\(/g)] : inline
