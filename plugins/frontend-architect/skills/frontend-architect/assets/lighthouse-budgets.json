@@ -1,0 +1,49 @@
+[
+  {
+    "_comment": "Lighthouse CI budgets.json: resource sizes in KB (transfer size), timings in ms, CLS unitless. Point lighthouserc `assert.budgetsFile` at this file. Tune per product after measuring a baseline; these are starting points for a product app on a mid-range phone.",
+    "path": "/*",
+    "resourceSizes": [
+      { "resourceType": "script", "budget": 300 },
+      { "resourceType": "stylesheet", "budget": 80 },
+      { "resourceType": "font", "budget": 120 },
+      { "resourceType": "image", "budget": 400 },
+      { "resourceType": "third-party", "budget": 150 },
+      { "resourceType": "total", "budget": 1000 }
+    ],
+    "resourceCounts": [
+      { "resourceType": "third-party", "budget": 10 },
+      { "resourceType": "total", "budget": 60 }
+    ],
+    "timings": [
+      { "metric": "first-contentful-paint", "budget": 1800 },
+      { "metric": "largest-contentful-paint", "budget": 2500 },
+      { "metric": "interactive", "budget": 3800 },
+      { "metric": "total-blocking-time", "budget": 200 },
+      { "metric": "cumulative-layout-shift", "budget": 0.1 }
+    ]
+  },
+  {
+    "_comment": "Marketing and content routes: stricter, they are the SEO surface and should ship little JavaScript.",
+    "path": "/blog/*",
+    "resourceSizes": [
+      { "resourceType": "script", "budget": 120 },
+      { "resourceType": "total", "budget": 600 }
+    ],
+    "timings": [
+      { "metric": "largest-contentful-paint", "budget": 2000 },
+      { "metric": "total-blocking-time", "budget": 100 }
+    ]
+  },
+  {
+    "_comment": "Authenticated dashboard routes: more interactivity allowed, still bounded; measure with an authenticated session in Lighthouse CI.",
+    "path": "/app/*",
+    "resourceSizes": [
+      { "resourceType": "script", "budget": 450 },
+      { "resourceType": "total", "budget": 1400 }
+    ],
+    "timings": [
+      { "metric": "largest-contentful-paint", "budget": 3000 },
+      { "metric": "total-blocking-time", "budget": 300 }
+    ]
+  }
+]

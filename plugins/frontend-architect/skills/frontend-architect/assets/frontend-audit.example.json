@@ -1,0 +1,23 @@
+{
+  "_comment": "Copy to the project root as .frontend-audit.json (or pass --config). Globs are relative to the project root; first matching domain wins. Start from `node scripts/domain-deps.mjs . --suggest-config` and group folders into real business domains: pages, components and the composables that serve them belong together.",
+  "domains": {
+    "crm": ["app/components/crm/**", "app/pages/crm/**", "app/pages/oportunidades/**", "app/composables/useCrm.ts", "app/composables/useComercial.ts", "app/types/crm.ts", "server/api/crm/**"],
+    "obra": ["app/pages/proyectos/**", "app/pages/generadores/**", "app/components/programa/**", "app/composables/useGeneradores.ts", "app/composables/useProgramaObra.ts"],
+    "rrhh": ["app/pages/organigrama/**", "app/components/organigrama/**", "app/composables/usePersonas.ts", "app/composables/useOrganigrama.ts"]
+  },
+  "_comment_shell": "App chrome: layouts, middleware, plugins, the home page, the project hub. Shell may depend on coreDomains without a finding.",
+  "shell": ["app/layouts/**", "app/middleware/**", "app/plugins/**", "app/app.vue", "app/error.vue", "app/pages/index.vue"],
+  "_comment_shared": "Domain-free code: UI primitives, formatting, the HTTP client, error contract.",
+  "shared": ["app/components/ui/**", "app/utils/**", "app/composables/useApi.ts", "app/composables/useFormatters.ts", "app/composables/useEstadoLista.ts"],
+  "_comment_coreDomains": "Domains that the shell legitimately depends on (session, identity, tenant). Not reported as shell-depends-on-domain.",
+  "coreDomains": ["auth", "organizations"],
+  "_comment_coreStores": "Store ids expected to be used from everywhere (not reported as store-shared-across-domains).",
+  "coreStores": ["auth", "ui", "preferences"],
+  "_comment_publicRoutes": "Pages that need no guard (login, callbacks, public status pages).",
+  "publicRoutes": ["app/pages/auth/**", "app/pages/suspendido.vue", "app/pages/sin-acceso.vue"],
+  "_comment_authPatterns": "Extra function names that count as an authorization check in Next.js Server Actions and Route Handlers.",
+  "authPatterns": ["requireUser(", "assertCan(", "withTenant("],
+  "excludeTests": true,
+  "_comment_budgets": "Gzip KB budgets for bundle-budget.mjs; null disables a metric.",
+  "budgets": { "entryJsKb": 250, "entryCssKb": 60, "maxChunkKb": 300, "totalJsKb": null }
+}
