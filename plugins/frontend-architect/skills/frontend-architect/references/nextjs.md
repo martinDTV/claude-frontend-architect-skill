@@ -207,3 +207,49 @@ Session in an `HttpOnly`, `Secure`, `SameSite` cookie, issued by the backend or 
 - Sequential awaits for independent requests (waterfalls).
 - Using Axios in Server Components and losing request deduplication.
 - Assuming Module Federation works with the App Router: `@module-federation/nextjs-mf` supports Pages Router only, peers Next ≤ 15, and is heading to end of life (see `microfrontends.md`).
+
+## Streaming and partial prerendering
+
+- **Streaming** (stable): a route segment with `loading.tsx` or `<Suspense>` boundaries sends the static shell first and streams the slow parts; the HTML arrives progressively and hydrates per boundary. Put the boundary around the slow component, not around the page.
+- **Cache Components / `"use cache"`** (Next 16): the opt-in model in which static parts are cached and dynamic parts (anything reading cookies, headers or uncached data) render per request inside Suspense boundaries, which is what partial prerendering means in practice. Flags, defaults and what is still marked experimental change between minors: check the docs for the installed version before enabling `cacheComponents` or any PPR-related option, and do not assume a behavior from memory.
+- Rules that hold regardless of flags: personalized data never enters a shared cache entry; a dynamic read (`cookies()`, `headers()`, `searchParams`) inside a cached scope is a build or runtime error; `loading.tsx` must match the final layout size (CLS).
+
+## Server Actions: authorization and validation checklist
+
+Server Actions are public HTTP endpoints reachable by anyone who can craft the request. Every exported action:
+
+- [ ] Reads the session (`cookies()` or the auth library) and rejects anonymous calls
+- [ ] Checks authorization **for the specific resource** (this user may rename this order), not only "is logged in" or a role string
+- [ ] Parses its input with a schema (Zod/Valibot) and returns field errors instead of throwing
+- [ ] Forwards the identity to the backend (cookie/token) so the backend enforces again; the action is not the only gate
+- [ ] Revalidates or updates the right tags after a successful mutation
+- [ ] Never trusts hidden fields (ids, prices, tenant) as authorization
+- [ ] Is covered by a test that calls it without a session and with another user's resource id
+
+The plugin's `routes-audit.mjs` lists exported actions and flags those with no visible session/authorization call or no schema parse; treat its findings as leads and read the action.
+
+## Route Handlers vs Server Actions vs server-only functions
+
+| Need | Use | Notes |
+|---|---|---|
+| Mutation from a form or Client Component in this app | Server Action (`'use server'`) | Progressive enhancement with `useActionState`; checklist above |
+| Endpoint consumed by other clients (mobile, webhooks, third parties) | Route Handler (`route.ts`) | Explicit HTTP semantics, signatures for webhooks, CORS if needed |
+| Data for a Server Component | Server-only function (`import 'server-only'`) called directly | No HTTP hop; never fetch your own Route Handler from a Server Component |
+| Streaming or file responses | Route Handler | `Response` streams, `Content-Disposition` |
+| Polling/optimistic client data | TanStack Query over a service (fetch/Axios) | `state-react.md` |
+
+## Client boundary audit
+
+A `'use client'` directive too high ships the whole subtree as JavaScript and renders it on the client. Find it: `grep -rl "^'use client'" src/app` restricted to `page.tsx`/`layout.tsx`, or run `routes-audit.mjs`, which reports `client-boundary-too-high` as a confirmed finding with the route. Fix pattern: keep the page a Server Component, extract the interactive piece (filter, form, chart) into a Client Component, pass server data as props and Server Components as `children`. Check the client bundle after (`@next/bundle-analyzer`, `bundle-budget.mjs`).
+
+## Caching pitfalls with personalized data
+
+- A cached function or component that reads the user (directly or through a helper) serves one user's data to another; keep user reads outside cached scopes and pass ids in explicitly, with the user id part of the cache key.
+- `fetch` in server code with caching enabled and a per-user cookie forwarded is cached per URL unless the request is marked dynamic or keyed; prefer `cache: 'no-store'`/dynamic for per-user calls and cache only public, shared responses.
+- CDN caching of HTML for authenticated routes must be off (`Cache-Control: private, no-store`) even when the framework cache is correct; `deployment.md` covers headers.
+- Tag design: tags per entity (`order-42`) and per list (`orders:tenant-7`) so a mutation revalidates the right scope; never one global tag.
+- After login/logout, caches keyed without the user are stale by construction: include the user or tenant in keys, and clear client caches (TanStack Query) on logout (`auth-session-tenant.md`).
+
+## Output modes and deployment
+
+`output: 'standalone'` for containers, static export for CDN-only sites (no Server Components dynamics, no Server Actions), the default for Node servers and Vercel-style platforms. Trade-offs, runtime config versus `NEXT_PUBLIC_*` inlining, proxies and route-based composition are in `deployment.md`.
