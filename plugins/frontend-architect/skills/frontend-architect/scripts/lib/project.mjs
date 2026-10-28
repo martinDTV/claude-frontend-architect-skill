@@ -1,7 +1,7 @@
 // Project detection, Nuxt auto-import catalog, Next.js layout and domain classification.
 // Configuration is textual (regex over nuxt.config.*): report anything derived here as heuristic.
 import { statSync } from 'node:fs'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import { exists, firstExisting, globToRegExp, readJson, readText, rel, walk } from './fs.mjs'
 import { extractExports, stripCode } from './source.mjs'
 
@@ -21,7 +21,7 @@ const DEFAULT_CONFIG = {
 
 /** Loads `.frontend-audit.json` (or `--config`) merged over defaults. */
 export function loadConfig(root, explicitPath) {
-  const file = explicitPath ? join(root, explicitPath) : firstExisting(...CONFIG_FILES.map((f) => join(root, f)))
+  const file = explicitPath ? (isAbsolute(explicitPath) ? explicitPath : join(root, explicitPath)) : firstExisting(...CONFIG_FILES.map((f) => join(root, f)))
   const user = file ? readJson(file) : null
   if (explicitPath && !user) throw new Error(`Config file not found or invalid JSON: ${explicitPath}`)
   const config = { ...DEFAULT_CONFIG, ...(user ?? {}), file: file ? rel(root, file) : null }
@@ -213,14 +213,14 @@ export function autoImportCatalog(project) {
   const symbols = new Map()
   const components = new Map()
   const collisions = []
-  if (project.framework !== 'nuxt') return { symbols, components, collisions }
+  if (project.framework !== 'nuxt') return { symbols, components, collisions, source: 'lexical' }
   const { root, srcDir, nuxt } = project
 
   const register = (name, file, kind) => {
     if (!name || name === '*' ) return
     const previous = symbols.get(name)
     if (previous && previous.file !== file) collisions.push({ name, files: [previous.file, file] })
-    symbols.set(name, { file, kind })
+    symbols.set(name, { file, kind, confidence: 'inferred' })
   }
   const scanTopLevel = (dir, kind, { recursive = false } = {}) => {
     if (!exists(dir)) return
@@ -246,20 +246,144 @@ export function autoImportCatalog(project) {
     scanTopLevel(clean, 'imports.dirs', { recursive: /\*\*$/.test(dir) })
   }
   for (const dir of nuxt.storesDirs) scanTopLevel(dir, 'store')
+  // Nuxt 4 layers (layers/<x>/app/...) and Nuxt 3 style layers (layers/<x>/...): same scanning rules
+  const layerDirs = []
+  for (const layer of nuxt.layers) {
+    const base = join(root, 'layers', layer)
+    const app = exists(join(base, 'app')) ? join(base, 'app') : base
+    scanTopLevel(join(app, 'composables'), 'layer-composable')
+    scanTopLevel(join(app, 'utils'), 'layer-util')
+    if (exists(join(app, 'components'))) layerDirs.push({ path: join(app, 'components'), prefix: '', pathPrefix: true, default: false, layer })
+  }
 
-  for (const entry of nuxt.componentDirs) {
+  const registerComponent = (name, relFile) => {
+    const previous = components.get(name)
+    if (previous && previous.file !== relFile) collisions.push({ name, files: [previous.file, relFile] })
+    components.set(name, { file: relFile, confidence: 'inferred' })
+  }
+  for (const entry of [...nuxt.componentDirs, ...layerDirs]) {
     if (!exists(entry.path)) continue
     for (const file of walk(entry.path, { extensions: ['.vue', '.tsx', '.jsx'] })) {
       const relToDir = rel(entry.path, file)
       const segments = relToDir.split('/')
       const fileName = segments.pop().split('.')[0]
       const name = nuxtComponentName(segments, fileName, { prefix: entry.prefix, pathPrefix: entry.pathPrefix })
-      const relFile = rel(root, file)
-      if (components.has(name) && components.get(name) !== relFile) collisions.push({ name, files: [components.get(name), relFile] })
-      components.set(name, relFile)
+      registerComponent(name, rel(root, file))
     }
   }
-  return { symbols, components, collisions }
+  return { symbols, components, collisions, source: 'lexical' }
+}
+
+// ---- Nuxt-generated metadata -------------------------------------------------------------------
+
+const META_EXTENSIONS = ['', '.ts', '.tsx', '.js', '.mjs', '.mts', '.vue', '/index.ts', '/index.js']
+
+/** Short package name from a node_modules path (`…/node_modules/@vueuse/core/index` → `@vueuse/core`). */
+function packageNameOf(path) {
+  const idx = path.lastIndexOf('node_modules/')
+  if (idx < 0) return 'nuxt'
+  const after = path.slice(idx + 'node_modules/'.length).split('/')
+  return after[0]?.startsWith('@') ? `${after[0]}/${after[1] ?? ''}` : after[0] ?? 'unknown'
+}
+
+/**
+ * Reads the catalogs Nuxt itself generates (`.nuxt/types/imports.d.ts`, `.nuxt/components.d.ts`)
+ * when they exist. Project files become `verified` symbols; package-provided ones are listed
+ * separately; entries pointing at files that no longer exist are dropped as stale. The files are
+ * written by `nuxt prepare`/`nuxt dev`/`nuxt build`; they can be older than the source tree.
+ */
+export function nuxtGeneratedCatalog(project) {
+  const result = { present: false, symbols: new Map(), components: new Map(), packageSymbols: new Map(), packageComponents: new Map(), stale: [], mtime: null, files: [] }
+  if (project.framework !== 'nuxt') return result
+  const { root } = project
+  const importsFile = join(root, '.nuxt', 'types', 'imports.d.ts')
+  const componentsFile = join(root, '.nuxt', 'components.d.ts')
+  const rootPrefix = `${root.replace(/\\/g, '/')}/`
+
+  const resolveMeta = (metaFile, importPath) => {
+    const abs = resolveModulePath(dirname(metaFile), importPath).replace(/\\/g, '/')
+    if (!abs.startsWith(rootPrefix) || abs.includes('/node_modules/')) return { kind: 'package', source: packageNameOf(abs) }
+    if (abs.startsWith(`${rootPrefix}.nuxt/`)) return { kind: 'package', source: 'nuxt' }
+    for (const ext of META_EXTENSIONS) {
+      const candidate = `${abs}${ext}`
+      if (exists(candidate) && !isDirectory(candidate)) return { kind: 'project', file: candidate.slice(rootPrefix.length) }
+    }
+    return { kind: 'stale', path: abs.slice(rootPrefix.length) }
+  }
+
+  if (exists(importsFile)) {
+    result.present = true
+    result.files.push(rel(root, importsFile))
+    result.mtime = Math.max(result.mtime ?? 0, statSync(importsFile).mtimeMs)
+    const text = readText(importsFile)
+    for (const m of text.matchAll(/^\s*const\s+([A-Za-z_$][\w$]*)\s*:\s*typeof\s+import\(\s*['"]([^'"]+)['"]\s*\)/gm)) {
+      const [, name, importPath] = m
+      const r = resolveMeta(importsFile, importPath)
+      if (r.kind === 'project') result.symbols.set(name, { file: r.file, kind: 'nuxt-metadata', confidence: 'verified' })
+      else if (r.kind === 'package') result.packageSymbols.set(name, r.source)
+      else result.stale.push({ name, kind: 'symbol', path: r.path })
+    }
+  }
+  if (exists(componentsFile)) {
+    result.present = true
+    result.files.push(rel(root, componentsFile))
+    result.mtime = Math.max(result.mtime ?? 0, statSync(componentsFile).mtimeMs)
+    const text = readText(componentsFile)
+    for (const m of text.matchAll(/^\s*export\s+const\s+([A-Za-z_$][\w$]*)\s*:\s*(?:LazyComponent<\s*)?typeof\s+import\(\s*['"]([^'"]+)['"]\s*\)/gm)) {
+      const [, name, importPath] = m
+      const r = resolveMeta(componentsFile, importPath)
+      if (r.kind === 'project') result.components.set(name, { file: r.file, confidence: 'verified' })
+      else if (r.kind === 'package') result.packageComponents.set(name, r.source)
+      else result.stale.push({ name, kind: 'component', path: r.path })
+    }
+  }
+  return result
+}
+
+function resolveModulePath(fromDir, importPath) {
+  return normalizeAbsolute(join(fromDir, importPath))
+}
+
+function normalizeAbsolute(p) {
+  const parts = []
+  for (const seg of p.split(/[\\/]+/)) {
+    if (seg === '..') parts.pop()
+    else if (seg !== '.' && seg !== '') parts.push(seg)
+  }
+  return `/${parts.join('/')}`
+}
+
+/**
+ * The catalog the graph uses: Nuxt metadata (verified) merged with the lexical scan (inferred).
+ * `source` is 'nuxt-metadata+lexical' when metadata was found, otherwise 'lexical'.
+ */
+export function mergedCatalog(project) {
+  const lexical = autoImportCatalog(project)
+  const generated = nuxtGeneratedCatalog(project)
+  const symbols = new Map()
+  const components = new Map()
+  const pathMismatches = []
+  for (const [name, entry] of generated.symbols) symbols.set(name, entry)
+  for (const [name, entry] of lexical.symbols) {
+    const verified = symbols.get(name)
+    if (!verified) symbols.set(name, entry)
+    else if (verified.file !== entry.file) pathMismatches.push({ name, metadata: verified.file, lexical: entry.file })
+  }
+  for (const [name, entry] of generated.components) components.set(name, entry)
+  for (const [name, entry] of lexical.components) {
+    const verified = components.get(name)
+    if (!verified) components.set(name, entry)
+    else if (verified.file !== entry.file) pathMismatches.push({ name, metadata: verified.file, lexical: entry.file })
+  }
+  return {
+    symbols,
+    components,
+    collisions: lexical.collisions,
+    packageSymbols: generated.packageSymbols,
+    packageComponents: generated.packageComponents,
+    source: generated.present ? 'nuxt-metadata+lexical' : 'lexical',
+    metadata: { present: generated.present, files: generated.files, mtime: generated.mtime, stale: generated.stale, pathMismatches, verifiedSymbols: generated.symbols.size, verifiedComponents: generated.components.size, newestSourceMtime: null, olderThanSources: false },
+  }
 }
 
 function camelCase(name) {

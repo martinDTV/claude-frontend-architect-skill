@@ -24,6 +24,7 @@ Findings:
   module-level-http-client-mutable-auth  a module-level HTTP instance whose auth header is mutated (confirmed pattern)
   module-level-mutable-state           let/Map/ref/… at module scope in code that runs on the server (heuristic)
   server-data-in-store                 a store that fetches and keeps entity arrays (heuristic)
+  server-data-copied-to-store          a component/composable that fetches (query cache or HTTP) and writes the result into a store (heuristic)
   store-shared-across-domains          a non-core store used by three or more business domains (heuristic)
   store-persists-everything            persist: true on a whole store (heuristic; high if it holds tokens)
   god-store                            a store returning many members or very long (heuristic)
@@ -33,6 +34,9 @@ Findings:
 `
 
 const HTTP_RE = /(?:\$fetch|useFetch|useLazyFetch|useAsyncData|apiFetch|fetch)\s*\(|\b(?:\$?api|http|axios|client|request)\.(?:get|post|put|patch|delete|request)\s*\(/g
+const QUERY_RE = /\b(?:useQuery|useInfiniteQuery|useFetch|useLazyFetch|useAsyncData|useLazyAsyncData|\$fetch|apiFetch)\s*\(|\b(?:\$?api|http|axios|client|request)\.(?:get|post|put|patch|delete)\s*\(/g
+const DATA_WORD_RE = /\b(?:data|response|result|results|res|items|rows|payload|json|records|list|page|body|await)\b/i
+const LITERAL_RHS_RE = /^(?:true|false|null|undefined|\[\s*\]|\{\s*\}|''|""|``|-?\d+(?:\.\d+)?)\s*$/
 const SECRET_RE = /token|jwt|access|refresh|secret|password|bearer|session|credential|api[-_]?key/i
 const CONTAINER_RE = /^(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*(?::[^=]+)?=\s*(new\s+(?:Map|Set|WeakMap|WeakSet)\b|\[\s*\]|\{\s*\}|(?:ref|reactive|shallowRef|shallowReactive)\s*(?:<[^>]*>)?\s*\(|axios\.create\s*\(|\$fetch\.create\s*\(|ofetch\.create\s*\(|createHttpClient\s*\(|new\s+(?:QueryClient|EventEmitter|AbortController)\b)/
 const MUTABLE_BINDING_RE = /^(?:export\s+)?(?:let|var)\s+([\w$]+)/
@@ -168,6 +172,41 @@ export function run(argv) {
       }
     }
 
+    // ---- server data copied from a fetch/query into a store (two sources of truth)
+    if (!/\bdefineStore\s*\(/.test(stripped)) {
+      const fetchLines = [...stripped.matchAll(QUERY_RE)].map((m) => lineAt(stripped, m.index))
+      if (fetchLines.length) {
+        const offset = info.isVue ? info.scriptLine - 1 : 0
+        const lines = stripped.split('\n')
+        const refsFromStore = new Set()
+        for (const m of stripped.matchAll(/(?:const|let)\s*\{([^}]*)\}\s*=\s*storeToRefs\s*\(/g)) for (const part of m[1].split(',')) {
+          const name = part.split(':').pop()?.trim()
+          if (name && /^[\w$]+$/.test(name)) refsFromStore.add(name)
+        }
+        const writes = []
+        lines.forEach((text, i) => {
+          const assign = /\b([\w$]*[sS]tore)\.([\w$]+)\s*=(?!=)\s*(.*)$/.exec(text)
+          if (assign && !LITERAL_RHS_RE.test(assign[3].replace(/;\s*$/, '')) && DATA_WORD_RE.test(assign[3])) writes.push({ line: i + 1, text: text.trim(), kind: 'assignment' })
+          const setter = /\b([\w$]*[sS]tore)\.((?:set|add|load|hydrate|replace|init|assign|fill|save|push|upsert|merge)[\w$]*)\s*\(([^)]*)\)/.exec(text)
+          if (setter && DATA_WORD_RE.test(setter[3])) writes.push({ line: i + 1, text: text.trim(), kind: 'setter' })
+          for (const ref of refsFromStore) {
+            const re = new RegExp(`(?<![\\w$.])${ref}\\.value\\s*=(?!=)\\s*(.*)$`)
+            const m = re.exec(text)
+            if (m && !LITERAL_RHS_RE.test(m[1].replace(/;\s*$/, '')) && DATA_WORD_RE.test(m[1])) writes.push({ line: i + 1, text: text.trim(), kind: 'storeToRefs' })
+          }
+        })
+        if (writes.length) {
+          const w = writes[0]
+          addFinding(report, {
+            id: 'server-data-copied-to-store', level: 'heuristic', severity: 'medium', file: rel, line: w.line + offset,
+            message: `fetches or queries (line ${fetchLines[0] + offset}) and writes the result into a store (${writes.length} write${writes.length > 1 ? 's' : ''}): the query cache already owns that data`,
+            evidence: `fetch at line ${fetchLines[0] + offset}; write at line ${w.line + offset}: ${w.text.slice(0, 120)}`,
+            fix: 'read the data from the query (state.data / useQuery) where it is needed; keep the store for client-owned state only; if several components need it, share the query composable, not a copy',
+          })
+        }
+      }
+    }
+
     // ---- logout without cache clear
     const definesLogout = /function\s+(?:logout|signOut|logOut|cerrarSesion)\s*\(|(?:const|let)\s+(?:logout|signOut|logOut|cerrarSesion)\s*=|(?:^|[\s,{])(?:async\s+)?(?:logout|signOut|logOut|cerrarSesion)\s*\([^)]*\)\s*(?::\s*[^{=]+)?\{/m.test(stripped)
     if (definesLogout) {
@@ -210,4 +249,6 @@ function lineAt(code, index) {
   return line
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exit(run(process.argv.slice(2)))
+// Set the exit code instead of calling process.exit: large --json outputs piped to another process
+// would otherwise be truncated at 64 KiB when the process exits before stdout drains.
+if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))

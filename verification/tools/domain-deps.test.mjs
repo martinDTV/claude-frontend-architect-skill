@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { createRequire } from 'node:module'
+const require = createRequire(import.meta.url)
 import { byId, fixtures, runTool } from './helpers.mjs'
 
 const nuxt = join(fixtures, 'nuxt-app')
@@ -86,6 +88,18 @@ test('next: classifies App Router segments and features without a config file', 
   assert.equal(shared[0].level, 'confirmed')
   // route group folders do not become domains
   assert.ok(!report.data.domains.includes('(dashboard)'))
+})
+
+test('--config accepts an absolute path outside the project (audits keep the classification in /tmp)', () => {
+  const { mkdtempSync, writeFileSync, readFileSync } = require('node:fs')
+  const { tmpdir } = require('node:os')
+  const dir = mkdtempSync(join(tmpdir(), 'fa-config-'))
+  const cfg = join(dir, 'audit.json')
+  writeFileSync(cfg, readFileSync(join(nuxt, '.frontend-audit.json')))
+  const { code, report } = runTool('domain-deps.mjs', [nuxt, '--config', cfg, '--fail-on', 'none'])
+  assert.equal(code, 0)
+  assert.ok(report.config.endsWith('audit.json'))
+  assert.ok(report.data.businessDomains.includes('crm'))
 })
 
 test('usage and errors', () => {

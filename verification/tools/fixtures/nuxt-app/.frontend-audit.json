@@ -1,13 +1,43 @@
 {
   "domains": {
-    "crm": ["app/composables/useCrm.ts", "app/composables/useSettingComercial.ts", "app/types/crm.ts", "app/components/crm/**", "app/pages/crm/**", "server/api/crm/**"],
-    "planos": ["app/composables/usePlanos.ts", "app/components/planos/**", "app/pages/planos/**"],
-    "rrhh": ["app/composables/usePersonas.ts"],
-    "pre": ["app/composables/catalogos/**"],
-    "obra": ["app/pages/obra/**"],
-    "big": ["app/pages/big/**"]
+    "crm": [
+      "app/composables/useCrm.ts",
+      "app/composables/useSettingComercial.ts",
+      "app/types/crm.ts",
+      "app/components/crm/**",
+      "app/pages/crm/**",
+      "server/api/crm/**",
+      "app/stores/crm.ts"
+    ],
+    "planos": [
+      "app/composables/usePlanos.ts",
+      "app/components/planos/**",
+      "app/pages/planos/**"
+    ],
+    "rrhh": [
+      "app/composables/usePersonas.ts"
+    ],
+    "pre": [
+      "app/composables/catalogos/**"
+    ],
+    "obra": [
+      "app/pages/obra/**"
+    ],
+    "big": [
+      "app/pages/big/**"
+    ]
   },
-  "shared": ["app/composables/useApi.ts", "app/utils/**", "app/components/ui/**"],
-  "publicRoutes": ["app/pages/auth/**"],
-  "coreStores": ["auth", "ui"]
+  "shared": [
+    "app/composables/useApi.ts",
+    "app/utils/**",
+    "app/components/ui/**",
+    "layers/**"
+  ],
+  "publicRoutes": [
+    "app/pages/auth/**"
+  ],
+  "coreStores": [
+    "auth",
+    "ui"
+  ]
 }

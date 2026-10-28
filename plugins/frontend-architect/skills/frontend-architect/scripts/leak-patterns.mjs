@@ -89,4 +89,6 @@ export function run(argv) {
   return finish(report, args, { sections })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exit(run(process.argv.slice(2)))
+// Set the exit code instead of calling process.exit: large --json outputs piped to another process
+// would otherwise be truncated at 64 KiB when the process exits before stdout drains.
+if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))

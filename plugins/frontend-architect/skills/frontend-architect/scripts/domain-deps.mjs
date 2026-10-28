@@ -24,15 +24,19 @@ usage: node domain-deps.mjs <project-root> [options]
   --json | --md        machine-readable or Markdown output (default: text)
   --fail-on <level>    exit 1 on: confirmed (default) | any | none
 
+Edge confidence: verified (explicit import, or auto-import/component resolved by Nuxt's own
+.nuxt/types/imports.d.ts and .nuxt/components.d.ts), inferred (this tool's lexical re-implementation
+of Nuxt's scanning rules). Names that resolve nowhere are listed as unknown and never become edges.
+
 Findings:
-  shared-imports-domain      shared/ui/lib code depends on a business domain (confirmed when imported)
+  shared-imports-domain      shared/ui/lib code depends on a business domain (confirmed when verified)
   shell-depends-on-domain    layouts, middleware, plugins or app.vue use domain code
   feature-internal-import    cross-module import that bypasses the module's index.ts
   cross-domain-hotspot       one file used by three or more other domains
   domain-cycle               two domains depend on each other
 Config keys (.frontend-audit.json): domains {name: [globs]}, shell [globs], shared [globs],
 coreDomains [names the shell may depend on], publicRoutes, excludeTests.
-Everything resolved through auto-imports is lexical: verify before acting.
+Inferred edges are lexical: verify before acting. Run 'nuxt prepare' to get verified ones.
 `
 
 export function run(argv) {
@@ -44,7 +48,7 @@ export function run(argv) {
   if (args['include-tests']) config.excludeTests = false
   const project = detectProject(root, config)
   const report = createReport('domain-deps', project)
-  const { files, edges, catalog } = buildGraph(project, { autoImports: !args['no-auto-imports'] })
+  const { files, edges, catalog, unknown, packageUses } = buildGraph(project, { autoImports: !args['no-auto-imports'] })
   const top = Number(args.top ?? 10)
   if (args['suggest-config']) {
     process.stdout.write(`${JSON.stringify(suggestConfig(project, files), null, 2)}\n`)
@@ -68,10 +72,11 @@ export function run(argv) {
     const key = `${a}>${b}`
     if (!pairFiles.has(key)) pairFiles.set(key, new Map())
     const targets = pairFiles.get(key)
-    if (!targets.has(e.to)) targets.set(e.to, { count: 0, via: new Set(), names: new Set(), sources: new Set() })
+    if (!targets.has(e.to)) targets.set(e.to, { count: 0, via: new Set(), confidence: new Set(), names: new Set(), sources: new Set() })
     const t = targets.get(e.to)
     t.count++
     t.via.add(e.via)
+    t.confidence.add(e.confidence)
     if (e.name) t.names.add(e.name)
     t.sources.add(e.from)
   }
@@ -100,14 +105,14 @@ export function run(argv) {
     if (to.kind !== 'domain') continue
     if (from.kind === 'shared') {
       addFinding(report, {
-        id: 'shared-imports-domain', level: e.via === 'import' ? 'confirmed' : 'heuristic', severity: 'high', file: e.from, line: e.line,
-        message: `shared code uses domain "${to.domain}" (${e.via} ${e.name}) from ${e.to}`,
+        id: 'shared-imports-domain', level: e.confidence === 'verified' ? 'confirmed' : 'heuristic', severity: 'high', file: e.from, line: e.line,
+        message: `shared code uses domain "${to.domain}" (${e.via} ${e.name}, ${e.confidence}) from ${e.to}`,
         fix: 'Move the domain-specific part into the domain, or move this shared piece into the domain that owns it.',
       })
     } else if (from.kind === 'shell' && !coreDomains.has(to.domain)) {
       addFinding(report, {
-        id: 'shell-depends-on-domain', level: e.via === 'import' ? 'confirmed' : 'heuristic', severity: 'medium', file: e.from, line: e.line,
-        message: `shell depends on domain "${to.domain}" (${e.via} ${e.name}) from ${e.to}`,
+        id: 'shell-depends-on-domain', level: e.confidence === 'verified' ? 'confirmed' : 'heuristic', severity: 'medium', file: e.from, line: e.line,
+        message: `shell depends on domain "${to.domain}" (${e.via} ${e.name}, ${e.confidence}) from ${e.to}`,
         fix: 'Shell (layouts, middleware, plugins) should depend only on a core/session layer; expose what it needs through a domain-free contract.',
       })
     }
@@ -173,12 +178,30 @@ export function run(argv) {
   }
 
   const viaCounts = edges.reduce((acc, e) => ((acc[e.via] = (acc[e.via] ?? 0) + 1), acc), {})
+  const confidenceCounts = edges.reduce((acc, e) => ((acc[e.confidence] = (acc[e.confidence] ?? 0) + 1), acc), {})
+  const meta = catalog.metadata ?? { present: false, stale: [], pathMismatches: [] }
+  const metadataState = !project.nuxt ? 'n/a' : !meta.present ? 'absent' : meta.olderThanSources ? 'stale' : 'present'
+  if (project.nuxt && args['no-auto-imports'] !== true) {
+    if (!meta.present) report.notes.push('No .nuxt/types/imports.d.ts or .nuxt/components.d.ts found: auto-import and component edges are inferred from this tool\'s re-implementation of Nuxt\'s scanning rules. Run `nuxt prepare` in the project to get Nuxt-verified edges.')
+    else {
+      report.notes.push(`Auto-imports resolved against Nuxt's generated metadata (${meta.files.join(', ')}): ${meta.verifiedSymbols} symbols and ${meta.verifiedComponents} components verified; lexical-only entries are inferred.`)
+      if (meta.olderThanSources) report.notes.push('The generated metadata is older than the newest source file: run `nuxt prepare` to refresh it before trusting verified edges for recently added files.')
+      if (meta.stale.length) report.notes.push(`${meta.stale.length} metadata entries point at files that no longer exist and were ignored (e.g. ${meta.stale.slice(0, 3).map((x) => x.name).join(', ')}).`)
+      if (meta.pathMismatches.length) report.notes.push(`${meta.pathMismatches.length} names resolve to different files in the metadata and in the lexical scan; the metadata wins (e.g. ${meta.pathMismatches.slice(0, 2).map((x) => `${x.name}: ${x.metadata} vs ${x.lexical}`).join('; ')}).`)
+    }
+    if (unknown.length) report.notes.push(`${unknown.length} composable or component names could not be resolved to a project file or a package (unknown): no edges were created for them; see the unknown-symbols section.`)
+  }
   report.summary = {
     files: files.size,
     edges: edges.length,
     edgesByKind: viaCounts,
+    edgesByConfidence: confidenceCounts,
+    catalogSource: catalog.source,
+    metadata: metadataState,
     autoImportSymbols: catalog.symbols.size,
     autoImportComponents: catalog.components.size,
+    unknownSymbols: unknown.length,
+    packageSymbolsUsed: packageUses.length,
     domains: business.length,
     horizontalEdges: pairs.reduce((n, p) => n + p.edges, 0),
     unclassifiedFiles: unclassified.length,
@@ -197,7 +220,7 @@ export function run(argv) {
       title: `Horizontal coupling between business domains (top ${top})`,
       table: {
         headers: ['from', 'to', 'edges', 'files', 'main targets'],
-        rows: pairs.slice(0, top).map((p) => [p.from, p.to, p.edges, p.files, p.targets.slice(0, 3).map(([f, t]) => `${f} (${t.count}, ${[...t.via].join('/')})`).join('; ')]),
+        rows: pairs.slice(0, top).map((p) => [p.from, p.to, p.edges, p.files, p.targets.slice(0, 3).map(([f, t]) => `${f} (${t.count}, ${[...t.via].join('/')}, ${[...t.confidence].join('/')})`).join('; ')]),
       },
     },
   ]
@@ -205,18 +228,28 @@ export function run(argv) {
   if (args.edges) {
     const [a, b] = String(args.edges).split(':')
     const list = edges.filter((e) => domainOf(e.from) === a && domainOf(e.to) === b)
-    sections.push({ title: `Edges ${a} → ${b} (${list.length})`, table: { headers: ['from', 'line', 'via', 'name', 'to'], rows: list.map((e) => [e.from, e.line, e.via, e.name, e.to]) } })
+    sections.push({ title: `Edges ${a} → ${b} (${list.length})`, table: { headers: ['from', 'line', 'via', 'confidence', 'name', 'to'], rows: list.map((e) => [e.from, e.line, e.via, e.confidence, e.name, e.to]) } })
+  }
+  if (unknown.length || packageUses.length) {
+    sections.push({
+      title: `Unknown and package-provided symbols (top ${top})`,
+      text: 'unknown = looks auto-importable but resolves to no project file or package (typo, missing module, or metadata not generated); package = provided by a dependency according to Nuxt metadata. Neither creates an edge.',
+      table: { headers: ['status', 'kind', 'name', 'source', 'files'], rows: [...unknown.slice(0, top).map((u) => ['unknown', u.kind, u.name, '-', u.files.length]), ...packageUses.slice(0, top).map((u) => ['package', u.kind, u.name, u.source, u.files.length])] },
+    })
   }
 
   report.data = {
     domains,
     businessDomains: business,
     matrix: Object.fromEntries(domains.map((a) => [a, Object.fromEntries(domains.map((b) => [b, matrix.get(a)?.get(b)?.size ?? 0]))])),
-    pairs: pairs.map((p) => ({ from: p.from, to: p.to, edges: p.edges, files: p.files, targets: p.targets.map(([f, t]) => ({ file: f, count: t.count, via: [...t.via], names: [...t.names].slice(0, 12), sources: [...t.sources] })) })),
+    pairs: pairs.map((p) => ({ from: p.from, to: p.to, edges: p.edges, files: p.files, targets: p.targets.map(([f, t]) => ({ file: f, count: t.count, via: [...t.via], confidence: [...t.confidence], names: [...t.names].slice(0, 12), sources: [...t.sources] })) })),
     hotspots,
     unclassified,
     collisions: catalog.collisions,
-    edges: edges.map((e) => ({ from: e.from, to: e.to, via: e.via, name: e.name, line: e.line, typeOnly: e.typeOnly, fromDomain: domainOf(e.from), toDomain: domainOf(e.to) })),
+    catalog: { source: catalog.source, metadata: catalog.metadata ? { ...catalog.metadata, stale: catalog.metadata.stale.slice(0, 50) } : null },
+    unknown,
+    packageUses,
+    edges: edges.map((e) => ({ from: e.from, to: e.to, via: e.via, confidence: e.confidence, name: e.name, line: e.line, typeOnly: e.typeOnly, fromDomain: domainOf(e.from), toDomain: domainOf(e.to) })),
   }
   return finish(report, args, { sections })
 }
@@ -245,4 +278,6 @@ function suggestConfig(project, files) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exit(run(process.argv.slice(2)))
+// Set the exit code instead of calling process.exit: large --json outputs piped to another process
+// would otherwise be truncated at 64 KiB when the process exits before stdout drains.
+if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))

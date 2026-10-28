@@ -9,7 +9,7 @@ const items = computed(() => (veModulo('crm') ? ['crm'] : []))
   <div>
     <AppHeader :user="auth.user" />
     <CrmBadge v-if="items.length" estado="activo" />
-    <StateLoading v-if="ui.loading" />
+    <UiStateLoading v-if="ui.loading" />
     <slot />
   </div>
 </template>

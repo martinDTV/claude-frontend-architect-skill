@@ -27,7 +27,7 @@ Findings:
   internal-import            an outsider imports a file that is not the module's index (confirmed)
   wildcard-public-api        index.ts uses export * (surface not explicit; heuristic, low)
   module-cycle               modules import each other through their entries (confirmed)
-  implicit-cross-module-dependency  a module is used through Nuxt auto-imports or auto-registered components (heuristic)
+  implicit-cross-module-dependency  a module is used through Nuxt auto-imports or auto-registered components (confirmed when Nuxt metadata verifies it, heuristic otherwise)
   breaking-change            a public export in the baseline is gone (confirmed)
   unused-public-export       exported by index.ts but never imported from outside (info)
 `
@@ -82,7 +82,8 @@ export function run(argv) {
     }
     if (e.via !== 'import') {
       mod.implicit.push({ from: e.from, line: e.line, to: e.to, name: e.name, via: e.via })
-      addFinding(report, { id: 'implicit-cross-module-dependency', level: 'heuristic', severity: 'medium', file: e.from, line: e.line, message: `uses ${e.name} from ${mod.root} through ${e.via === 'component' ? 'component auto-registration' : 'an auto-import'}: the dependency bypasses ${mod.index ?? 'any public entry'} and is invisible to import rules`, fix: 'move module code out of auto-imported dirs (Nuxt scans only top-level composables/utils and components dirs) and import it explicitly from the module entry' })
+      mod.implicit[mod.implicit.length - 1].confidence = e.confidence
+      addFinding(report, { id: 'implicit-cross-module-dependency', level: e.confidence === 'verified' ? 'confirmed' : 'heuristic', severity: 'medium', file: e.from, line: e.line, message: `uses ${e.name} from ${mod.root} through ${e.via === 'component' ? 'component auto-registration' : 'an auto-import'}${e.confidence === 'verified' ? ' (resolved by Nuxt\'s generated metadata)' : ' (inferred lexically)'}: the dependency bypasses ${mod.index ?? 'any public entry'} and is invisible to import rules`, fix: 'move module code out of auto-imported dirs (Nuxt scans only top-level composables/utils and components dirs) and import it explicitly from the module entry' })
       continue
     }
     if (mod.index && e.to === mod.index) {
@@ -139,4 +140,6 @@ export function run(argv) {
   return finish(report, args, { sections })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exit(run(process.argv.slice(2)))
+// Set the exit code instead of calling process.exit: large --json outputs piped to another process
+// would otherwise be truncated at 64 KiB when the process exits before stdout drains.
+if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))
