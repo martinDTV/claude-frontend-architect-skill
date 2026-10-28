@@ -104,3 +104,34 @@ Use `onCleanup`/`onWatcherCleanup` to cancel stale async work. `{ immediate: tru
 - `any` in props or emits: use generics or `unknown` with narrowing.
 - Large reactive arrays of class instances: use `shallowRef` and replace.
 - `v-if` with `v-for` on the same element; missing or index-based `:key` on reorderable lists.
+
+## Reactivity limits
+
+- `reactive()` returns a proxy: `===` against the raw object fails, and class instances with private fields or `this`-bound methods break when proxied. Wrap such instances with `markRaw()` or keep them in `shallowRef`.
+- `shallowRef`/`shallowReactive` for large lists, API payloads, Three.js objects, editor states: replace the whole value to trigger updates; mutate inside and call `triggerRef` only as a deliberate exception.
+- `Map` and `Set` are reactive inside `reactive()` (Vue tracks their methods); plain object property additions are too in Vue 3; array index assignment works. Non-reactive: values captured in a closure before they became reactive, and properties accessed off the raw object.
+- Props destructure (Vue 3.5+): `const { limit = 20 } = defineProps<{ limit?: number }>()` stays reactive inside the setup scope; passing a destructured prop to a composable needs a getter (`() => limit`) or `toRef`. Before 3.5, destructuring props loses reactivity.
+- `watch` with a getter of a nested path (`() => form.address.zip`) is cheaper than `deep: true` on the whole object; `deep: true` on large trees is a performance trap. Vue 3.5 supports `deep: <number>` for a bounded depth.
+- `nextTick()` after state changes before reading the DOM; `flush: 'post'` watchers for DOM-dependent effects.
+- `effectScope()` groups watchers and computeds created outside a component (shared composables, stores) so they can be stopped together; composables created inside `setup` are tied to the component scope automatically.
+- Computed values must be pure and cheap; a computed that maps 10k rows re-runs on any dependency change. Memoize per item or move the work to the server.
+
+## Auto-imports: benefits and risks at scale
+
+Auto-imports remove boilerplate for Vue APIs and small apps, and make large apps harder to reason about:
+- **Implicit coupling**: any component can call any top-level composable without an import line; dependency rules (`dependency-cruiser`) cannot see it, and refactors miss call sites. `domain-deps.mjs` resolves these edges lexically precisely because the code does not declare them.
+- **Name collisions**: two files exporting `useFormat` register silently; the last wins. The audit script reports collisions.
+- **Discoverability**: newcomers cannot jump to the definition without tooling, and reviewers cannot see what a file depends on.
+- `imports.dirs` extends scanning to more folders (and nested paths with globs); each addition widens the implicit surface.
+
+Policy for products beyond stage 0: keep auto-imports for framework APIs and a small set of truly global helpers (`app/composables`, `app/utils` top level); put domain code in `features/` or `modules/` (not scanned) and import it explicitly from the module's entry (`folder-structure.md`, `modular-monolith.md`). Do not add `features/**` to `imports.dirs`.
+
+## Suspense and async components
+
+- `<Suspense>` renders a fallback while async setup functions (top-level `await` in `<script setup>`) and async components resolve; it is still marked experimental in Vue 3.5 docs, and Nuxt uses it internally for pages. Errors inside propagate to `onErrorCaptured` of the parent and to `<NuxtErrorBoundary>`.
+- `defineAsyncComponent({ loader, loadingComponent, errorComponent, delay, timeout })` for heavy, rarely used components (editors, charts); in Nuxt the `Lazy` prefix does this for registered components.
+- Await in setup only when the page cannot render without the data; otherwise `lazy: true` fetches and render a skeleton (`nuxt.md`).
+
+## Error capture
+
+`onErrorCaptured`, `<NuxtErrorBoundary>`, `createError` and the policy for `catch` blocks are in `error-handling.md`.

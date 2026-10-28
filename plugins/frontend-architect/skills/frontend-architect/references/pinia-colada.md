@@ -114,3 +114,7 @@ Test services in isolation (`axios.md`). For composables and components, install
 - Non-hierarchical keys (`['getUsersPage1']`) that cannot be invalidated as a group.
 - Catching errors inside the query function and returning `null`: the error state never shows.
 - Optimistic updates without rollback, or on operations where failure is common (payments).
+
+## Beyond the basics
+
+Invalidation driven by server events (SSE/WebSocket hints), optimistic concurrency with versions and 409 handling, stale-response races outside the cache, cross-tab logout and offline queues are covered in `realtime-and-sync.md`. Error states and recovery flows (expired session, revoked permission, tenant switch) are in `error-handling.md`.
