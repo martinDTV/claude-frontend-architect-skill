@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict'
+import { join } from 'node:path'
+import { test } from 'node:test'
+import { byId, fixtures, runTool } from './helpers.mjs'
+
+const nuxt = join(fixtures, 'nuxt-app')
+const next = join(fixtures, 'next-app')
+
+test('nuxt: tokens in localStorage and a module-level client with mutable auth are confirmed', () => {
+  const { code, report } = runTool('state-audit.mjs', [nuxt])
+  assert.equal(code, 1)
+  const tokens = byId(report, 'token-in-web-storage')
+  assert.equal(tokens.length, 2)
+  assert.ok(tokens.every((f) => f.level === 'confirmed' && f.file === 'app/stores/auth.ts'))
+  assert.ok(tokens.some((f) => f.message.includes("'nexus:access'")))
+  const client = byId(report, 'module-level-http-client-mutable-auth')
+  assert.equal(client.length, 1)
+  assert.equal(client[0].file, 'app/composables/useApi.ts')
+  assert.equal(client[0].level, 'confirmed')
+  assert.equal(client[0].severity, 'critical', 'ssr is on in the fixture')
+  // the plugin creates its instance inside defineNuxtPlugin: not module-level
+  assert.ok(!report.findings.some((f) => f.file === 'app/plugins/api.ts'))
+})
+
+test('nuxt: module-level containers and let bindings are heuristic; stores are inventoried', () => {
+  const { report } = runTool('state-audit.mjs', [nuxt, '--fail-on', 'none'])
+  const mod = byId(report, 'module-level-mutable-state')
+  assert.ok(mod.some((f) => f.file === 'app/composables/useCrm.ts' && f.message.includes('"cache"')))
+  assert.ok(mod.some((f) => f.file === 'app/composables/catalogos/useCatalogoWbs.ts' && f.message.includes('"enVuelo"')))
+  assert.ok(mod.every((f) => f.level === 'heuristic'))
+  const stores = report.data.stores
+  assert.deepEqual(stores.map((s) => s.id).sort(), ['auth', 'ui'])
+  const auth = stores.find((s) => s.id === 'auth')
+  assert.equal(auth.persist, 'all')
+  assert.ok(auth.consumers >= 4, `auth store consumers via auto-import: ${auth.consumers}`)
+  const persisted = byId(report, 'store-persists-everything')
+  assert.equal(persisted.length, 1)
+  assert.equal(persisted[0].severity, 'high', 'holds tokens')
+  assert.equal(byId(report, 'logout-without-cache-clear').length, 0, 'logout calls clearNuxtState')
+  assert.deepEqual(report.data.stateKeys.map((k) => k.key).sort(), ['catalogo-wbs', 'comercial-permisos', 'personas:padron'])
+  assert.equal(byId(report, 'raw-state-key-shared').length, 0, 'each key lives in one composable')
+})
+
+test('next: module-level axios with setToken is confirmed; zustand store is info only', () => {
+  const { code, report } = runTool('state-audit.mjs', [next])
+  assert.equal(code, 1)
+  const client = byId(report, 'module-level-http-client-mutable-auth')
+  assert.equal(client.length, 1)
+  assert.equal(client[0].file, 'src/lib/http/client.ts')
+  const zustand = byId(report, 'module-level-client-store')
+  assert.equal(zustand.length, 1)
+  assert.equal(zustand[0].level, 'info')
+  assert.equal(byId(report, 'token-in-web-storage').length, 0)
+  assert.equal(report.data.stateKeys.length, 0, 'React useState is not a keyed store')
+})
