@@ -1,0 +1,31 @@
+schema_version: "1.1"
+name: audit-with-tools
+description: >
+  Audit of a small Nuxt 4 app scaffolded with known defects. Requires Bash for the plugin's scripts
+  (run with: claude plugin eval ./plugins/frontend-architect --case 39-audit-with-tools --allow-tools Bash).
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the Nuxt 4 frontend in the current directory (read-only) and tell me what to fix first.
+    Separate what you demonstrated in the code from what you measured and from what is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's audit scripts (domain-deps, state-audit, routes-audit or leak-patterns) or equivalent read-only inspection, and cites file paths with line numbers
+      - Finds the module-level Axios instance with a mutable Authorization header and the tokens written to localStorage
+      - Finds that shared UI imports a feature's internals and that the layout depends on a business domain composable
+      - Finds the page without a guard and the component with listeners/intervals that are never cleaned up
+      - Labels findings by evidence tier (demonstrated / measured / hypothetical) and does not call the module-level client an active cross-request leak without checking whether SSR is enabled
+      - Does not modify any file
+      The response FAILS if it recommends microfrontends, a rewrite, or asserts security guarantees from client-side guards.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: '(?:domain-deps|state-audit|routes-audit|leak-patterns|component-complexity|contracts-check)\.mjs'
+    arm: with-only
