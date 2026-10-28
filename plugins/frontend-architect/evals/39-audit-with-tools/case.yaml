@@ -3,6 +3,8 @@ name: audit-with-tools
 description: >
   Audit of a small Nuxt 4 app scaffolded with known defects. Requires Bash for the plugin's scripts
   (run with: claude plugin eval ./plugins/frontend-architect --case 39-audit-with-tools --allow-tools Bash).
+expected_outcome: "Scripts run, defects found with path:line, findings separated by evidence tier, no file modified, no microfrontends"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:security"]
 max_turns: 30
 timeout_seconds: 900
 allowed_tools: [Read, Glob, Grep, Skill, Bash]
@@ -28,4 +30,10 @@ graders:
     type: tool_used
     tool: Bash
     input_match: '(?:domain-deps|state-audit|routes-audit|leak-patterns|component-complexity|contracts-check)\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
     arm: with-only
