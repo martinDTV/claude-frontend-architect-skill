@@ -65,7 +65,7 @@ With `S` pointing at the skill's `scripts/` directory and the project root as th
 | 9 | Project's own `typecheck`, `lint`, `test` | Measured quality signals (report real results, including "no tests") |
 | 10 | `frontend-reviewer` agent | An independent pass; reconcile its findings with yours and keep the union with tiers |
 
-Run 2–7 in under a minute on a 100k-line app; they are lexical and never execute project code.
+Run 2–7 in under a minute on a 100k-line app. They parse the code with the project's own TypeScript and `vue/compiler-sfc` when installed (the `Analysis` line of each report says `engine: semantic`, with the compiler version and the `tsconfig` used) and fall back to lexical analysis otherwise; they never execute project code. Quote the engine and an edge's `resolution` when a finding rests on a dependency, and treat *Unresolved imports* as unknowns rather than as absence of coupling (`scripts/README.md`, section "Analysis engine").
 
 ## Reading the tool output
 

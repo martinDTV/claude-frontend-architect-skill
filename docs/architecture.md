@@ -10,18 +10,18 @@ plugins/frontend-architect/
 │   ├── frontend-architect/               core skill
 │   │   ├── SKILL.md                      workflow, stages, task → references selection, defaults, rules, scripts (~2.7k tokens on invoke)
 │   │   ├── references/ (38 files + index.md)  capability packs loaded on demand; index.md is the full catalog
-│   │   ├── scripts/ (7 tools + lib/)     read-only audit scripts, dependency-free Node
+│   │   ├── scripts/ (7 tools + lib/)     read-only audit scripts, dependency-free Node; lib/semantic/ = TypeScript/SFC engine (1.2)
 │   │   └── assets/                       ADR template, audit report template, audit config example, Lighthouse budgets
 │   └── creative-frontend/                visual design, motion and 3D skill
 │       ├── SKILL.md
 │       └── references/ (11 files)
 ├── agents/frontend-reviewer.md           read-only audit subagent (runs the scripts)
-└── evals/ (43 scenarios)                 claude plugin eval suite; one scaffolded audit case
+└── evals/ (54 scenarios)                 claude plugin eval suite; one scaffolded audit case
 verification/                             compiles and tests the documented code and the scripts (not installed)
 ├── extract.mjs, vue/ react/ next/ nuxt/ creative/   @verify extraction and real compilers
 ├── ssr-test/                             SSR cross-request leak test
 ├── depcruise/                            boundary rules fixture
-├── tools/                                node:test suites and two fixture apps for the scripts
+├── tools/                                node:test suites, three fixture apps (nuxt, next, ts-paths with ground truth) and the lexical-vs-semantic benchmark
 └── plugin-check.mjs                      manifests, references, scripts and evals consistency
 docs/                                     research, this document, validation report
 ```
@@ -34,7 +34,9 @@ docs/                                     research, this document, validation re
 
 **One agent, now with instruments.** `frontend-reviewer` keeps context isolation and read-only tools; it runs the audit scripts first and must report evidence tiers (demonstrated in code, measured by a tool or command, hypothetical). Specialist agents were again rejected: they would duplicate reference content and produce conflicting instructions.
 
-**Scripts inside the skill, tests outside the plugin.** Executable tools live in `skills/frontend-architect/scripts/` so they ship with the plugin and are referenced as `${CLAUDE_SKILL_DIR}/scripts/<tool>.mjs` (works for marketplace installs and for manual copies of the skill). They are dependency-free Node ESM, read-only by construction (one explicit `--write-baseline` exception), and lexical: they never parse TypeScript, so every output is tagged `confirmed`, `heuristic` or `info`. Their tests and fixture apps live in `verification/tools/` and are not installed. The motivating gap was real: an audit of an 80k-line Nuxt app had to build its domain dependency graph by hand because dependency-cruiser cannot see auto-imported composables or components used in templates; `domain-deps.mjs` resolves both using Nuxt's own naming rules.
+**Scripts inside the skill, tests outside the plugin.** Executable tools live in `skills/frontend-architect/scripts/` so they ship with the plugin and are referenced as `${CLAUDE_SKILL_DIR}/scripts/<tool>.mjs` (works for marketplace installs and for manual copies of the skill). They are dependency-free Node ESM, read-only by construction (one explicit `--write-baseline` exception), and every output is tagged `confirmed`, `heuristic` or `info`. Until 1.1 they were lexical; 1.2 added a semantic engine (below) and kept the lexical one as fallback. Their tests and fixture apps live in `verification/tools/` and are not installed. The motivating gap was real: an audit of an 80k-line Nuxt app had to build its domain dependency graph by hand because dependency-cruiser cannot see auto-imported composables or components used in templates; `domain-deps.mjs` resolves both using Nuxt's own naming rules.
+
+**A semantic engine without dependencies (1.2).** The scripts stay dependency-free by borrowing the compilers the audited project already has: `typescript` and `vue/compiler-sfc` are loaded from its `node_modules` with `createRequire`, validated for the API they must expose, and used for syntax trees and module resolution only (no program, no type checker, no project config executed). The alternatives were rejected: bundling a parser would add a dependency to a plugin that installs by copying files and would drift from the project's TypeScript version; running `vue-tsc` or `nuxt typecheck` would execute project configuration. The resolver uses the project's `tsconfig` (for Nuxt, the generated `.nuxt/tsconfig.app.json`), so aliases are resolved the way the build resolves them, and each edge records how it was resolved and whether it is a runtime or a type dependency. The lexical engine is unchanged and selectable; `--engine auto` falls back to it with a stated reason when `typescript` is missing or lacks the JavaScript API (TypeScript 7). A fixture with a hand-written ground truth (`verification/tools/fixtures/ts-paths`) and a benchmark compare the two engines; design and limits are in `docs/semantic-engine.md`.
 
 **Progressive disclosure, four layers.** The frontmatter description (~230 tokens, always on) is the trigger. `SKILL.md` (~2.7k tokens on invoke, measured with `claude plugin details`; it was ~5.1k before the full reference catalog moved out) holds the workflow, the stage table, a task → references selection table, a defaults table, the rules and the one-paragraph script list. `references/index.md` is the complete catalog with a "read when" line per file, read only when a task fits no selection row. References are one level deep with a `Contents` section when longer than 100 lines; scripts, assets and the scripts' README are read only when used. `plugin-check.mjs` accepts references linked from the index as linked.
 

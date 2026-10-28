@@ -20,16 +20,32 @@ Every tool supports `--help`, `--json`, `--md` and `--fail-on confirmed|any|none
 - **heuristic**: a lexical signal. Auto-import usage inferred by this tool's scanning rules, cleanup that may live in a helper the tool does not know, a Server Action that may check authorization through a wrapper. Verify before reporting it as a defect.
 - **info**: inventory and suggestions.
 
+## Analysis engine (1.2.0)
+
+The six graph-based tools (`domain-deps`, `contracts-check`, `state-audit`, `routes-audit`, `leak-patterns`, `component-complexity`) build the file graph with one of two engines:
+
+| Engine | How | When |
+|---|---|---|
+| **semantic** | TypeScript, TSX and JavaScript parsed with the audited project's own `typescript` (syntax trees, no type checker); `.vue` files parsed with its `vue/compiler-sfc`; specifiers resolved with the project's `tsconfig` (`paths`, `baseUrl`, `moduleResolution`) through `ts.resolveModuleName`, and for Nuxt the generated `.nuxt/tsconfig.app.json` / `tsconfig.server.json` | Default (`--engine auto`) whenever a `typescript` with the JavaScript API is found in the project (or in `--typescript <dir>`) |
+| **lexical** | The 1.1 engine: regular expressions over blanked code and the fixed alias table | Fallback when `typescript` is missing or is the TypeScript 7 preview (no JavaScript API), or on request (`--engine lexical`) |
+
+Flags: `--engine auto|semantic|lexical` (`semantic` exits 2 instead of falling back), `--typescript <dir>`, `--vue-compiler <dir>` (directories whose `node_modules` hold the packages; useful for pnpm layouts and for auditing code you do not trust with a known compiler), `--format text|json|markdown`. Every report starts with an `Analysis` line (JSON: top-level `analysis`) naming the engine, the compiler versions and paths, the tsconfig files, the resolution methods and any per-file fallbacks. Exit codes and every 1.1 field are unchanged.
+
+What the semantic engine changes in the output: edges carry `kind` (`runtime` or `type`), `resolution` (`typescript`, `tsconfig-paths`, `relative`, `nuxt-metadata`, `lexical-catalog`) and the import `specifier`; type-only imports lower the severity of boundary findings and never form cycles; a symbol counts as an auto-import use only when it is a value identifier (not a property name, key, string or comment); `'use client'` / `'use server'` are read as directive prologues; cleanup hooks and SFC metrics come from calls and compiler bindings; imports that resolve nowhere are listed under *Unresolved imports* with a reason and never become edges. Design, trust boundary and limits: `docs/semantic-engine.md` in the repository; measured differences against the lexical engine: `docs/benchmarks.md`.
+
+The one thing to know before running it on code you do not trust: with the semantic engine the tool loads `typescript` and `vue/compiler-sfc` from the audited project's `node_modules` into its own process. Pass `--typescript`/`--vue-compiler` pointing at an installation you control, or `--engine lexical`, when that matters.
+
 ## Dependency confidence (domain-deps, contracts-check, state-audit)
 
 Every edge in the graph carries a confidence:
 
 | Confidence | Meaning | Source |
 |---|---|---|
-| **verified** | The dependency exists as Nuxt or the bundler sees it | An explicit `import` resolved to an existing file; an auto-imported composable, util or store listed in `.nuxt/types/imports.d.ts`; a component listed in `.nuxt/components.d.ts` |
+| **verified** | The dependency exists as Nuxt or the bundler sees it | An explicit `import` resolved to an existing file (semantic engine: by TypeScript with the project's compiler options, by a `tsconfig` `paths` mapping or as a relative path; lexical engine: by the alias table); an auto-imported composable, util or store listed in `.nuxt/types/imports.d.ts`; a component listed in `.nuxt/components.d.ts` |
 | **inferred** | Resolved only by this tool's re-implementation of Nuxt's scanning rules (top-level `composables/` and `utils/`, `shared/`, `imports.dirs`, stores dirs, `components` dirs with the path-prefix naming rule, `layers/*`) | Lexical scan |
 | **unknown** | A `useX(` call or a PascalCase tag that resolves to no project file and no package | Listed in the `unknown-symbols` section; never an edge |
-| **package** | Provided by a dependency (VueUse, Nuxt UI, Pinia…) according to the metadata | Listed, never an edge |
+| **package** | Provided by a dependency (VueUse, Nuxt UI, Pinia…) according to the metadata, or an import of a declared or installed package | Listed, never an edge |
+| **unresolved import** (semantic) | An import specifier that resolves to no file and no package: non-literal dynamic import, missing file, undeclared bare specifier, a target outside the project | Listed with the reason; never an edge |
 
 The metadata files are written by `nuxt prepare`, `nuxt dev` and `nuxt build`. The tools read them when present (read-only), drop entries whose files no longer exist (reported as stale) and warn when the metadata is older than the newest source file ("run `nuxt prepare`"). Without them, every auto-import edge is `inferred` and findings that depend on such edges stay `heuristic`. With them, boundary findings backed by a verified edge are `confirmed`. Nothing is ever executed to obtain the metadata: if it is missing, the user runs `nuxt prepare` in the project.
 
@@ -68,9 +84,9 @@ Optional, at the project root (or `--config path`). Without it, folders are clas
 
 ## What the tools do not do
 
-- They do not parse TypeScript. Comments and strings are blanked before matching; regex literals and unusual formatting can produce misses or false hits.
+- They do not type-check. The semantic engine parses syntax trees and resolves modules with the project's TypeScript, but creates no program and no type checker: symbols are matched by name, `export *` barrels are not expanded, dynamic specifiers stay unresolved. The lexical fallback blanks comments and strings before matching and can still miss or over-match on unusual formatting; the `Analysis` line says which engine produced a report.
 - They do not run Nuxt. Verified auto-import edges come from metadata Nuxt already generated; when it is absent or stale the tools say so and fall back to inference.
-- They do not execute code, install packages, build or write (except `--write-baseline`).
+- They do not execute project code, install packages, build or write (except `--write-baseline`). The semantic engine loads the project's `typescript` and `vue/compiler-sfc` libraries; it never loads `nuxt.config`, `next.config`, plugins or transformers.
 - They do not prove security. A declared guard is UX; authorization lives in the backend.
 - They are not a substitute for `nuxt typecheck`, `tsc`, ESLint, dependency-cruiser or the framework analyzers; they point at what to look at first.
 

@@ -12,6 +12,7 @@ Follow the `frontend-architect` skill's references for the criteria (`references
 
 2. **Run the audit scripts** (dependency-free Node, read-only). They live in the installed plugin at `${CLAUDE_PLUGIN_ROOT}/skills/frontend-architect/scripts/`; if that variable is not expanded in your shell, locate them with `find ~/.claude -path '*/frontend-architect/scripts/domain-deps.mjs' 2>/dev/null | head -1`. With `S` set to that directory and the project root as `.`:
    - `node $S/domain-deps.mjs . --suggest-config` → write nothing into the project; keep the suggested grouping in your notes, then run `node $S/domain-deps.mjs . --md` (pass `--config <path-to-a-temp-file>` only if you created one under `/tmp`).
+   - Each report begins with an `Analysis` line: `engine semantic` means the project's own TypeScript and `vue/compiler-sfc` parsed the code and resolved imports with its `tsconfig`; `engine lexical` means regex analysis (the reason is printed). Quote the engine and the `resolution` of an edge when a finding depends on a dependency; list *Unresolved imports* as unknowns, never as proof of decoupling.
    - `node $S/component-complexity.mjs . --top 25 --md`
    - `node $S/state-audit.mjs . --md`
    - `node $S/routes-audit.mjs . --md`

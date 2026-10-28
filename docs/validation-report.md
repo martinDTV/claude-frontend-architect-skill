@@ -92,11 +92,26 @@ Two local Nuxt 4 applications were used as smoke targets without modifying them.
 
 Defects found and fixed by these runs before shipping: `logout` detection matched any mention of the word (12 false positives in one app); a global `tenant` middleware was taken for an auth guard; `let x = null` at module scope was skipped; Nuxt 4 node-server builds keep the client manifest in `client.precomputed.mjs`, so entry detection by file name reported 0 KB.
 
+## 1.2.0 addendum: semantic engine (2026-10-28, same machine)
+
+Compilers under test: `typescript` 5.9.3 and `vue/compiler-sfc` 3.5.44 from `verification/vue` (lent to the fixtures, which ship no `node_modules`); on the real projects, their own installations (`typescript` 6.0.3 with `vue/compiler-sfc` 3.5.34 reached through the `nuxt` package in a pnpm layout; `typescript` 5.9.3 with `vue/compiler-sfc` 3.5.44 at the root). The TypeScript 7 shape (a `typescript` package without the JavaScript API) is exercised with a synthetic package in the tests.
+
+| # | Check | Result |
+|---|---|---|
+| 15 | `node --test verification/tools/*.test.mjs`: the 31 suites of 1.1 plus `semantic-engine.test.mjs` (ground-truth equality including dependency kinds, engine selection and fallback reasons, TypeScript-7 rejection, Nuxt `paths` and `.nuxt` metadata interplay, Next `server-only-in-client` / `server-env-in-client` with a negative control, SFC metrics from compiler bindings, AST-based cleanup detection, type-only severity in `contracts-check`, JSON contract of the six tools) | **42/42 pass** |
+| 16 | Ground truth `verification/tools/fixtures/ts-paths/expected-edges.json` (19 edges written before the run) | semantic: precision 100%, recall 100%, kinds exact; lexical: precision 100%, recall 57.9% (8 alias and barrel edges missed, including the edge that closes a domain cycle) |
+| 17 | `verification/tools/benchmark.mjs` on the three fixtures and on two real projects (`docs/benchmarks.md`) | Semantic 4–6× slower and 5–11× more heap than lexical; under 1 s and 141 MB on the 294-file app |
+| 18 | Back-office Nuxt 4 app (294 files), all six graph tools with both engines, read-only | Same findings except: 3 lexical false-positive auto-import edges removed (`plural`, `vencimiento` used as property names and object keys, file and line in `docs/benchmarks.md`), one `domain-cycle` upgraded to `confirmed`, 9 `unresolved-import` info entries (an `infra/` CDK package without `node_modules`, an uninstalled `@vueform/vueform`), 3 `god-template` flags changed by the AST template depth |
+| 19 | Clinic SaaS frontend (151 files), same procedure | Same findings except one `god-template` flag (lexical depth 13 vs AST depth 9); 6 additional type edges to `shared/api/schema.d.ts` with no finding |
+| 20 | Audited projects unmodified | `git status` clean in the back-office repo; the clinic repo shows one modified file, `.claude/settings.json` (plugin enablement, last written 14:44, before any tool of this pass ran; the tools open files read-only) |
+| 21 | Real Next.js project | **None available on this machine**; the React/Next adapter is validated on the fixture only (`OrderAdminPanel.tsx` reaches `server.ts` and `secrets.ts`; `OrderBadge.tsx` importing a pure helper produces no finding) |
+| 22 | `verification/plugin-check.mjs` (manifests 1.2.0, 54 eval cases), `claude plugin validate`, `git diff --check` | See the final section of the 1.2.0 report in `CHANGELOG.md`; re-run before publishing |
+
 ## Not verified (honest limits)
 
 - **Eval scores**: need `claude plugin eval` with an authenticated account (43 cases × 3 runs × 2 arms by default; the audit case additionally needs `--allow-tools Bash`). Structure validated offline by `plugin-check.mjs`.
 - **nginx config**: `nginx -t` not available on this machine; the config is unchanged since the 1.0.0 run that passed it.
 - Rendering of TresJS and R3F scenes in a browser (compiled and typed, not rendered); GLSL compiled by TypeScript only as strings.
 - Browser behavior of GSAP, Lenis and View Transitions (typed only); the new cleanup tests exercise Three.js disposal and the cleanup helper in Node, not a GPU.
-- The audit scripts are lexical: their heuristics were checked against two real codebases and two fixtures, not against a parser-based oracle.
+- The semantic engine resolves modules and parses syntax trees with the project's TypeScript but creates no type checker; it was checked against a hand-written ground truth, two real Nuxt codebases and the fixtures, not against `vue-tsc` or a type-level oracle. No real Next.js project was available locally. The lexical fallback keeps the 1.1 limits.
 - Prose guidance is reviewed, not executable.
