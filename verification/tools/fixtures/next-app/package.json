@@ -1,1 +1,1 @@
-{ "name": "fixture-next-app", "private": true, "dependencies": { "next": "^16.4.0", "react": "^19.0.0", "zustand": "^5.0.0", "axios": "^1.20.0" } }
+{ "name": "fixture-next-app", "private": true, "dependencies": { "next": "^16.4.0", "react": "^19.0.0", "zustand": "^5.0.0", "axios": "^1.20.0", "server-only": "^0.0.1" } }

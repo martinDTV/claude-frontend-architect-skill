@@ -21,8 +21,12 @@ jobs:
           claude plugin validate ./plugins/frontend-architect
       - name: Check plugin distribution (manifests, references, scripts, evals)
         run: node verification/plugin-check.mjs
+      - name: Install the verification vue project (supplies typescript and vue/compiler-sfc to the fixture tests)
+        run: cd verification/vue && npm install --no-audit --no-fund
       - name: Test the audit scripts against the fixture apps
         run: node --test verification/tools/*.test.mjs
+      - name: Benchmark the lexical and semantic engines on the fixtures with ground truth
+        run: node --expose-gc verification/tools/benchmark.mjs
       - name: Check SKILL.md frontmatter
         run: |
           for f in plugins/frontend-architect/skills/*/SKILL.md; do

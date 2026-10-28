@@ -1,0 +1,1 @@
+{ "name": "fixture-ts-paths", "private": true, "dependencies": { "vue": "^3.5.0", "zod": "^4.0.0" } }

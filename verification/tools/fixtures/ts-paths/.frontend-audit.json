@@ -1,0 +1,10 @@
+{
+  "domains": {
+    "orders": ["src/core/orders/**"],
+    "billing": ["src/core/billing/**"],
+    "checkout": ["src/features/checkout/**"],
+    "reports": ["src/features/reports/**"]
+  },
+  "shared": ["src/shared/**", "src/lib/**", "src/components/**"],
+  "excludeTests": true
+}

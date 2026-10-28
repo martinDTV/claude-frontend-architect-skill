@@ -5,6 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 node plugin-check.mjs
 node --test tools/*.test.mjs
+node --expose-gc tools/benchmark.mjs > /tmp/fa-benchmark.md && grep -q '| ts-paths | semantic | semantic | 19 | 19 | 0 | 0 | 100% | 100% | 100% |' /tmp/fa-benchmark.md
 node extract.mjs
 (cd vue && npx tsc --noEmit && npx vitest run)
 (cd react && npx tsc --noEmit)
