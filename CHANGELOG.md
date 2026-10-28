@@ -2,6 +2,29 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-10-28
+
+### Added
+- **Semantic Architecture Engine** for the six graph-based audit scripts (`domain-deps`, `contracts-check`, `state-audit`, `routes-audit`, `leak-patterns`, `component-complexity`): TypeScript, TSX and JavaScript parsed into syntax trees with the audited project's own `typescript`; `.vue` files parsed with its `vue/compiler-sfc` (script bindings and template AST); module specifiers resolved with the project's `tsconfig` through `ts.resolveModuleName` (Nuxt 4: the generated `.nuxt/tsconfig.app.json` and `tsconfig.server.json`). Lives in `scripts/lib/semantic/` (`host`, `tsconfig`, `ts-module`, `vue-sfc`, `resolver`, `graph-semantic`); no dependency is added to the plugin and nothing of the project is executed beyond loading those two libraries.
+- Flags on the six tools: `--engine auto|semantic|lexical` (default `auto`: semantic when a usable `typescript` is found, otherwise lexical with the reason stated; `semantic` exits 2 instead of falling back), `--typescript <dir>`, `--vue-compiler <dir>`, `--format text|json|markdown`. Every report opens with an `Analysis` line (JSON: top-level `analysis`) naming the engine, compiler versions and paths, tsconfig files, resolution counts and per-file fallbacks.
+- Edges now carry `kind` (`runtime` | `type`), `resolution` (`typescript`, `tsconfig-paths`, `relative`, `nuxt-metadata`, `lexical-catalog`, `lexical-alias`), `importKind`, `specifier` and `col`. `domain-deps` lists *Unresolved imports* (non-literal dynamic imports, missing files, undeclared specifiers) and *packages imported*; new findings `server-only-in-client` (Next.js: a `'use client'` module reaching an `import 'server-only'` module through runtime imports; confirmed when the chain is verified), `server-env-in-client` (heuristic) and `unresolved-import` (info).
+- `verification/tools/fixtures/ts-paths`: a fixture with a hand-written ground truth (`expected-edges.json`, 19 edges) covering `paths` aliases, barrels, type-only imports, a runtime cycle, dynamic imports and SFCs; `verification/tools/semantic-engine.test.mjs` (11 tests; suite 31 → 42); `verification/tools/benchmark.mjs` (precision, recall, F1, unknowns, time and heap per engine on the fixtures; `--real <root>` diff mode for a project) wired into `run-all.sh` and CI.
+- Docs: `docs/semantic-engine.md` (design, resolution labels, framework adapters, trust boundary, limits, how to verify a finding, JSON additions), `docs/benchmarks.md` (fixture and real-project measurements), an "Analysis engine" section in `scripts/README.md`, a 1.2.0 addendum in `docs/validation-report.md`.
+- Six eval cases (49–54): hidden coupling through aliases, Nuxt auto-import dependency mapping, server-only code reaching the client, a Vue cleanup false positive to refuse, SSR state with late responses per tenant, a public-contract breaking change. Structure validated; not run (no paid run was authorized for this pass). `docs/evals.md` records the case-48 activation analysis and a proposed, unexecuted A/B for 1.3.
+
+### Changed
+- `domain-deps`: type-only edges lower the severity of boundary findings (`low` for shared/shell, `medium` for internal imports) and never form cycles; `domain-cycle` is `confirmed` when both directions are verified runtime imports under the semantic engine; `feature-internal-import` level follows the edge confidence and shows the resolution; edge targets outside the scanned sources (declaration files) are classified by the same convention rules instead of `other`.
+- `contracts-check`: `internal-import` is `confirmed` only on verified edges, `medium` when type-only, with the specifier and resolution as evidence.
+- `routes-audit`: `'use client'` / `'use server'` read as directive prologues from the AST when available.
+- `leak-patterns`: a cleanup hook counts when it is a real call (`onBeforeUnmount`, `onUnmounted`, `onScopeDispose`, `useEffect` returning a function, `.dispose()`), not a word in a comment; rows carry `cleanupSource`.
+- `component-complexity`: `.vue` metrics from `compileScript` bindings and the template AST (`metricsSource: ast`), `.ts/.tsx` metrics from the TypeScript AST (`ast-script`); nested generics in state declarations no longer break the count; rows add `componentsUsed`, `lifecycleHooks`, `imports`.
+- Lexical engine unchanged in behavior; its edges now also report `kind`, `importKind` and `resolution: lexical-alias | nuxt-metadata | lexical-catalog` so both engines share one contract. `TOOL_VERSION` 1.2.0. `SKILL.md` gains one sentence on the engine (+~60 tokens by the chars/4 estimate; the `claude plugin details` measurement was not repeated in this pass); the `frontend-reviewer` agent quotes the engine and the resolution of an edge when a finding depends on it.
+- Manifests 1.2.0; descriptions mention that the scripts parse with the project's own TypeScript and `vue/compiler-sfc`.
+
+### Fixed
+- Auto-import edges created by a property name or object key that happened to match an auto-imported symbol (three such false positives on an 80k-line Nuxt app) no longer appear under the semantic engine, which counts value identifiers only.
+- Template depth no longer inflated by `>` inside attribute expressions when the SFC compiler is available.
+
 ## [1.1.0] - 2026-10-28
 
 ### Added

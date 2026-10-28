@@ -1,7 +1,7 @@
 {
   "name": "frontend-architect",
-  "version": "1.1.0",
-  "description": "Two skills, a read-only reviewer agent and seven audit scripts for Nuxt/Vue and Next.js/React: architecture stages and modular monoliths, rendering strategies, state (Pinia, Pinia Colada, Zustand, TanStack Query), API layers (Axios, fetch), TypeScript, forms, tables, charts, i18n, auth and multi-tenancy, security, performance, observability, deployment, testing, legacy modernization, microfrontends and Nuxt Layers, visual design, GSAP and Three.js.",
+  "version": "1.2.0",
+  "description": "Two skills, a read-only reviewer agent and seven audit scripts (parsing with the project's own TypeScript and vue/compiler-sfc) for Nuxt/Vue and Next.js/React: architecture stages and modular monoliths, rendering strategies, state (Pinia, Pinia Colada, Zustand, TanStack Query), API layers (Axios, fetch), TypeScript, forms, tables, charts, i18n, auth and multi-tenancy, security, performance, observability, deployment, testing, legacy modernization, microfrontends and Nuxt Layers, visual design, GSAP and Three.js.",
   "author": {
     "name": "Martín De La Torre",
     "url": "https://github.com/martinDTV"
