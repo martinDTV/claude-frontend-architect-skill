@@ -4,7 +4,7 @@
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-export const TOOL_VERSION = '1.2.0'
+export const TOOL_VERSION = '1.3.0'
 
 /**
  * True when the module at `importMetaUrl` is the script Node was started with. Compares real paths,
