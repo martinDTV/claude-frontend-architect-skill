@@ -8,8 +8,8 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { buildGraph } from './lib/graph.mjs'
-import { detectProject, loadConfig } from './lib/project.mjs'
-import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { detectProject, excludeArg, loadConfig } from './lib/project.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, isMainModule, parseArgs, usage } from './lib/report.mjs'
 import { lineOf } from './lib/source.mjs'
 
 const HELP = `
@@ -17,6 +17,7 @@ routes-audit — routes, guards, Server Actions and handlers.
 
 usage: node routes-audit.mjs <project-root> [options]
   --config <file>     .frontend-audit.json with publicRoutes [globs] and authPatterns [strings]
+  --exclude <globs>   comma-separated project-relative globs to leave out (also "exclude" in .frontend-audit.json)
   --json | --md       output format
   --fail-on <level>   exit 1 on: confirmed (default) | any | none${ENGINE_HELP}
 
@@ -80,7 +81,12 @@ export function run(argv) {
   if (args.help || !args._[0]) return usage(HELP)
   const root = resolve(args._[0])
   if (!existsSync(join(root, 'package.json'))) return fail(`no package.json in ${root}`)
-  const config = loadConfig(root, args.config)
+  let config
+  try {
+    config = loadConfig(root, args.config, { exclude: excludeArg(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
   const project = detectProject(root, config)
   const report = createReport('routes-audit', project)
   const authRe = config.authPatterns?.length ? new RegExp(`${AUTH_RE_BASE.source}|${config.authPatterns.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}`) : AUTH_RE_BASE
@@ -202,4 +208,4 @@ export function run(argv) {
 
 // Set the exit code instead of calling process.exit: large --json outputs piped to another process
 // would otherwise be truncated at 64 KiB when the process exits before stdout drains.
-if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))
+if (isMainModule(import.meta.url)) process.exitCode = run(process.argv.slice(2))

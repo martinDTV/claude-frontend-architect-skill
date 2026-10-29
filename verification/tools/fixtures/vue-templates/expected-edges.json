@@ -1,0 +1,17 @@
+{
+  "$comment": "Ground truth written before running the engines. Edges are unique (from, to, kind) pairs; multiplicity of tags is not part of the truth. `via` documents the mechanism expected.",
+  "edges": [
+    { "from": "app/components/crm/CrmCard.vue", "to": "app/components/crm/CrmBadge.vue", "kind": "runtime", "via": "component", "why": "kebab-case tag and Lazy prefix" },
+    { "from": "app/components/ui/Dynamic.vue", "to": "app/components/ui/LocalWidget.vue", "kind": "runtime", "via": "import", "why": "explicit import used as <LocalWidget> and <local-widget>" },
+    { "from": "app/components/ui/Dynamic.vue", "to": "app/components/crm/CrmBadge.vue", "kind": "runtime", "via": "component", "why": "<component is=\"CrmBadge\"> and a string literal inside :is" },
+    { "from": "app/pages/index.vue", "to": "app/composables/useCrm.ts", "kind": "runtime", "via": "auto-import", "why": "useCrm() call" },
+    { "from": "app/pages/index.vue", "to": "app/utils/texto.ts", "kind": "runtime", "via": "auto-import", "why": "contar inside a template literal in the script; plural inside a template literal in a bound attribute" },
+    { "from": "app/pages/about.vue", "to": "app/components/crm/CrmCard.vue", "kind": "runtime", "via": "component", "why": "<component is=\"CrmCard\"> static attribute" }
+  ],
+  "noEdgesFrom": ["app/components/ui/Documented.vue"],
+  "noEdgesWhy": "every mention of CrmBadge, CrmCard, useCrm and contar in Documented.vue lives in a JSDoc block, a line comment, a string or an HTML comment",
+  "unknownComponents": [{ "file": "app/components/ui/Dynamic.vue", "name": "TotallyMissing" }],
+  "dynamicComponents": [{ "file": "app/components/ui/Dynamic.vue", "expression": "current" }, { "file": "app/components/ui/Dynamic.vue", "expression": "props.mode === 'card' ? 'CrmBadge' : 'span'" }, { "file": "app/pages/about.vue", "expression": "current" }],
+  "dynamicComponentsDefinition": "every <component :is> whose expression is not a single string literal; string literals inside the expression are still resolved as component uses (the ternary above yields the CrmBadge edge and is also listed here)",
+  "builtinsUsed": ["transition", "keep-alive", "component", "Teleport", "slot", "Transition"]
+}

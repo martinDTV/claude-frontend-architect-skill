@@ -8,8 +8,8 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { firstExisting, readJson, toPosix, walk } from './lib/fs.mjs'
-import { detectProject, loadConfig } from './lib/project.mjs'
-import { addFinding, createReport, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { detectProject, excludeArg, loadConfig } from './lib/project.mjs'
+import { addFinding, createReport, fail, finish, isMainModule, parseArgs, usage } from './lib/report.mjs'
 
 const HELP = `
 bundle-budget — size of the built assets against budgets (gzip, exact; no build is triggered).
@@ -20,6 +20,7 @@ usage: node bundle-budget.mjs <project-root> [options]
   --budgets <file>    JSON with budgets in KB (gzip): { "entryJsKb": 250, "entryCssKb": 60, "maxChunkKb": 300, "totalJsKb": 2000 }
                       (also read from "budgets" in .frontend-audit.json)
   --top <n>           largest files to list (default 15)
+  --exclude <globs>   comma-separated project-relative globs to leave out (also "exclude" in .frontend-audit.json)
   --json | --md       output format
   --fail-on <level>   exit 1 on: confirmed (default; a budget breach is confirmed) | any | none
 
@@ -27,6 +28,12 @@ Startup assets, in order of preference: --html, a rendered index.html/200.html i
 Nuxt client manifest (.output/server/chunks/build/client.manifest.mjs or client.precomputed.mjs),
 Next.js build-manifest.json; otherwise file-name conventions (Nuxt 4 hash-only names give nothing and
 entry metrics are reported as unknown).
+
+Scope (1.3): when a build manifest lists the assets of the current build, only those are measured
+(assetScope "manifest"); files in the output directory that no manifest references are leftovers of an
+earlier build, reported as stale-build-artifacts with their own size and never added to the totals.
+Without a manifest every file is measured (assetScope "directory") and stale files cannot be told apart.
+Nuxt build ids come from .output/public/_nuxt/builds/latest.json and builds/meta/*.json.
 `
 
 const DEFAULT_BUDGETS = { entryJsKb: 250, entryCssKb: 60, maxChunkKb: 300, totalJsKb: null }
@@ -118,37 +125,7 @@ function manifestEntries(root, kind, outputDir, htmlOverride) {
     if (file) {
       const text = readFileSync(file, 'utf8')
       if (!text.includes('@vite/client')) {
-        const entries = new Map()
-        const objStart = text.indexOf('{')
-        let depth = 0
-        let keyStart = -1
-        let key = null
-        let valueStart = -1
-        for (let i = objStart; i < text.length; i++) {
-          const c = text[i]
-          if (c === '"' && depth === 1 && keyStart < 0) keyStart = i + 1
-          else if (c === '"' && depth === 1 && keyStart >= 0 && key === null) {
-            key = text.slice(keyStart, i)
-            keyStart = -1
-          } else if (c === '{') {
-            if (depth === 1 && key !== null) valueStart = i
-            depth++
-          } else if (c === '}') {
-            depth--
-            if (depth === 1 && key !== null && valueStart >= 0) {
-              const body = text.slice(valueStart, i + 1)
-              entries.set(key, {
-                file: /\bfile\s*:\s*"([^"]+)"/.exec(body)?.[1],
-                isEntry: /\bisEntry\s*:\s*(?:!0|true)/.test(body),
-                imports: [...(/\bimports\s*:\s*\[([^\]]*)\]/.exec(body)?.[1] ?? '').matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-                css: [...(/\bcss\s*:\s*\[([^\]]*)\]/.exec(body)?.[1] ?? '').matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-              })
-              key = null
-              valueStart = -1
-            }
-            if (depth === 0) break
-          }
-        }
+        const entries = parseNuxtManifest(text)
         const names = new Set()
         const visit = (k) => {
           const e = entries.get(k)
@@ -174,6 +151,136 @@ function manifestEntries(root, kind, outputDir, htmlOverride) {
   return null
 }
 
+/**
+ * Inventory of the current build: every asset file name a framework manifest references. Returns
+ * { names: Set, source, buildId, otherBuilds, importers: Map<file, Set<importer>> | null } or null
+ * when no manifest exists (then nothing can be called stale).
+ */
+function buildInventory(root, kind, outputDir) {
+  // paths relative to the output directory; Nuxt outputs are flat, so there a bare file name is enough
+  const names = new Set()
+  const outName = outputDir.split(/[\\/]/).pop()
+  const addToken = (t) => {
+    if (!t) return
+    const clean = t.replace(/^\.?\//, '').replace(new RegExp(`^(?:\\.output/public/)?${outName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`), '')
+    names.add(clean)
+    if (clean.startsWith('_')) names.add(clean.slice(1))
+  }
+  const addAllTokens = (text) => {
+    for (const m of text.matchAll(/["']([^"'\s]+?\.(?:m?js|css))["']/g)) addToken(m[1])
+  }
+  let source = null
+  let buildId = null
+  const otherBuilds = []
+  let importers = null
+  let complete = true // Nuxt and Vite manifests list every chunk; Next.js only in webpack builds
+  if (kind === 'nuxt') {
+    const manifestFile = firstExisting(join(root, '.output', 'server', 'chunks', 'build', 'client.manifest.mjs'), join(root, '.output', 'server', 'chunks', 'build', 'client.precomputed.mjs'))
+    if (manifestFile) {
+      const text = readFileSync(manifestFile, 'utf8')
+      addAllTokens(text)
+      source = toPosix(relative(root, manifestFile))
+      if (manifestFile.endsWith('client.manifest.mjs')) {
+        importers = new Map()
+        for (const [, entry] of parseNuxtManifest(text)) {
+          for (const dep of entry.imports) {
+            const depFile = dep.replace(/^_/, '')
+            if (!importers.has(depFile)) importers.set(depFile, new Set())
+            if (entry.file) importers.get(depFile).add(entry.file)
+          }
+        }
+      }
+    }
+    const latest = readJson(join(outputDir, 'builds', 'latest.json'))
+    if (latest?.id) buildId = latest.id
+    const metaDir = join(outputDir, 'builds', 'meta')
+    if (existsSync(metaDir)) {
+      for (const f of walk(metaDir, { extensions: ['.json'] })) {
+        const meta = readJson(f)
+        if (meta?.id && meta.id !== buildId) otherBuilds.push({ id: meta.id, timestamp: meta.timestamp ? new Date(meta.timestamp).toISOString() : null })
+      }
+    }
+  } else if (kind === 'next') {
+    const files = ['build-manifest.json', 'app-build-manifest.json', 'react-loadable-manifest.json', 'app-path-routes-manifest.json'].map((f) => join(root, '.next', f)).filter(existsSync)
+    for (const f of files) addAllTokens(readFileSync(f, 'utf8'))
+    // App Router chunk lists (Turbopack builds have no app-build-manifest.json): *_client-reference-manifest.js under .next/server
+    const serverDir = join(root, '.next', 'server')
+    let referenceManifests = 0
+    if (existsSync(serverDir)) {
+      for (const f of walk(serverDir, { extensions: ['.js'] })) {
+        if (!/_client-reference-manifest\.js$|middleware-build-manifest\.js$|server-reference-manifest\.js$/.test(f)) continue
+        addAllTokens(readFileSync(f, 'utf8'))
+        referenceManifests++
+      }
+    }
+    if (files.length) source = `${files.map((f) => toPosix(relative(root, f))).join(', ')}${referenceManifests ? ` + ${referenceManifests} client reference manifest(s)` : ''}`
+    // only a webpack build publishes the complete app chunk list; otherwise unreferenced chunks stay measured
+    complete = files.some((f) => f.endsWith('app-build-manifest.json'))
+    const idFile = join(root, '.next', 'BUILD_ID')
+    if (existsSync(idFile)) buildId = readFileSync(idFile, 'utf8').trim()
+    // chunks of the current build live under static/<BUILD_ID>/; other ids are leftovers
+    if (buildId && existsSync(outputDir)) {
+      for (const f of walk(outputDir, { extensions: ['.js', '.css'] })) {
+        const rel = toPosix(relative(outputDir, f))
+        const m = /^([^/]+)\/_(?:build|ssg)Manifest\.js$/.exec(rel)
+        if (m && m[1] !== buildId && !otherBuilds.some((b) => b.id === m[1])) otherBuilds.push({ id: m[1], timestamp: null })
+        if (rel.startsWith(`${buildId}/`)) addToken(rel)
+      }
+    }
+  } else if (kind === 'vite') {
+    const manifestFile = firstExisting(join(outputDir, '..', '.vite', 'manifest.json'), join(outputDir, '..', 'manifest.json'))
+    if (manifestFile) {
+      const manifest = readJson(manifestFile)
+      if (manifest && typeof manifest === 'object') {
+        for (const entry of Object.values(manifest)) {
+          addToken(entry.file)
+          for (const c of entry.css ?? []) addToken(c)
+          for (const a of entry.assets ?? []) addToken(a)
+        }
+        source = toPosix(relative(root, manifestFile))
+      }
+    }
+  }
+  return names.size ? { names, source, buildId, otherBuilds, importers, complete } : (buildId || otherBuilds.length ? { names, source: null, buildId, otherBuilds, importers: null, complete: false } : null)
+}
+
+/** Tolerant parser of Nuxt's minified client.manifest.mjs: Map key -> { file, isEntry, imports, css }. */
+function parseNuxtManifest(text) {
+  const entries = new Map()
+  const objStart = text.indexOf('{')
+  if (objStart < 0) return entries
+  let depth = 0
+  let keyStart = -1
+  let key = null
+  let valueStart = -1
+  for (let i = objStart; i < text.length; i++) {
+    const c = text[i]
+    if (c === '"' && depth === 1 && keyStart < 0) keyStart = i + 1
+    else if (c === '"' && depth === 1 && keyStart >= 0 && key === null) {
+      key = text.slice(keyStart, i)
+      keyStart = -1
+    } else if (c === '{') {
+      if (depth === 1 && key !== null) valueStart = i
+      depth++
+    } else if (c === '}') {
+      depth--
+      if (depth === 1 && key !== null && valueStart >= 0) {
+        const body = text.slice(valueStart, i + 1)
+        entries.set(key, {
+          file: /\bfile\s*:\s*"([^"]+)"/.exec(body)?.[1],
+          isEntry: /\bisEntry\s*:\s*(?:!0|true)/.test(body),
+          imports: [...(/\bimports\s*:\s*\[([^\]]*)\]/.exec(body)?.[1] ?? '').matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+          css: [...(/\bcss\s*:\s*\[([^\]]*)\]/.exec(body)?.[1] ?? '').matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+        })
+        key = null
+        valueStart = -1
+      }
+      if (depth === 0) break
+    }
+  }
+  return entries
+}
+
 function isEntry(kind, rel) {
   const name = rel.split('/').pop()
   if (kind === 'nuxt') return /^entry[.-]/.test(name)
@@ -187,7 +294,13 @@ export function run(argv) {
   if (args.help || !args._[0]) return usage(HELP)
   const root = resolve(args._[0])
   if (!existsSync(join(root, 'package.json'))) return fail(`no package.json in ${root}`)
-  const project = detectProject(root, loadConfig(root, args.config))
+  let config
+  try {
+    config = loadConfig(root, args.config, { exclude: excludeArg(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
+  const project = detectProject(root, config)
   const report = createReport('bundle-budget', project)
   const output = args.dir ? { dir: resolve(root, String(args.dir)), kind: project.framework === 'nuxt' ? 'nuxt' : project.framework === 'next' ? 'next' : 'vite' } : detectOutput(root)
   if (!output || !existsSync(output.dir)) return fail('no production build found (.output/public/_nuxt, .next/static or dist/assets). Run the project’s build first; this tool measures, it does not build.')
@@ -201,22 +314,39 @@ export function run(argv) {
     return fail(e.message)
   }
   const nameBased = !fromManifest
+  const inventory = buildInventory(root, output.kind, output.dir)
+  const scoped = Boolean(inventory?.names?.size)
+  const inInventory = (rel) => inventory.names.has(rel) || (output.kind === 'nuxt' && inventory.names.has(rel.split('/').pop()))
   const assets = []
   for (const file of walk(output.dir, { extensions: ['.js', '.mjs', '.css'] })) {
     if (/\.map$/.test(file)) continue
     const buf = readFileSync(file)
     const rel = toPosix(relative(output.dir, file))
     const entry = fromManifest ? fromManifest.names.has(rel) || fromManifest.names.has(rel.split('/').pop()) : isEntry(output.kind, rel)
-    assets.push({ file: rel, type: /\.css$/.test(file) ? 'css' : 'js', raw: buf.length, gzip: gzipSync(buf).length, entry, mtime: statSync(file).mtime.toISOString() })
+    // current = referenced by the build manifest; stale = provably from another build (complete inventory, or a
+    // directory of another BUILD_ID); unreferenced = not in an incomplete inventory, still measured; unknown = no manifest
+    const otherBuildDir = inventory?.otherBuilds?.some((b) => rel.startsWith(`${b.id}/`))
+    const scope = !scoped ? 'unknown' : inInventory(rel) ? 'current' : (inventory.complete || otherBuildDir) ? 'stale' : 'unreferenced'
+    const sharedBy = inventory?.importers ? (inventory.importers.get(rel)?.size ?? inventory.importers.get(rel.split('/').pop())?.size ?? 0) : null
+    assets.push({ file: rel, type: /\.css$/.test(file) ? 'css' : 'js', raw: buf.length, gzip: gzipSync(buf).length, entry, scope, sharedBy, mtime: statSync(file).mtime.toISOString() })
   }
   report.notes.push(fromManifest ? `startup assets taken from ${fromManifest.source}` : 'startup assets guessed from file names (no HTML or manifest found); prefer running from the project root after a build')
   if (!assets.length) return fail(`no .js/.css assets under ${output.dir}`)
   assets.sort((a, b) => b.gzip - a.gzip)
   const kb = (n) => Math.round((n / 1024) * 10) / 10
   const sum = (list, key) => list.reduce((n, a) => n + a[key], 0)
-  const entryJs = assets.filter((a) => a.entry && a.type === 'js')
-  const entryCss = assets.filter((a) => a.entry && a.type === 'css')
-  const js = assets.filter((a) => a.type === 'js')
+  // Only the current build is measured; leftovers of earlier builds are reported, never summed.
+  const stale = assets.filter((a) => a.scope === 'stale')
+  const measured = assets.filter((a) => a.scope !== 'stale')
+  const unreferenced = assets.filter((a) => a.scope === 'unreferenced')
+  if (scoped) report.notes.push(`asset scope: ${measured.length} file(s) measured${inventory.source ? ` against ${inventory.source}` : ''}${inventory.buildId ? ` (build ${inventory.buildId})` : ''}${stale.length ? `; ${stale.length} file(s) from earlier builds excluded as stale` : ''}${unreferenced.length ? `; ${unreferenced.length} file(s) not referenced by the manifests read were kept (the inventory of this bundler is not complete, so they cannot be called stale)` : ''}`)
+  else report.notes.push('asset scope: no build manifest found, every file in the output directory is measured; leftovers of earlier builds cannot be told apart from the current build')
+  if (stale.length) {
+    addFinding(report, { id: 'stale-build-artifacts', level: 'info', severity: 'low', file: toPosix(relative(root, output.dir)), message: `${stale.length} asset(s), ${kb(sum(stale, 'gzip'))} KB gzip, are not referenced by the current build manifest${inventory.otherBuilds.length ? ` (other build id(s) present: ${inventory.otherBuilds.map((b) => b.id).join(', ')})` : ''}: leftovers of an earlier build, excluded from the totals`, fix: 'clean the output directory before building (rm -rf .output / .next / dist) so measurements and deployments contain one build' })
+  }
+  const entryJs = measured.filter((a) => a.entry && a.type === 'js')
+  const entryCss = measured.filter((a) => a.entry && a.type === 'css')
+  const js = measured.filter((a) => a.type === 'js')
   const entryUnknown = nameBased && entryJs.length === 0
   const metrics = {
     entryJsKb: entryUnknown ? null : kb(sum(entryJs, 'gzip')),
@@ -244,11 +374,15 @@ export function run(argv) {
   for (const [v, list] of Object.entries(vendorHits)) if (list.length >= 2) addFinding(report, { id: 'possible-duplicate-vendor', level: 'heuristic', severity: 'low', message: `"${v}" appears in ${list.length} chunk names: ${list.slice(0, 3).join(', ')}`, fix: 'confirm with nuxi analyze / @next/bundle-analyzer whether the library is bundled twice' })
 
   if (entryUnknown) report.notes.push('startup assets could not be identified (hash-only file names, no HTML or manifest): entry metrics are unknown; pass --html <saved page> or run from a build that keeps client.precomputed.mjs')
-  report.summary = { output: toPosix(relative(root, output.dir)), kind: output.kind, files: assets.length, entryJsGzipKb: metrics.entryJsKb ?? 'unknown', entryCssGzipKb: metrics.entryCssKb ?? 'unknown', totalJsGzipKb: metrics.totalJsKb, totalJsRawKb: kb(sum(js, 'raw')), largest: js[0] ? `${js[0].file} (${kb(js[0].gzip)} KB gzip)` : '-', newestAsset: assets.map((a) => a.mtime).sort().pop() }
-  report.data = { metrics, budgets, assets }
+  const sharedChunks = js.filter((a) => (a.sharedBy ?? 0) >= 2)
+  report.summary = {
+    output: toPosix(relative(root, output.dir)), kind: output.kind, files: assets.length, entryJsGzipKb: metrics.entryJsKb ?? 'unknown', entryCssGzipKb: metrics.entryCssKb ?? 'unknown', totalJsGzipKb: metrics.totalJsKb, totalJsRawKb: kb(sum(js, 'raw')), largest: js[0] ? `${js[0].file} (${kb(js[0].gzip)} KB gzip)` : '-', newestAsset: assets.map((a) => a.mtime).sort().pop(),
+    assetScope: scoped ? 'manifest' : 'directory', measuredFiles: measured.length, staleFiles: stale.length, unreferencedFiles: unreferenced.length, inventoryComplete: scoped ? Boolean(inventory.complete) : false, staleJsGzipKb: kb(sum(stale.filter((a) => a.type === 'js'), 'gzip')), buildId: inventory?.buildId ?? null, otherBuilds: (inventory?.otherBuilds ?? []).map((b) => b.id), sharedChunks: inventory?.importers ? sharedChunks.length : 'unknown',
+  }
+  report.data = { metrics, budgets, assets, inventory: inventory ? { source: inventory.source, buildId: inventory.buildId, otherBuilds: inventory.otherBuilds, knownNames: inventory.names.size } : null }
   const sections = [
     { title: 'Budgets (KB gzip)', table: { headers: ['metric', 'value', 'budget', 'status'], rows: budgetRows } },
-    { title: `Largest assets (top ${top})`, table: { headers: ['gzip KB', 'raw KB', 'entry', 'file'], rows: assets.slice(0, top).map((a) => [kb(a.gzip), kb(a.raw), a.entry ? 'yes' : '', a.file]) } },
+    { title: `Largest assets (top ${top})`, table: { headers: ['gzip KB', 'raw KB', 'entry', 'scope', 'shared by', 'file'], rows: assets.slice(0, top).map((a) => [kb(a.gzip), kb(a.raw), a.entry ? 'yes' : '', a.scope, a.sharedBy ?? '?', a.file]) } },
   ]
   report.notes.push('gzip level 6 (Node zlib default) approximates CDN compression; Brotli is usually 10-20% smaller.')
   return finish(report, args, { sections })
@@ -256,4 +390,4 @@ export function run(argv) {
 
 // Set the exit code instead of calling process.exit: large --json outputs piped to another process
 // would otherwise be truncated at 64 KiB when the process exits before stdout drains.
-if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))
+if (isMainModule(import.meta.url)) process.exitCode = run(process.argv.slice(2))

@@ -11,11 +11,26 @@
 import { statSync } from 'node:fs'
 import { readText } from './fs.mjs'
 import { buildSemanticGraph, createSemanticHost } from './semantic/graph-semantic.mjs'
-import { classify, mergedCatalog, resolveImport, sourceFiles } from './project.mjs'
+import { classify, excludedBy, mergedCatalog, resolveImport, sourceFiles } from './project.mjs'
 import {
   countLines, declaredNames, extractExports, extractImports, findIdentifier, identifiers, splitSfc, stripCode,
   templateExpressions, templateTags,
 } from './source.mjs'
+
+/**
+ * Vue's own special elements as they appear in templates (lowercase or kebab-case) plus the Nuxt and
+ * Vue components above in PascalCase. Compared case-insensitively after PascalCase normalisation, so
+ * `<component :is>`, `<transition>`, `<keep-alive>` and `<Teleport>` are never "unknown components".
+ */
+const VUE_SPECIAL_ELEMENTS = new Set(['component', 'transition', 'transition-group', 'keep-alive', 'teleport', 'suspense', 'slot', 'template'])
+export function isBuiltinComponent(name) {
+  if (!name) return false
+  if (BUILTIN_COMPONENTS.has(name)) return true
+  const lower = String(name).toLowerCase()
+  if (VUE_SPECIAL_ELEMENTS.has(lower)) return true
+  const pascal = lower.replace(/(^|-)([a-z])/g, (_, __, c) => c.toUpperCase())
+  return BUILTIN_COMPONENTS.has(pascal) || [...BUILTIN_COMPONENTS].some((b) => b.toLowerCase() === lower)
+}
 
 /** Composables provided by Nuxt/Vue themselves: never unknown, never project edges. */
 export const BUILTIN_COMPOSABLES = new Set(['useState', 'useFetch', 'useAsyncData', 'useLazyFetch', 'useLazyAsyncData', 'useRoute', 'useRouter', 'useHead', 'useSeoMeta', 'useServerSeoMeta', 'useNuxtApp', 'useRuntimeConfig', 'useAppConfig', 'useCookie', 'useRequestHeaders', 'useRequestHeader', 'useRequestEvent', 'useRequestURL', 'useRequestFetch', 'useError', 'useId', 'useAttrs', 'useSlots', 'useTemplateRef', 'useCssModule', 'useNuxtData', 'useLoadingIndicator', 'useHydration', 'useRouteAnnouncer', 'usePreviewMode', 'useScript', 'useColorMode', 'useToast', 'useOverlay', 'useModel', 'useLink', 'useResponseHeader', 'useHeadSafe', 'useRuntimeHook', 'useNuxtDevTools'])
@@ -85,22 +100,39 @@ function lineAt(text, index) {
  * Analyzes every source file and returns { files: Map<rel, info>, edges, catalog, unknown, packageUses }.
  * Edge: { from, to, via: 'import'|'auto-import'|'component', confidence, name, line, typeOnly, specifier }.
  */
-export function buildGraph(project, { autoImports = true, engine = 'auto', typescript, vueCompiler } = {}) {
+export function buildGraph(project, { autoImports = true, engine = 'auto', typescript, vueCompiler, typecheck = false, typecheckMaxFiles } = {}) {
   const requested = engine
+  let g
   if (engine !== 'lexical') {
     const host = createSemanticHost(project, { typescript, vueCompiler })
     if (host.available) {
-      const g = buildSemanticGraph(project, host, { autoImports, builtins: { composables: BUILTIN_COMPOSABLES, components: BUILTIN_COMPONENTS } })
+      g = buildSemanticGraph(project, host, { autoImports, builtins: { composables: BUILTIN_COMPOSABLES, components: BUILTIN_COMPONENTS }, typecheck, typecheckMaxFiles })
       g.analysis.requested = requested
-      return g
+    } else {
+      if (engine === 'semantic') throw new Error(`semantic engine requested but unavailable: ${host.typescript.reason}`)
+      g = buildLexicalGraph(project, { autoImports })
+      g.analysis = { engine: 'lexical', requested, reason: host.typescript.reason, typescript: host.typescript, vueCompiler: host.vueCompiler, fallbacks: [], filesSemantic: 0, filesPartial: g.files.size, typechecker: typecheck ? { requested: true, enabled: false, reason: 'lexical engine' } : null }
     }
-    if (engine === 'semantic') throw new Error(`semantic engine requested but unavailable: ${host.typescript.reason}`)
-    const g = buildLexicalGraph(project, { autoImports })
-    g.analysis = { engine: 'lexical', requested, reason: host.typescript.reason, typescript: host.typescript, vueCompiler: host.vueCompiler, fallbacks: [], filesSemantic: 0, filesPartial: g.files.size }
-    return g
+  } else {
+    g = buildLexicalGraph(project, { autoImports })
+    g.analysis = { engine: 'lexical', requested, reason: null, typescript: null, vueCompiler: null, fallbacks: [], filesSemantic: 0, filesPartial: g.files.size, typechecker: typecheck ? { requested: true, enabled: false, reason: 'lexical engine' } : null }
   }
-  const g = buildLexicalGraph(project, { autoImports })
-  g.analysis = { engine: 'lexical', requested, reason: null, typescript: null, vueCompiler: null, fallbacks: [], filesSemantic: 0, filesPartial: g.files.size }
+  return applyExclusions(project, g)
+}
+
+/**
+ * Configured exclusions (1.3): excluded files are never scanned; edges that still point at them (an
+ * import of an excluded module, an auto-import resolved into an excluded directory) are dropped and
+ * counted, so the report can state what the exclusion hid instead of hiding it silently.
+ */
+function applyExclusions(project, g) {
+  const matchers = project.config?.excludeMatchers ?? []
+  if (!matchers.length) return g
+  const before = g.edges.length
+  g.edges = g.edges.filter((e) => excludedBy(project, e.to) < 0 && excludedBy(project, e.from) < 0)
+  const dropped = before - g.edges.length
+  project.excluded = { patterns: matchers.map((m) => m.pattern), files: [], unmatched: [], ...(project.excluded ?? {}), importsToExcluded: dropped }
+  g.analysis.excluded = { patterns: project.excluded.patterns, files: project.excluded.files.length, importsToExcluded: dropped }
   return g
 }
 
@@ -164,7 +196,7 @@ export function buildLexicalGraph(project, { autoImports = true } = {}) {
         if (entry.file !== info.rel) edges.push({ from: info.rel, to: entry.file, via: 'component', confidence: entry.confidence ?? 'inferred', kind: 'runtime', importKind: 'component', resolution: entry.confidence === 'verified' ? 'nuxt-metadata' : 'lexical-catalog', name: tag, line, col: null, typeOnly: false, specifier: null })
         continue
       }
-      if (BUILTIN_COMPONENTS.has(name) || BUILTIN_COMPONENTS.has(tag)) continue
+      if (isBuiltinComponent(name) || isBuiltinComponent(tag)) continue
       if (catalog.packageComponents.has(name) || catalog.packageComponents.has(tag)) {
         const source = catalog.packageComponents.get(name) ?? catalog.packageComponents.get(tag)
         info.packageUses.push({ name: tag, kind: 'component', source, line })

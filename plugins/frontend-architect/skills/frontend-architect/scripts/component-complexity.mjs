@@ -6,9 +6,9 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { buildGraph } from './lib/graph.mjs'
-import { detectProject, loadConfig } from './lib/project.mjs'
+import { detectProject, excludeArg, loadConfig } from './lib/project.mjs'
 import { countMatches } from './lib/source.mjs'
-import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, isMainModule, parseArgs, usage } from './lib/report.mjs'
 
 const HELP = `
 component-complexity — which components and pages carry too many responsibilities.
@@ -17,6 +17,7 @@ usage: node component-complexity.mjs <project-root> [options]
   --top <n>               files to list (default 20)
   --threshold-lines <n>   size above which a component is reported (default 400; 2x = high)
   --config <file>         classification file (default: .frontend-audit.json)
+  --exclude <globs>   comma-separated project-relative globs to leave out (also "exclude" in .frontend-audit.json)
   --json | --md           output format
   --fail-on <level>       exit 1 on: confirmed | any | none (default confirmed; this tool emits heuristics only)${ENGINE_HELP}
 
@@ -132,7 +133,13 @@ export function run(argv) {
   if (args.help || !args._[0]) return usage(HELP)
   const root = resolve(args._[0])
   if (!existsSync(join(root, 'package.json'))) return fail(`no package.json in ${root}`)
-  const project = detectProject(root, loadConfig(root, args.config))
+  let config
+  try {
+    config = loadConfig(root, args.config, { exclude: excludeArg(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
+  const project = detectProject(root, config)
   const report = createReport('component-complexity', project)
   const threshold = Number(args['threshold-lines'] ?? 400)
   const top = Number(args.top ?? 20)
@@ -196,4 +203,4 @@ export function run(argv) {
 
 // Set the exit code instead of calling process.exit: large --json outputs piped to another process
 // would otherwise be truncated at 64 KiB when the process exits before stdout drains.
-if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))
+if (isMainModule(import.meta.url)) process.exitCode = run(process.argv.slice(2))

@@ -59,9 +59,17 @@ export function parseSfc(sfcCompiler, ts, text, fileName) {
     merged.parseDiagnostics += info.parseDiagnostics
   }
 
-  // template: component tags, expressions, depth
+  // template: component tags, expressions, depth, `<component :is>` targets
   const templateComponents = new Map()
   const templateIdentifiers = new Map()
+  const componentUses = [] // { tag, line, how: 'tag' | 'is-static' | 'is-literal' }
+  const dynamicComponents = [] // { line, expression } for `<component :is="expr">` with a non-literal expression
+  const useComponent = (tag, line, how) => {
+    if (!tag) return
+    if (!templateComponents.has(tag)) templateComponents.set(tag, [])
+    templateComponents.get(tag).push(line)
+    componentUses.push({ tag, line, how })
+  }
   let depth = 0
   let elements = 0
   const templateLine = descriptor.template?.loc?.start?.line ?? 0
@@ -77,8 +85,21 @@ export function parseSfc(sfcCompiler, ts, text, fileName) {
         depth = Math.max(depth, d + 1)
         if (node.tagType === ElementTypes.COMPONENT) {
           const tag = node.tag
-          if (!templateComponents.has(tag)) templateComponents.set(tag, [])
-          templateComponents.get(tag).push(node.loc.start.line)
+          if (tag === 'component' || tag === 'Component') {
+            // the real target lives in `is`: a static attribute, a string literal, or an expression
+            const isAttr = (node.props ?? []).find((p) => p.type !== NodeTypes.DIRECTIVE && p.name === 'is')
+            const isBind = (node.props ?? []).find((p) => p.type === NodeTypes.DIRECTIVE && p.name === 'bind' && p.arg?.content === 'is')
+            if (isAttr?.value?.content) useComponent(isAttr.value.content.replace(/^vue:/, ''), node.loc.start.line, 'is-static')
+            else if (isBind?.exp?.content) {
+              const expr = isBind.exp.content.trim()
+              // string literals that name a component: PascalCase or kebab-case; lowercase words are HTML elements or data
+              const literals = [...expr.matchAll(/(["'`])([A-Za-z][\w-]*)\1/g)].map((m) => m[2]).filter((name) => /^[A-Z]/.test(name) || name.includes('-'))
+              const onlyLiterals = /^(["'`])[A-Za-z][\w-]*\1$/.test(expr)
+              for (const name of literals) useComponent(name, node.loc.start.line, 'is-literal')
+              if (!onlyLiterals) dynamicComponents.push({ line: node.loc.start.line, expression: expr.slice(0, 80) })
+            } else dynamicComponents.push({ line: node.loc.start.line, expression: '(no is attribute)' })
+            useComponent('component', node.loc.start.line, 'tag')
+          } else useComponent(tag, node.loc.start.line, 'tag')
         }
         for (const prop of node.props ?? []) {
           if (prop.type === NodeTypes.DIRECTIVE) {
@@ -109,6 +130,8 @@ export function parseSfc(sfcCompiler, ts, text, fileName) {
     scriptStartLine,
     templateLine,
     templateComponents: new Map([...templateComponents].map(([tag, lines]) => [tag, lines.sort((a, b) => a - b)])),
+    componentUses,
+    dynamicComponents,
     templateIdentifiers,
     templateDepth: depth,
     templateElements: elements,

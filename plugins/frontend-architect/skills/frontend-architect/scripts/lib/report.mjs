@@ -1,7 +1,33 @@
 // Findings model, output formats and exit codes shared by every audit script.
 // Levels: `confirmed` = the pattern is present in the code as stated (an import exists, a literal
 // key is written); `heuristic` = lexical signal worth a human look; `info` = inventory.
+import { realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 export const TOOL_VERSION = '1.2.0'
+
+/**
+ * True when the module at `importMetaUrl` is the script Node was started with. Compares real paths,
+ * so symbolic links (`/tmp` on macOS, linked plugin installs), relative invocations from another
+ * directory and paths with spaces all count. A tool whose guard fails would exit 0 without analysing
+ * anything, which is why this is not a plain string comparison.
+ */
+export function isMainModule(importMetaUrl) {
+  const entry = process.argv[1]
+  if (!entry) return false
+  const real = (p) => {
+    try {
+      return realpathSync(p)
+    } catch {
+      return p
+    }
+  }
+  try {
+    return real(entry) === real(fileURLToPath(importMetaUrl))
+  } catch {
+    return false
+  }
+}
 
 export function parseArgs(argv, { booleans = [] } = {}) {
   const out = { _: [] }
@@ -48,7 +74,7 @@ export function applyFormat(args) {
 }
 
 export function createReport(tool, project) {
-  return {
+  const report = {
     tool,
     version: TOOL_VERSION,
     root: project.root,
@@ -60,6 +86,22 @@ export function createReport(tool, project) {
     notes: [...(project.notes ?? [])],
     data: {},
   }
+  // kept off the JSON: lets finish() report what the configuration excluded
+  Object.defineProperty(report, 'project', { value: project, enumerable: false })
+  return report
+}
+
+/** Adds the `excluded` block and its notes when the configuration excluded files (additive, 1.3). */
+export function describeExclusions(report) {
+  const ex = report.project?.excluded
+  const cfg = report.project?.config
+  if (!ex && !cfg?.excludePatterns?.length) return
+  const patterns = ex?.patterns ?? cfg?.excludePatterns ?? []
+  if (!patterns.length) return
+  const block = { patterns, files: ex?.files.length ?? 0, unmatchedPatterns: ex?.unmatched ?? [], importsToExcluded: ex?.importsToExcluded ?? 0, sample: (ex?.files ?? []).slice(0, 10) }
+  report.excluded = block
+  report.notes.push(`${block.files} file(s) excluded by configuration (${patterns.join(', ')})${block.importsToExcluded ? `; ${block.importsToExcluded} import(s) pointing at excluded files were dropped from the graph` : ''}. Excluded code is not audited: findings inside it are not reported.`)
+  if (block.unmatchedPatterns.length) report.notes.push(`exclude pattern(s) matched no file: ${block.unmatchedPatterns.join(', ')} (check the glob; patterns are project-relative posix paths).`)
 }
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
@@ -164,6 +206,7 @@ export function formatMarkdown(report, { sections = [] } = {}) {
  */
 export function finish(report, args, options = {}) {
   applyFormat(args)
+  describeExclusions(report)
   const failOn = args['fail-on'] ?? 'confirmed'
   const output = args.json ? JSON.stringify(report, null, 2) : args.md ? formatMarkdown(report, options) : formatText(report, options)
   if (!args.quiet) process.stdout.write(`${output}\n`)

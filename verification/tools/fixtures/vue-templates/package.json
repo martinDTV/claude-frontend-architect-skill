@@ -1,0 +1,1 @@
+{ "name": "fixture-vue-templates", "private": true, "dependencies": { "nuxt": "^4.6.0" } }

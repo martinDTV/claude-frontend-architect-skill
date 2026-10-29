@@ -7,8 +7,8 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { buildGraph } from './lib/graph.mjs'
-import { detectProject, loadConfig } from './lib/project.mjs'
-import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { detectProject, excludeArg, loadConfig } from './lib/project.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, isMainModule, parseArgs, usage } from './lib/report.mjs'
 import { countMatches, findIdentifier, topLevelStatements } from './lib/source.mjs'
 
 const HELP = `
@@ -16,6 +16,7 @@ state-audit — where state lives and which placements are risky.
 
 usage: node state-audit.mjs <project-root> [options]
   --config <file>     classification file (default: .frontend-audit.json)
+  --exclude <globs>   comma-separated project-relative globs to leave out (also "exclude" in .frontend-audit.json)
   --json | --md       output format
   --fail-on <level>   exit 1 on: confirmed (default) | any | none${ENGINE_HELP}
 
@@ -51,7 +52,12 @@ export function run(argv) {
   if (args.help || !args._[0]) return usage(HELP)
   const root = resolve(args._[0])
   if (!existsSync(join(root, 'package.json'))) return fail(`no package.json in ${root}`)
-  const config = loadConfig(root, args.config)
+  let config
+  try {
+    config = loadConfig(root, args.config, { exclude: excludeArg(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
   const project = detectProject(root, config)
   const report = createReport('state-audit', project)
   let graph
@@ -258,4 +264,4 @@ function lineAt(code, index) {
 
 // Set the exit code instead of calling process.exit: large --json outputs piped to another process
 // would otherwise be truncated at 64 KiB when the process exits before stdout drains.
-if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))
+if (isMainModule(import.meta.url)) process.exitCode = run(process.argv.slice(2))

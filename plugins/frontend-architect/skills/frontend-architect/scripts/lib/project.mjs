@@ -1,6 +1,6 @@
 // Project detection, Nuxt auto-import catalog, Next.js layout and domain classification.
 // Configuration is textual (regex over nuxt.config.*): report anything derived here as heuristic.
-import { statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import { exists, firstExisting, globToRegExp, readJson, readText, rel, walk } from './fs.mjs'
 import { extractExports, stripCode } from './source.mjs'
@@ -19,12 +19,49 @@ const DEFAULT_CONFIG = {
   budgets: null,
 }
 
-/** Loads `.frontend-audit.json` (or `--config`) merged over defaults. */
-export function loadConfig(root, explicitPath) {
+/**
+ * Validates `exclude` entries: project-relative posix globs. Absolute paths, `..`, backslashes, empty
+ * strings and patterns that would exclude everything are rejected with a reason (the tool stops,
+ * nothing is silently ignored). A bare directory (`infra`) also matches everything below it.
+ */
+/** CLI `--exclude a/**,b/**` → array of patterns (merged with the config by loadConfig). */
+export function excludeArg(args) {
+  return args?.exclude ? String(args.exclude).split(',').map((s) => s.trim()).filter(Boolean) : []
+}
+
+export function compileExcludes(raw) {
+  const patterns = []
+  const invalid = []
+  for (const p of [].concat(raw ?? [])) {
+    const reason = typeof p !== 'string' ? 'not a string'
+      : !p.trim() ? 'empty pattern'
+      : isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p) ? 'absolute path (patterns are project-relative)'
+      : p.split('/').includes('..') ? 'contains ".."'
+      : p.includes('\\') ? 'backslash (use "/")'
+      : /^(\*\*|\*\*\/\*|\*|\.|\.\/)$/.test(p.trim()) ? 'would exclude everything'
+      : null
+    if (reason) {
+      invalid.push({ pattern: p, reason })
+      continue
+    }
+    const clean = p.trim().replace(/^\.\//, '').replace(/\/$/, '')
+    const res = [globToRegExp(clean)]
+    if (!/[*?]/.test(clean)) res.push(globToRegExp(`${clean}/**`))
+    patterns.push({ pattern: clean, res })
+  }
+  return { patterns, invalid }
+}
+
+/** Loads `.frontend-audit.json` (or `--config`) merged over defaults. `overrides.exclude` adds CLI patterns. */
+export function loadConfig(root, explicitPath, overrides = {}) {
   const file = explicitPath ? (isAbsolute(explicitPath) ? explicitPath : join(root, explicitPath)) : firstExisting(...CONFIG_FILES.map((f) => join(root, f)))
   const user = file ? readJson(file) : null
   if (explicitPath && !user) throw new Error(`Config file not found or invalid JSON: ${explicitPath}`)
   const config = { ...DEFAULT_CONFIG, ...(user ?? {}), file: file ? rel(root, file) : null }
+  const excludes = compileExcludes([...[].concat(config.exclude ?? []), ...[].concat(overrides.exclude ?? [])])
+  if (excludes.invalid.length) throw new Error(`invalid exclude pattern(s): ${excludes.invalid.map((e) => `"${e.pattern}" (${e.reason})`).join('; ')}`)
+  config.excludePatterns = excludes.patterns.map((e) => e.pattern)
+  config.excludeMatchers = excludes.patterns
   config.domainMatchers = Object.entries(config.domains ?? {}).map(([domain, globs]) => ({
     domain,
     res: [].concat(globs).map(globToRegExp),
@@ -33,6 +70,117 @@ export function loadConfig(root, explicitPath) {
   config.sharedRes = [].concat(config.shared ?? []).map(globToRegExp)
   config.publicRouteRes = [].concat(config.publicRoutes ?? []).map(globToRegExp)
   return config
+}
+
+// ---- Workspaces (monorepos) -----------------------------------------------------------------
+
+/** `key:` list of a minimal YAML file (pnpm-workspace.yaml): `- "pattern"` lines under the key. */
+function yamlList(text, key) {
+  const lines = text.split(/\r?\n/)
+  const start = lines.findIndex((l) => new RegExp(`^${key}\\s*:`).test(l))
+  if (start < 0) return []
+  const out = []
+  for (const l of lines.slice(start + 1)) {
+    const m = /^\s*-\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/.exec(l)
+    if (m) out.push(m[1].trim())
+    else if (/^\S/.test(l)) break
+  }
+  return out
+}
+
+/** Directories matching a workspace glob (`apps/*`, `packages/**`, `tools/cli`) that contain a package.json. */
+function workspaceDirs(root, glob) {
+  if (glob.startsWith('!')) return []
+  const clean = glob.replace(/\/+$/, '')
+  const dirs = []
+  const addIfPackage = (dir) => {
+    if (exists(join(dir, 'package.json'))) dirs.push(dir)
+  }
+  if (clean.endsWith('/**')) {
+    const base = join(root, clean.slice(0, -3))
+    for (const d of walkDirsDeep(base, 3)) addIfPackage(d)
+  } else if (clean.endsWith('/*')) {
+    const base = join(root, clean.slice(0, -2))
+    for (const d of walkDirsDeep(base, 1)) addIfPackage(d)
+  } else addIfPackage(join(root, clean))
+  return dirs
+}
+
+function walkDirsDeep(base, depth) {
+  const out = []
+  const visit = (dir, level) => {
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name === 'node_modules' || e.name.startsWith('.')) continue
+      const full = join(dir, e.name)
+      out.push(full)
+      if (level < depth) visit(full, level + 1)
+    }
+  }
+  visit(base, 1)
+  return out
+}
+
+function frameworkOf(deps) {
+  if (deps.nuxt) return 'nuxt'
+  if (deps.next) return 'next'
+  if (deps.vue) return 'vue'
+  if (deps.react) return 'react'
+  return null
+}
+
+/**
+ * Workspace declared at `dir`: pnpm-workspace.yaml, or package.json "workspaces" (npm, yarn). Returns
+ * { type, globs, packages: [{ name, dir (absolute), rel, deps, pkg, framework }] } or null.
+ */
+export function detectWorkspace(dir) {
+  let type = null
+  let globs = []
+  const pnpm = join(dir, 'pnpm-workspace.yaml')
+  if (exists(pnpm)) {
+    type = 'pnpm'
+    globs = yamlList(readText(pnpm), 'packages')
+  } else {
+    const pkg = readJson(join(dir, 'package.json'))
+    const ws = pkg?.workspaces
+    const list = Array.isArray(ws) ? ws : Array.isArray(ws?.packages) ? ws.packages : null
+    if (list) {
+      type = exists(join(dir, 'yarn.lock')) ? 'yarn' : 'npm'
+      globs = list
+    }
+  }
+  if (!type) return null
+  const packages = []
+  const seen = new Set()
+  for (const g of globs) {
+    for (const pdir of workspaceDirs(dir, g)) {
+      if (seen.has(pdir)) continue
+      seen.add(pdir)
+      const pkg = readJson(join(pdir, 'package.json')) ?? {}
+      const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}), ...(pkg.peerDependencies ?? {}) }
+      packages.push({ name: pkg.name ?? rel(dir, pdir), dir: pdir, rel: rel(dir, pdir), deps, pkg: { exports: pkg.exports ?? null, main: pkg.main ?? null, module: pkg.module ?? null, types: pkg.types ?? pkg.typings ?? null }, framework: frameworkOf(deps) })
+    }
+  }
+  packages.sort((a, b) => a.rel.localeCompare(b.rel))
+  return { type, globs, packages }
+}
+
+/** Nearest workspace above `root` (not `root` itself), so sibling packages can be named without being followed. */
+export function findParentWorkspace(root) {
+  let dir = dirname(root)
+  for (let i = 0; i < 6; i++) {
+    const ws = detectWorkspace(dir)
+    if (ws && ws.packages.some((p) => p.dir === root)) return { root: dir, type: ws.type, packages: ws.packages }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return null
 }
 
 function majorOf(range) {
@@ -52,13 +200,28 @@ function resolveAlias(path, root, srcDir) {
 export function detectProject(root, config = loadConfig(root)) {
   const pkg = readJson(join(root, 'package.json')) ?? {}
   const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
-  let framework = 'unknown'
-  if (deps.nuxt) framework = 'nuxt'
-  else if (deps.next) framework = 'next'
-  else if (deps.vue) framework = 'vue'
-  else if (deps.react) framework = 'react'
+  let framework = frameworkOf(deps) ?? 'unknown'
 
-  const project = { root, framework, pkg, deps, config, srcDir: '.', nuxt: null, next: null, notes: [] }
+  const project = { root, framework, pkg, deps, config, srcDir: '.', nuxt: null, next: null, notes: [], workspace: null, workspaceParent: null }
+
+  // Monorepos (1.3): a workspace root is analysed as one project whose packages are internal code;
+  // an app inside a workspace sees its sibling packages by name but never follows them.
+  const workspace = detectWorkspace(root)
+  if (workspace && workspace.packages.length) {
+    project.workspace = { type: workspace.type, globs: workspace.globs, packages: workspace.packages.map((p) => ({ name: p.name, dir: p.rel, framework: p.framework, pkg: p.pkg, deps: p.deps })) }
+    if (framework === 'unknown') {
+      framework = 'workspace'
+      project.framework = 'workspace'
+      const frameworks = [...new Set(workspace.packages.map((p) => p.framework).filter(Boolean))]
+      project.notes.push(`${workspace.type} workspace with ${workspace.packages.length} package(s)${frameworks.length ? ` (${frameworks.join(', ')})` : ''}: imports between packages resolve through package.json exports/main; framework-specific rules (Nuxt auto-imports, Next.js boundaries) apply when a tool runs inside an app directory`)
+    }
+  } else {
+    const parent = findParentWorkspace(root)
+    if (parent) {
+      project.workspaceParent = { root: parent.root, type: parent.type, packages: parent.packages.filter((p) => p.dir !== root).map((p) => ({ name: p.name, dir: p.dir })) }
+      project.notes.push(`inside a ${parent.type} workspace at ${parent.root}: sibling packages (${project.workspaceParent.packages.map((p) => p.name).slice(0, 6).join(', ')}${project.workspaceParent.packages.length > 6 ? ', …' : ''}) are listed as workspace imports, not followed; run the tools at the workspace root to see edges into them`)
+    }
+  }
 
   if (framework === 'nuxt') {
     const configFile = firstExisting(join(root, 'nuxt.config.ts'), join(root, 'nuxt.config.js'), join(root, 'nuxt.config.mjs'))
@@ -476,12 +639,36 @@ export function classify(project, relPath) {
   }
 }
 
-/** Source files of the project worth analyzing (excludes build output, declarations and, by default, tests). */
+/** True when `relPath` matches one of the configured exclude patterns (index of the matcher, or -1). */
+export function excludedBy(project, relPath) {
+  const matchers = project.config?.excludeMatchers ?? []
+  for (let i = 0; i < matchers.length; i++) if (matchers[i].res.some((re) => re.test(relPath))) return i
+  return -1
+}
+
+/**
+ * Source files of the project worth analyzing (excludes build output, declarations and, by default,
+ * tests). Configured `exclude` patterns are applied last and recorded on `project.excluded`
+ * ({ patterns, files, unmatched, importsToExcluded }) so every report can say what was left out.
+ */
 export function sourceFiles(project) {
-  return walk(project.root)
+  const all = walk(project.root)
     .map((abs) => ({ abs, rel: rel(project.root, abs) }))
     .filter(({ rel: r }) => !r.endsWith('.d.ts') && !/(^|\/)(nuxt|next|vite|vitest|playwright|eslint|tailwind|postcss)\.config\.[cm]?[jt]s$/.test(r))
     .filter(({ rel: r }) => !(project.config.excludeTests !== false && isTestFile(r)))
+  const matchers = project.config?.excludeMatchers ?? []
+  if (!matchers.length) return all
+  const hits = matchers.map(() => 0)
+  const excluded = []
+  const kept = all.filter(({ rel: r }) => {
+    const i = excludedBy(project, r)
+    if (i < 0) return true
+    hits[i]++
+    excluded.push(r)
+    return false
+  })
+  project.excluded = { patterns: matchers.map((m) => m.pattern), files: excluded, unmatched: matchers.filter((_, i) => !hits[i]).map((m) => m.pattern), importsToExcluded: project.excluded?.importsToExcluded ?? 0 }
+  return kept
 }
 
 /**
