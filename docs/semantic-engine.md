@@ -1,4 +1,4 @@
-# Semantic Architecture Engine (1.2.0)
+# Semantic Architecture Engine (1.2.0, extended in 1.3.0)
 
 The audit scripts in `plugins/frontend-architect/skills/frontend-architect/scripts/` build a file dependency graph. Until 1.1 that graph came from regular expressions over blanked source text (the *lexical* engine). Since 1.2 the six graph-based tools (`domain-deps`, `contracts-check`, `state-audit`, `routes-audit`, `leak-patterns`, `component-complexity`) can build it from syntax trees instead: TypeScript, TSX and JavaScript parsed with the audited project's own `typescript` package, Vue single-file components parsed with its own `vue/compiler-sfc`, and module specifiers resolved with the project's `tsconfig` through TypeScript's resolver. The lexical engine is kept as the fallback and stays selectable; nothing in the 1.1 output was removed.
 
@@ -15,6 +15,7 @@ The audit scripts in `plugins/frontend-architect/skills/frontend-architect/scrip
 - [Limits](#limits)
 - [How to verify a finding](#how-to-verify-a-finding)
 - [JSON contract](#json-contract)
+- [1.3.0: symbols, workspaces, policy, checker](#130-symbols-workspaces-policy-checker)
 
 ## Selecting the engine
 
@@ -126,3 +127,60 @@ All 1.1 fields remain with the same meaning. Additions (1.2.0, `version: "1.2.0"
 - `contracts-check` `internal-import` findings gain `evidence`.
 
 Nothing was renamed or removed; a consumer of the 1.1 JSON keeps working and can ignore the new keys.
+
+## 1.3.0: symbols, workspaces, policy, checker
+
+Everything below is additive: the 1.2 edges, findings and flags keep their meaning (the `compat` test suite checks every key path of the 1.2.0 JSON reports against snapshots under `verification/tools/contracts/1.2.0/`).
+
+### Resolution levels
+
+| Level | What produced the result | Where it shows |
+|---|---|---|
+| **lexical** | regular expressions over blanked code, the fixed alias table | `engine: lexical`, `resolution: lexical-alias / lexical-catalog` |
+| **syntactic** | syntax trees (TypeScript parser, `vue/compiler-sfc`), module resolution with the project's `tsconfig`, barrels followed on the parsed exports | `resolution: typescript / tsconfig-paths / relative / workspace`, `origins[]` with `status` and `hops` |
+| **metadata** | files Nuxt generated (`.nuxt/types/imports.d.ts`, `.nuxt/components.d.ts`) | `resolution: nuxt-metadata`, components `nuxt-metadata` |
+| **checker** | a TypeScript Program and its type checker, opt-in | `origins[].verifiedBy: checker`, `analysis.typechecker` |
+
+A report never upgrades a level silently: a `not-found` origin stays `not-found`, an unreferenced bundle asset is `unreferenced` (not `stale`) when the bundler's inventory is incomplete, and an excluded file is counted, not forgotten.
+
+### Symbol origins (`lib/semantic/symbols.mjs`)
+
+For each named import the resolver follows, on the parsed module records: `export { a as b } from './x'` (with the original name), `export * from './x'` (searched in source order, first module that declares the name wins, as ESM does; `export * as ns` yields a `namespace` result), `export { a }` where `a` was imported, and the default of a `.vue` module (the component itself). Chains are relative to each file so results are cached per file and `hops` is the number of barrel files between importer and owner. Statuses: `declared` (file, kind, line), `declaration-file` (a `.d.ts` the sources do not scan), `not-found` (no module in the chain declares the name: a real defect or a dynamic re-export the syntax cannot see), `external` (the chain leaves the project), `cycle`, `too-deep` (12 hops). Guards: a set of visited files per call, no caching of cycle results.
+
+What the level means: the resolver knows the files and the names, not the types. `export =`, ambient module augmentation, namespace merging and re-exports produced at runtime are outside it; that is what `--typecheck` is for.
+
+### `--follow-reexports` and `reexport-crosses-module`
+
+`domain-deps --follow-reexports` adds one edge per (importer, declaring file) when the origin is a different file from the import target (`via: reexport`, `resolution: syntax-reexport`, `through` = the barrel, `hops`). The barrel edge stays; the derived edge lets the matrix, the hotspots and the cycles see who really owns the code. Off by default so 1.2 numbers are reproducible. `contracts-check` resolves every public name of a module entry and reports, per owner, the names declared in another module or outside the modules tree (`reexport-crosses-module`, info): a barrel that still points at files living elsewhere is a migration state to measure, not to hide.
+
+### `--typecheck`
+
+`lib/semantic/checker.mjs` creates a `ts.createProgram` over the TypeScript/JavaScript files of the audited root with the app compiler options (`noEmit`, `skipLibCheck`, `plugins` stripped) only when a tool asks for it and only under `--typecheck-max-files` (default 2500). For each origin of a non-`.vue` importer it asks the checker for the aliased symbol's first declaration and compares: agreement (`verifiedBy: checker`), correction (`disagreement: true`, the syntactic file kept as `syntacticFile`), resolution of something the syntax could not place (`resolvedByChecker`), or `unresolved`. `.vue` importers are counted as outside the Program (`skippedVueImporters`). Over budget or on failure the syntactic results stand and the reason is printed. Cost on the fixtures: about 150 ms and 40–50 MB for a dozen files; it grows with the libraries the project types reach, which is why it is not the default.
+
+### Template components
+
+Every component tag of a template is classified (`componentsByResolution`): `local` (imported or declared in the script), `builtin` (Vue special elements in any casing and the Nuxt/Vue components), `nuxt-metadata` (registered and verified), `catalog` (inferred from Nuxt's scanning rules), `package` (a dependency according to the metadata), `dynamic` (`<component :is="expr">`; `dynamicComponents[]` lists file, line and expression; string literals inside the expression are still resolved) and `unknown`. Only `unknown` names are reported as unknown symbols. `is="X"` resolves X; lowercase words in `:is` are HTML elements or data, never component names.
+
+### Workspaces
+
+`project.workspace` is read from `pnpm-workspace.yaml` or `package.json` `workspaces` (npm; yarn when `yarn.lock` exists); packages are the directories matching the globs that have a `package.json`. A bare specifier that names a workspace package resolves through its `exports` (string, conditions `import`/`default`/`module`/`require`/`types`, subpath maps and `*` patterns) or `main`/`module`/`types`, to an existing file (`resolution: workspace`, `confidence: verified`); a subpath the package does not publish still resolves to the physical file but is flagged (`exported: false`, `package-subpath-not-exported` in `contracts-check`). The nearest `package.json` above an importer supplies its declared dependencies, so an app's `left-pad` is a package, not an unresolved import. `tsconfig` `references` and the packages' own `tsconfig.json` become per-directory compiler options. A root with no framework of its own is `framework: workspace` (framework-specific rules apply when a tool runs inside an app). From inside an app that belongs to a bigger workspace, sibling packages are `packageImports[].scope: workspace`: named, counted, never followed, because the audited root is the authorised scope.
+
+### Dependency policy
+
+`dependencies.allowed` (pairs `[from, to]` of business domains) and `dependencies.exceptions` (`from`, `to`, `reason`, `since`, `until`) turn the descriptive matrix into a judged one: `forbidden-dependency` per pair, split into runtime and type-only file pairs (the type-only case is `low` and says "compile-time coupling only": it disappears at build time but still ties the domains at design time), `architecture-exception` (info) keeps tolerated pairs measurable, and a cycle whose both directions are allowed is `allowed-cycle` (info): a cycle by design is a fact to carry into any split decision, not a violation. A cycle with one excepted direction stays a `domain-cycle` and names the exception. Without a policy nothing changes.
+
+### Exclusions
+
+`exclude` patterns are validated when the configuration loads (absolute paths, `..`, backslashes, empty or catch-all patterns stop the tool with exit 2); bare directories match their subtree. Excluded files are not scanned; edges pointing at them are dropped and counted. Every report carries `excluded` (`patterns`, `files`, `unmatchedPatterns`, `importsToExcluded`, `sample`) and a note. The point is that an exclusion is a decision the reader can see, not a way to make findings vanish.
+
+### Next.js
+
+`client-only-in-server`: a Server Component or route handler of the App Router (segment files without `'use client'`) that reaches, through modules that are not client boundaries, a module with `import 'client-only'`. Confirmed when the chain is verified. `server-env-in-client` no longer counts a `'use server'` module imported by a client component (Server Actions run on the server). The Next.js reference project built by the harness (`verification/next`) is audited after `next build` with its own TypeScript: no boundary findings, the Server Function and the Route Handler inventoried, `.next` measured through its manifests.
+
+### Bundle scope
+
+`bundle-budget` builds the inventory of the current build from the framework manifests (Nuxt `client.manifest.mjs`/`client.precomputed.mjs` plus `builds/latest.json` and `builds/meta/*`; Next.js `build-manifest.json`, `app-build-manifest.json` when present, the App Router `*_client-reference-manifest.js` files and `BUILD_ID`; Vite `.vite/manifest.json`). Assets are `current`, `stale` (unreferenced with a complete inventory, or under another build id), `unreferenced` (unreferenced with an incomplete inventory: still measured) or `unknown` (no manifest: everything measured, scope `directory`). Totals cover current and unreferenced assets; stale ones are reported with their own size. Shared chunks come from the Nuxt import graph when available.
+
+### Main-module guard
+
+The seven tools start with `isMainModule(import.meta.url)`: real paths of `process.argv[1]` and of the module are compared, so symbolic links, relative invocations from another directory and paths with spaces run the analysis. The harness and CI run a tool through a symbolic link and fail when it prints nothing.

@@ -41,7 +41,7 @@ Requirements: Claude Code with plugin support; Node 18+ for the audit scripts (n
 | Skill `creative-frontend` | Visual design (art direction, typography, color, layout and responsive, enterprise UI patterns), motion design, tool selection for motion and 3D, GSAP, Lenis and scroll, Three.js, TresJS, React Three Fiber, shaders and WebGPU, animation lifecycle with leak tests |
 | Agent `frontend-reviewer` | Read-only audit of an existing codebase: runs the scripts, verifies leads in the code, returns prioritized findings by evidence tier |
 | Audit scripts (7) | `domain-deps`, `component-complexity`, `state-audit`, `routes-audit`, `leak-patterns`, `contracts-check`, `bundle-budget` (see below) |
-| `evals/` | 54 scenarios with positive and negative criteria for `claude plugin eval`, tagged by expected activation and domain, including "say no" cases, out-of-scope cases that must not activate the skills, and a scaffolded audit |
+| `evals/` | 66 scenarios with positive and negative criteria for `claude plugin eval`, tagged by expected activation and domain, including "say no" cases, out-of-scope cases that must not activate the skills, and a scaffolded audit |
 
 The skills load progressively: `SKILL.md` holds the workflow, a task → references selection table and the defaults (about 2.7k tokens when it fires, measured with `claude plugin details`); `references/index.md` is the full catalog; 49 reference files load only when a task needs them; scripts and assets are read only when used.
 
@@ -74,7 +74,7 @@ node $S/contracts-check.mjs .           # module entry points, internal imports,
 node $S/bundle-budget.mjs .             # gzip sizes of an existing build against budgets (never builds)
 ```
 
-Every script supports `--json`, `--md` (or `--format`) and `--fail-on confirmed|any|none`. Findings are **confirmed** (the pattern is present as stated), **heuristic** (a signal to verify) or **info**. Since 1.2 the six graph-based tools parse TypeScript, TSX and Vue SFCs with the project's own `typescript` and `vue/compiler-sfc` when installed (`--engine auto`, default) and resolve imports with its `tsconfig`; without them they fall back to the lexical analysis of 1.1 and say so in the report's `Analysis` line. They never execute project code, install packages or prove security; they tell a reviewer where to look first. Design, trust boundary and limits: [`docs/semantic-engine.md`](docs/semantic-engine.md); measured differences between the two engines: [`docs/benchmarks.md`](docs/benchmarks.md).
+Every script supports `--json`, `--md` (or `--format`), `--fail-on confirmed|any|none` and `--exclude <globs>`. Findings are **confirmed** (the pattern is present as stated), **heuristic** (a signal to verify) or **info**. Since 1.2 the six graph-based tools parse TypeScript, TSX and Vue SFCs with the project's own `typescript` and `vue/compiler-sfc` when installed (`--engine auto`, default) and resolve imports with its `tsconfig`; without them they fall back to the lexical analysis of 1.1 and say so in the report's `Analysis` line. 1.3 adds symbol origins through barrels (`--follow-reexports`, optional `--typecheck` verification), pnpm/npm/yarn workspaces with `package.json` exports, a dependency policy (allowed pairs, exceptions, cycles allowed by design), classified template components, validated exclusions and bundle measurements scoped to the current build. They never execute project code, install packages or prove security; loading the project's own compilers is the one trust boundary, and `--engine lexical` avoids it. They tell a reviewer where to look first. Design, trust boundary and limits: [`docs/semantic-engine.md`](docs/semantic-engine.md); measured differences between the two engines: [`docs/benchmarks.md`](docs/benchmarks.md).
 
 ## Validation
 
@@ -82,8 +82,8 @@ Every script supports `--json`, `--md` (or `--format`) and `--fail-on confirmed|
 
 | Check | Result |
 |---|---|
-| `plugin-check.mjs`: manifests in sync, references linked (directly or via `references/index.md`), cross-references, scripts documented and executable, 54 eval cases well formed | Pass |
-| Audit scripts: `node --test verification/tools/*.test.mjs` against a Nuxt 4, a Next.js 16 and a `tsconfig`-paths fixture with a hand-written ground truth, including `.nuxt` metadata (verified vs inferred edges), the semantic engine (precision and recall 100% on the ground truth, fallback to lexical with reasons, Next server-only reachability, SFC metrics) and large piped JSON | 42/42 |
+| `plugin-check.mjs`: manifests in sync, references linked (directly or via `references/index.md`), cross-references, scripts documented and executable, 66 eval cases well formed | Pass |
+| Audit scripts: `node --test verification/tools/*.test.mjs` against Nuxt 4, Next.js 16, `tsconfig`-paths, Vue-template and pnpm-workspace fixtures (three with hand-written ground truths), including `.nuxt` metadata, the semantic engine (precision and recall 100% on the truths), symbol origins, the optional type checker, workspaces, the dependency policy, exclusions, Vue built-ins, Next client/server boundaries, execution through symbolic links, byte-identical projects after every tool, and the 1.2.0 JSON contract | 82/82 |
 | Scripts on real code: a Nuxt enterprise application (80k lines; 1,512 edges, every one verified by TypeScript or `.nuxt` metadata) and a medical SaaS (Nuxt 4 + Pinia Colada), read-only, both engines compared edge by edge | Findings with file and line in the report; the semantic engine removed three lexical false positives and changed no other finding except template-depth flags (`docs/benchmarks.md`) |
 | Vue + Pinia 4 + Pinia Colada + Axios: `tsc --strict` + Vitest (HTTP, refresh, contracts, stores, race guards, tenant scope, logout protocol, identity epochs, public serialization) | 31/31 |
 | React + TanStack Query + Zustand + React Three Fiber: `tsc --strict` | Pass |
@@ -93,7 +93,7 @@ Every script supports `--json`, `--md` (or `--format`) and `--fail-on confirmed|
 | Creative: `tsc --strict` + Vitest (Three.js disposal, cleanup stack) | Pass (see report) |
 | dependency-cruiser boundary rules; Nginx reverse-proxy example | Pass; `nginx -t` not run on this machine (no nginx) |
 | `claude plugin validate` (marketplace and plugin) | Pass |
-| `claude plugin eval` (54 scenarios) | Smoke subset of the 1.1 cases run under a cost ceiling (see `docs/evals.md` for scores and limits); cases 49–54 not yet run; the full suite is not run in CI |
+| `claude plugin eval` (66 scenarios) | Smoke subset of the 1.1 cases run under a cost ceiling (see `docs/evals.md` for scores and limits); cases 49–66 not yet run; the full suite is not run in CI |
 
 Run it yourself: `./verification/run-all.sh` (Node 22, pnpm 10, python3; nginx optional). Run the evals with your account through `./verification/evals/run-evals.sh smoke|activation|tag <tag>|full`, which always sets a cost ceiling (details and results in [`docs/evals.md`](docs/evals.md); the audit case needs `--allow-tools Bash`).
 

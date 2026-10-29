@@ -20,7 +20,7 @@ Every tool supports `--help`, `--json`, `--md` and `--fail-on confirmed|any|none
 - **heuristic**: a lexical signal. Auto-import usage inferred by this tool's scanning rules, cleanup that may live in a helper the tool does not know, a Server Action that may check authorization through a wrapper. Verify before reporting it as a defect.
 - **info**: inventory and suggestions.
 
-## Analysis engine (1.2.0)
+## Analysis engine (1.2.0, extended in 1.3.0)
 
 The six graph-based tools (`domain-deps`, `contracts-check`, `state-audit`, `routes-audit`, `leak-patterns`, `component-complexity`) build the file graph with one of two engines:
 
@@ -33,7 +33,21 @@ Flags: `--engine auto|semantic|lexical` (`semantic` exits 2 instead of falling b
 
 What the semantic engine changes in the output: edges carry `kind` (`runtime` or `type`), `resolution` (`typescript`, `tsconfig-paths`, `relative`, `nuxt-metadata`, `lexical-catalog`) and the import `specifier`; type-only imports lower the severity of boundary findings and never form cycles; a symbol counts as an auto-import use only when it is a value identifier (not a property name, key, string or comment); `'use client'` / `'use server'` are read as directive prologues; cleanup hooks and SFC metrics come from calls and compiler bindings; imports that resolve nowhere are listed under *Unresolved imports* with a reason and never become edges. Design, trust boundary and limits: `docs/semantic-engine.md` in the repository; measured differences against the lexical engine: `docs/benchmarks.md`.
 
-The one thing to know before running it on code you do not trust: with the semantic engine the tool loads `typescript` and `vue/compiler-sfc` from the audited project's `node_modules` into its own process. Pass `--typescript`/`--vue-compiler` pointing at an installation you control, or `--engine lexical`, when that matters.
+The one thing to know before running it on code you do not trust: with the semantic engine the tool loads `typescript` and `vue/compiler-sfc` from the audited project's `node_modules` into its own process, which executes the code of those packages and of what they require. It is not an isolated analysis. Pass `--typescript`/`--vue-compiler` pointing at an installation you control, or `--engine lexical` (loads nothing from the project; loses alias resolution through `tsconfig`, symbol origins and the AST-based rules), when that matters.
+
+### What 1.3.0 adds on top
+
+| Capability | Where | Resolution level it reports |
+|---|---|---|
+| Symbol origins through barrels (`export { a as b } from`, `export *`, re-exports of imports, `.vue` defaults) | every import edge carries `origins[]` (`status`, `file`, `hops`, `viaStar`); summary `symbolResolution`; `domain-deps --follow-reexports` adds importer → declaring-file edges (`via: reexport`, `resolution: syntax-reexport`) | **syntactic**: the chain of re-exports is followed on the parsed modules; no type information |
+| `--typecheck` (`domain-deps`) | a TypeScript Program verifies each syntactic origin (`verifiedBy: checker`, `disagreement`, `resolvedByChecker`); `--typecheck-max-files` budget (2500); `.vue` importers are outside the Program | **checker**: the compiler's own alias resolution, for TypeScript/JavaScript importers only; skipped with a reason over budget |
+| Template components classified | `componentsByResolution` (`local`, `builtin`, `nuxt-metadata`, `catalog`, `package`, `dynamic`, `unknown`), `dynamicComponents[]`, `is="X"` and literals in `:is` resolved | **AST** of the template (compiler-sfc); `unknown` only when nothing explains the name |
+| Workspaces (pnpm, npm, yarn) | packages inside the root resolve by name through `package.json` `exports`/`main` (`resolution: workspace`); `tsconfig` project references and per-package `tsconfig.json`; `framework: workspace` at a root without its own framework; siblings of an app are `packageImports[].scope: workspace`, named and never followed; `contracts-check` entries from `package.json`, `package-subpath-not-exported` | **verified**: the file exists at the path the package publishes |
+| Exclusions | `exclude` in the config or `--exclude a/**,b` (validated; exit 2 on absolute paths, `..`, backslashes, empty or catch-all patterns); `excluded` block and note in every report, including edges dropped because they pointed at excluded files | explicit: excluded code is not audited and the report says so |
+| Dependency policy | `dependencies.allowed` / `dependencies.exceptions`; `forbidden-dependency` (runtime vs type-only), `architecture-exception`, `allowed-cycle` | derived from the edges and their `kind` |
+| Next.js | `client-only-in-server`; Server Action modules exempt from `server-env-in-client` | directive prologues from the AST (semantic) or the first statement (lexical) |
+| `bundle-budget` scope | `assetScope` (`manifest` / `directory`), `staleFiles`, `staleJsGzipKb`, `unreferencedFiles`, `inventoryComplete`, `buildId`, `otherBuilds`, `sharedChunks`; `stale-build-artifacts` | manifests of the current build; stale only when provable (complete inventory or another build id); nothing is guessed |
+| Main-module guard | all seven tools run through symbolic links, relative paths and paths with spaces | `isMainModule()` compares real paths |
 
 ## Dependency confidence (domain-deps, contracts-check, state-audit)
 
@@ -70,6 +84,11 @@ Optional, at the project root (or `--config path`). Without it, folders are clas
   "publicRoutes": ["app/pages/auth/**"],
   "authPatterns": ["requireUser(", "assertCan("],
   "excludeTests": true,
+  "exclude": ["infra/**", "vueform.config.ts"],
+  "dependencies": {
+    "allowed": [["obra", "crm"], ["rrhh", "crm"]],
+    "exceptions": [{ "from": "crm", "to": "obra", "reason": "project client lives in crm until PR 4", "since": "2026-10-27", "until": "PR 4" }]
+  },
   "budgets": { "entryJsKb": 250, "entryCssKb": 60, "maxChunkKb": 300, "totalJsKb": null }
 }
 ```
@@ -81,10 +100,12 @@ Optional, at the project root (or `--config path`). Without it, folders are clas
 - `publicRoutes`: pages that need no guard.
 - `authPatterns`: extra function names that count as an authorization check in Server Actions and handlers.
 - `budgets`: gzip KB budgets for `bundle-budget.mjs`.
+- `exclude` (1.3): project-relative globs (or bare directories) left out of every tool; invalid patterns stop the tool; the report lists what was excluded. `--exclude a/**,b` adds patterns from the command line.
+- `dependencies` (1.3): `allowed` pairs `[from, to]` between business domains and `exceptions` with `reason`, `since`, `until`. With it, pairs outside the list are `forbidden-dependency` (runtime file pairs high, type-only low), excepted pairs are `architecture-exception` (info, with current counts) and a cycle allowed in both directions is `allowed-cycle` (info). Without it the matrix is descriptive only.
 
 ## What the tools do not do
 
-- They do not type-check. The semantic engine parses syntax trees and resolves modules with the project's TypeScript, but creates no program and no type checker: symbols are matched by name, `export *` barrels are not expanded, dynamic specifiers stay unresolved. The lexical fallback blanks comments and strings before matching and can still miss or over-match on unusual formatting; the `Analysis` line says which engine produced a report.
+- They do not type-check by default. The semantic engine parses syntax trees and resolves modules with the project's TypeScript; barrels and `export *` are followed syntactically (`origins`), dynamic specifiers stay unresolved. `domain-deps --typecheck` adds the compiler's alias resolution for TypeScript/JavaScript importers, within a file budget; it is still not a type-level audit of the code. The lexical fallback blanks comments and strings before matching and can still miss or over-match on unusual formatting; the `Analysis` line says which engine produced a report.
 - They do not run Nuxt. Verified auto-import edges come from metadata Nuxt already generated; when it is absent or stale the tools say so and fall back to inference.
 - They do not execute project code, install packages, build or write (except `--write-baseline`). The semantic engine loads the project's `typescript` and `vue/compiler-sfc` libraries; it never loads `nuxt.config`, `next.config`, plugins or transformers.
 - They do not prove security. A declared guard is UX; authorization lives in the backend.

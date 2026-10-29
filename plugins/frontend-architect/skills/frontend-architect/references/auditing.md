@@ -55,12 +55,12 @@ With `S` pointing at the skill's `scripts/` directory and the project root as th
 | Step | Command | Output used for |
 |---|---|---|
 | 1 | `node $S/domain-deps.mjs . --suggest-config` | A starter classification; group folders into business domains **by hand** (pages, components and the composables that serve them belong together). Save it outside the project (for example `/tmp/<app>.frontend-audit.json`) or ask the owner to commit `.frontend-audit.json` |
-| 2 | `node $S/domain-deps.mjs . --config <file> --md` | Matrix, horizontal coupling, hotspots, shell→domain, shared→domain, cycles; `--edges a:b` to list a pair |
+| 2 | `node $S/domain-deps.mjs . --config <file> --md` | Matrix, horizontal coupling, hotspots, shell→domain, shared→domain, cycles; `--edges a:b` to list a pair; `--follow-reexports` to see the file that declares a name imported through a barrel; with `dependencies` in the config, allowed, forbidden and excepted pairs |
 | 3 | `node $S/component-complexity.mjs . --top 25 --md` | Which files to read first; oversized and mixed-responsibility candidates |
 | 4 | `node $S/state-audit.mjs . --config <file> --md` | Stores by consumer domains, server data in stores, tokens in storage, module-level state, logout coverage |
 | 5 | `node $S/routes-audit.mjs . --config <file> --md` | Unguarded pages, literal role checks, `'use client'` too high, Server Actions without checks |
 | 6 | `node $S/leak-patterns.mjs . --md` | Resources without cleanup, by file |
-| 7 | `node $S/contracts-check.mjs . --md` | Module entries, internal imports, implicit (auto-import) dependencies, cycles; `--write-baseline` for later diffs |
+| 7 | `node $S/contracts-check.mjs . --md` | Module entries (index.ts or package.json exports), internal imports, unexported package subpaths, barrels publishing names declared elsewhere, implicit (auto-import) dependencies, cycles; `--write-baseline` for later diffs |
 | 8 | `node $S/bundle-budget.mjs . --md` | Startup and chunk sizes, only when a production build exists |
 | 9 | Project's own `typecheck`, `lint`, `test` | Measured quality signals (report real results, including "no tests") |
 | 10 | `frontend-reviewer` agent | An independent pass; reconcile its findings with yours and keep the union with tiers |
