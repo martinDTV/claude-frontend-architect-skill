@@ -8,14 +8,15 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { buildGraph } from './lib/graph.mjs'
-import { detectProject, loadConfig } from './lib/project.mjs'
-import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, parseArgs, usage } from './lib/report.mjs'
+import { detectProject, excludeArg, loadConfig } from './lib/project.mjs'
+import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, isMainModule, parseArgs, usage } from './lib/report.mjs'
 import { countMatches, lineOf } from './lib/source.mjs'
 
 const HELP = `
 leak-patterns — resources created without a visible cleanup.
 
 usage: node leak-patterns.mjs <project-root> [options]
+  --exclude <globs>   comma-separated project-relative globs to leave out (also "exclude" in .frontend-audit.json)
   --json | --md       output format
   --fail-on <level>   exit 1 on: confirmed | any | none (default confirmed; this tool emits heuristics only)${ENGINE_HELP}
 
@@ -36,6 +37,11 @@ export const RESOURCES = [
   { id: 'subscription', label: 'subscribe/$subscribe/$onAction/onSnapshot', create: /\.subscribe\s*\(|\$subscribe\s*\(|\$onAction\s*\(|\bonSnapshot\s*\(|\.on\s*\(\s*['"]/g, cleanup: /\.unsubscribe\s*\(|\bunsub\w*\s*\(|\.off\s*\(|\bonScopeDispose\b|\bonBeforeUnmount\b|\bonUnmounted\b|\breturn\s*\(\)\s*=>/g, expected: 'call the returned unsubscribe function on unmount', severity: 'medium' },
   { id: 'media-query', label: 'matchMedia listener', create: /matchMedia\s*\([^)]*\)\s*\.\s*add(?:EventListener|Listener)\s*\(/g, cleanup: /\.remove(?:EventListener|Listener)\s*\(|\buseMediaQuery\b|\busePreferredReducedMotion\b|\busePreferredDark\b/g, expected: 'remove the listener on unmount (or VueUse useMediaQuery)', severity: 'low' },
   { id: 'object-url', label: 'URL.createObjectURL', create: /URL\.createObjectURL\s*\(/g, cleanup: /URL\.revokeObjectURL\s*\(/g, expected: 'URL.revokeObjectURL when the blob is no longer displayed', severity: 'low' },
+  // 1.3: channels, workers, idle callbacks and media streams hold handles or threads until closed
+  { id: 'channel', label: 'BroadcastChannel/MessageChannel', create: /\bnew\s+(?:BroadcastChannel|MessageChannel)\s*\(/g, cleanup: /\.close\s*\(|\buseBroadcastChannel\b/g, expected: 'channel.close() (and port.close()) on unmount, logout and tenant switch', severity: 'medium' },
+  { id: 'worker', label: 'Worker/SharedWorker', create: /\bnew\s+(?:Shared)?Worker\s*\(/g, cleanup: /\.terminate\s*\(|\.port\.close\s*\(|\buseWebWorker(?:Fn)?\b/g, expected: 'worker.terminate() on unmount (VueUse useWebWorker terminates for you)', severity: 'high' },
+  { id: 'idle-callback', label: 'requestIdleCallback', create: /\brequestIdleCallback\s*\(/g, cleanup: /\bcancelIdleCallback\s*\(/g, expected: 'cancelIdleCallback of the pending id on unmount', severity: 'low' },
+  { id: 'media-stream', label: 'getUserMedia/getDisplayMedia', create: /\bget(?:User|Display)Media\s*\(/g, cleanup: /\.getTracks\s*\(\)\s*\.forEach|\.stop\s*\(|\buseUserMedia\b|\buseDisplayMedia\b/g, expected: 'stop every track of the stream on unmount (track.stop())', severity: 'high' },
 ]
 
 const CLEANUP_HOOK_RE = /\b(?:onBeforeUnmount|onUnmounted|onScopeDispose|onDeactivated|tryOnScopeDispose|tryOnUnmounted|effectScope|useEffect\s*\(\s*\(\)\s*=>\s*\{[\s\S]*?return\s*\(\)\s*=>|return\s*\(\)\s*=>\s*\{|componentWillUnmount|\bdispose\b)/
@@ -68,7 +74,13 @@ export function run(argv) {
   if (args.help || !args._[0]) return usage(HELP)
   const root = resolve(args._[0])
   if (!existsSync(join(root, 'package.json'))) return fail(`no package.json in ${root}`)
-  const project = detectProject(root, loadConfig(root, args.config))
+  let config
+  try {
+    config = loadConfig(root, args.config, { exclude: excludeArg(args) })
+  } catch (error) {
+    return fail(error.message)
+  }
+  const project = detectProject(root, config)
   const report = createReport('leak-patterns', project)
   const rows = []
   let scanned = 0
@@ -102,4 +114,4 @@ export function run(argv) {
 
 // Set the exit code instead of calling process.exit: large --json outputs piped to another process
 // would otherwise be truncated at 64 KiB when the process exits before stdout drains.
-if (import.meta.url === `file://${process.argv[1]}`) process.exitCode = run(process.argv.slice(2))
+if (isMainModule(import.meta.url)) process.exitCode = run(process.argv.slice(2))
