@@ -63,7 +63,7 @@ Imports the engine cannot place are listed under *Unresolved imports* with a rea
 
 - Compiler options come from the files Nuxt generates (`.nuxt/tsconfig.app.json`, `.nuxt/tsconfig.server.json`); they carry the `~`, `@`, `~~`, `@@`, `#shared`, `#imports` and layer aliases exactly as Nuxt resolves them. When `.nuxt/` is missing, a root `tsconfig.json` with `paths` is used, and when that is missing too, the lexical alias table.
 - Auto-imported composables, utils and stores and template components are resolved as in 1.1: `.nuxt/types/imports.d.ts` and `.nuxt/components.d.ts` make them `verified`; the scanned catalog makes them `inferred`; symbols that resolve nowhere stay *unknown*. Freshness is checked (metadata older than the newest source is reported as stale). The tools never run `nuxt prepare`.
-- What the AST adds: a symbol counts as used only when it appears as a value identifier (not as a property name, object key, string, comment or type annotation). On an 80k-line Nuxt 4 app this removed three auto-import edges that the lexical engine had reported (`plural` and `vencimiento` were object keys and property accesses, not calls to the auto-imported functions).
+- What the AST adds: a symbol counts as used only when it appears as a value identifier (not as a property name, object key, string, comment or type annotation). On an 80k-line Nuxt 4 app this removed three auto-import edges that the lexical engine had reported (the names were object keys and property accesses, not calls to the auto-imported functions).
 
 ## Vue single-file components
 
