@@ -1,6 +1,6 @@
 # Evaluation suite
 
-`plugins/frontend-architect/evals/` holds 54 cases for `claude plugin eval` (48 through 1.1.0; cases 49–54 were added in 1.2.0 and have not been run). The suite exists to answer four questions: does the right skill activate (and only then), does the answer apply the references, does it refuse what should be refused, and does the reviewer use the scripts. Structure is validated offline by `verification/plugin-check.mjs`; scores exist only after a run, and a run costs money.
+`plugins/frontend-architect/evals/` holds 66 cases for `claude plugin eval` (48 through 1.1.0; cases 49–54 were added in 1.2.0 and cases 55–66 in 1.3.0; none of the 1.2 or 1.3 cases has been run). The suite exists to answer four questions: does the right skill activate (and only then), does the answer apply the references, does it refuse what should be refused, and does the reviewer use the scripts. Structure is validated offline by `verification/plugin-check.mjs`; scores exist only after a run, and a run costs money.
 
 ## Taxonomy
 
@@ -78,8 +78,26 @@ Limits: an indicator proves the `Skill` tool was called with that name, not that
 | 46-python-csv-script | none | - |  | cheap | activation |
 | 47-terraform-s3-bucket-policy | none | - |  | cheap | activation |
 | 48-nuxt-dashboard-restructure-visual | both | architecture, visual, vue-nuxt |  | standard | smoke |
+| 49-hidden-coupling-through-aliases | architect | architecture, vue-nuxt, audit |  | standard |  |
+| 50-nuxt-auto-import-dependency-mapping | architect | architecture, vue-nuxt, audit |  | standard |  |
+| 51-server-only-code-reaching-client | architect | react-next, security, architecture |  | standard |  |
+| 52-vue-sfc-cleanup-false-positive | architect | vue-nuxt, testing, performance | yes | standard |  |
+| 53-ssr-state-and-late-responses-tenant | architect | vue-nuxt, security, state, testing |  | standard |  |
+| 54-public-contract-breaking-change | architect | architecture, vue-nuxt, audit |  | standard |  |
+| 55-symbol-origin-through-barrels | architect | architecture, vue-nuxt, audit |  | standard |  |
+| 56-pnpm-workspace-nuxt-and-packages | architect | architecture, vue-nuxt, audit |  | standard |  |
+| 57-vue-builtins-reported-unknown | architect | vue-nuxt, audit |  | standard |  |
+| 58-dependency-inside-template-literal | architect | vue-nuxt, audit, testing |  | standard |  |
+| 59-component-mentioned-in-comments-only | architect | vue-nuxt, audit, testing |  | standard |  |
+| 60-client-only-and-server-only-boundaries | architect | react-next, security, architecture |  | standard |  |
+| 61-no-rule-flagging-use-client-and-usestate | architect | react-next, security, audit | yes | standard |  |
+| 62-dependency-policy-and-allowed-cycles | architect | architecture, vue-nuxt, audit |  | standard |  |
+| 63-choosing-and-reading-the-engine | architect | audit, vue-nuxt |  | standard |  |
+| 64-auditing-an-untrusted-repository | architect | security, audit |  | standard |  |
+| 65-exclusions-and-stale-build-output | architect | audit, performance, delivery |  | standard |  |
+| 66-nuxt-module-structure-and-visual-density | both | architecture, visual, vue-nuxt, state |  | standard |  |
 
-Totals: 36 architect, 5 creative, 3 both, 4 none; 13 say-no cases; cost classes: 4 cheap (max_turns 4), 43 standard (max_turns 10), 1 expensive (case 39: 30 turns, scaffold, Bash).
+Totals: 53 architect, 5 creative, 4 both, 4 none; 15 say-no cases; cost classes: 4 cheap (max_turns 4), 61 standard (max_turns 10), 1 expensive (case 39: 30 turns, scaffold, Bash). Cases 49–66 are not in any named suite: they run with `tag <tag>` or `full`.
 
 ## Running
 
@@ -177,6 +195,25 @@ The remaining 40 cases have never been scored. The structure of every case is va
 
 They follow the 1.1 conventions (positive and negative criteria, tags in the frontmatter) and are included in the `tag` and `full` suites of `verification/evals/run-evals.sh`. No paid run was authorized for this pass, so they have no scores yet.
 
+## Cases added in 1.3.0 (structure validated, not run)
+
+| Case | Activation | What it checks |
+|---|---|---|
+| 55 `symbol-origin-through-barrels` | architect | Attributing an imported name to the file that declares it through re-exports and `export *`; expects symbol origins / `--follow-reexports`, the barrel hop kept apart from the owner, no guessing |
+| 56 `pnpm-workspace-nuxt-and-packages` | architect | Workspace scope: cross-package edges from the root, `exports`/subpath resolution, `package-subpath-not-exported`, siblings named but not followed from inside an app |
+| 57 `vue-builtins-reported-unknown` | architect | `component`, `transition`, `keep-alive`, `Teleport` are built-ins, never to be registered; only a name that resolves nowhere is unknown; dynamic `:is` is its own class |
+| 58 `dependency-inside-template-literal` | architect | Calls inside `${…}` and bound attributes are runtime dependencies; explains why an AST engine sees them and a string-stripping detector may not, verifies before blaming |
+| 59 `component-mentioned-in-comments-only` | architect | Names in JSDoc, strings and HTML comments are not dependencies; the AST engine ignores them; read the file, invent no edge |
+| 60 `client-only-and-server-only-boundaries` | architect | Next.js reachability both ways with transitive chains; `'use client'` is a boundary; a `'use server'` module reading env imported by a client component is not a leak |
+| 61 `no-rule-flagging-use-client-and-usestate` | architect (say no) | Declines rules that flag every `'use client'` and `useState`; proposes the evidence-based rules; keeps `confirmed` honest |
+| 62 `dependency-policy-and-allowed-cycles` | architect | `dependencies.allowed` and `exceptions` in the config; `allowed-cycle` as info, `forbidden-dependency` split runtime/type-only, exceptions visible with reason and dates |
+| 63 `choosing-and-reading-the-engine` | architect | `--engine auto|semantic|lexical`, `--typescript`, `--vue-compiler`; honest fallbacks (TypeScript 7 preview, pnpm layouts); reading `Analysis` and per-edge `resolution` |
+| 64 `auditing-an-untrusted-repository` | architect | Semantic mode loads `typescript` and `vue/compiler-sfc` from the project (code execution); `--engine lexical` loads nothing; trusted-compiler override as middle ground; no isolation claims |
+| 65 `exclusions-and-stale-build-output` | architect | Explicit, validated and reported `exclude`; bundle totals scoped to the current build manifest with stale artifacts reported separately, never two builds summed |
+| 66 `nuxt-module-structure-and-visual-density` | both | A module whose structure and visual direction must be decided together; two activation indicators (architect and creative), the second combined-activation probe after case 48 |
+
+Same conventions as 1.2 (positive and negative criteria, `activation:` tags, `tool_used` indicators excluded from the baseline arm). No paid run was authorized for this pass; the cases have no scores and their rubrics have not been calibrated against a model yet.
+
 ## Case 48: activation analysis
 
 Facts from the 2026-10-28 runs: with the original prompt (concrete paths, no repository in the sandbox) Sonnet activated both skills in 1 of 2 with-plugin runs and the other run went straight to exploring the empty directory; with the clarified prompt Haiku answered in a single turn and activated neither; the single-skill cases activated the expected skill in 7 of 7 with-plugin runs. Four runs of one case, split across two prompts and two models, support an observation, not a measurement.
@@ -213,3 +250,4 @@ Not the activation rate of the combined prompt for any model, not whether the ga
 - Read-outs: activation of each skill (indicator graders), rubric pass rate, turns, and how often the model answered in one turn without any tool call.
 - Legitimate tweak: adding missing trigger vocabulary that describes real use (the two fragments above). Illegitimate: copying rubric phrases into the descriptions, instructing the skill to always fire, or loosening the rubric so one-turn answers pass; those raise scores without improving routing or answers and are out of bounds for this suite.
 - Decision rule: adopt a description change only if it improves activation on case 48 without changing the out-of-scope results (cases 44–47 must stay at zero activation in both arms).
+- Second probe (1.3): case 66 (`nuxt-module-structure-and-visual-density`) is a second combined-activation prompt with the same two indicator graders; running it in the same budgeted A/B gives a second data point on double activation that is not tied to the wording of case 48. Not run; no budget has been authorized.
