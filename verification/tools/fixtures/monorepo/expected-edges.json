@@ -1,0 +1,31 @@
+{
+  "$comment": "Ground truth for the pnpm workspace, measured from the workspace root. Unique (from, to, kind) pairs. Workspace packages are internal code and resolve to files; left-pad is an external dependency and never an edge.",
+  "edges": [
+    { "from": "apps/web/app/pages/index.vue", "to": "packages/ui/src/index.ts", "kind": "runtime", "why": "import { Button } from '@acme/ui' (package exports '.')" },
+    { "from": "apps/web/app/pages/index.vue", "to": "packages/ui/src/index.ts", "kind": "type", "why": "import type { Size } from '@acme/ui'" },
+    { "from": "apps/web/app/pages/index.vue", "to": "packages/shared/src/index.ts", "kind": "runtime", "why": "import { formatMoney } from '@acme/shared' (package main)" },
+    { "from": "apps/web/app/pages/deep.vue", "to": "packages/ui/src/internal/theme.ts", "kind": "runtime", "why": "deep import of a subpath the package does not export" },
+    { "from": "apps/web/app/pages/deep.vue", "to": "packages/ui/src/button.ts", "kind": "runtime", "why": "subpath export './button'" },
+    { "from": "apps/web/app/components/Price.vue", "to": "packages/ui/src/index.ts", "kind": "runtime", "why": "import { formatMoney, nothingHere } from '@acme/ui'" },
+    { "from": "packages/ui/src/index.ts", "to": "packages/ui/src/button.ts", "kind": "runtime", "why": "re-export" },
+    { "from": "packages/ui/src/index.ts", "to": "packages/ui/src/types.ts", "kind": "runtime", "why": "export * from './types' (the statement itself is not type-only)" },
+    { "from": "packages/ui/src/index.ts", "to": "packages/shared/src/index.ts", "kind": "runtime", "why": "re-export from another workspace package" },
+    { "from": "packages/ui/src/button.ts", "to": "packages/ui/src/internal/theme.ts", "kind": "runtime", "why": "relative import" },
+    { "from": "packages/shared/src/index.ts", "to": "packages/shared/src/money.ts", "kind": "runtime", "why": "re-export" }
+  ],
+  "packages": { "external": ["left-pad"], "workspace": ["@acme/ui", "@acme/shared"] },
+  "symbols": [
+    { "from": "apps/web/app/components/Price.vue", "name": "formatMoney", "file": "packages/shared/src/money.ts", "hops": 2, "status": "declared" },
+    { "from": "apps/web/app/components/Price.vue", "name": "nothingHere", "file": null, "hops": 0, "status": "not-found" },
+    { "from": "apps/web/app/pages/index.vue", "name": "Size", "file": "packages/ui/src/types.ts", "hops": 1, "status": "declared", "viaStar": true },
+    { "from": "apps/web/app/pages/deep.vue", "name": "Button", "file": "packages/ui/src/button.ts", "hops": 0, "status": "declared" }
+  ],
+  "contracts": {
+    "modulesDir": "packages",
+    "entries": { "packages/ui": "packages/ui/src/index.ts", "packages/shared": "packages/shared/src/index.ts" },
+    "reexportCrossesModule": [{ "module": "packages/ui", "name": "formatMoney", "declaredIn": "packages/shared/src/money.ts" }],
+    "internalImports": [{ "from": "apps/web/app/pages/deep.vue", "to": "packages/ui/src/internal/theme.ts" }],
+    "subpathNotExported": [{ "from": "apps/web/app/pages/deep.vue", "specifier": "@acme/ui/src/internal/theme" }]
+  },
+  "fromAppDir": { "root": "apps/web", "workspaceSiblings": ["@acme/ui", "@acme/shared"], "external": ["left-pad"], "edgesIntoSiblings": 0 }
+}

@@ -31,12 +31,13 @@ test('next: use client on a page is confirmed; server actions and handlers witho
   assert.equal(client.length, 1)
   assert.equal(client[0].file, 'src/app/page.tsx')
   const actions = report.data.actions
-  assert.deepEqual(actions.map((a) => [a.name, a.hasAuth]), [['deleteOrder', false], ['renameOrder', true]])
+  // 1.3 fixture adds audit.actions.ts (logAudit, with an authorize call) next to orders.actions.ts
+  assert.deepEqual(actions.map((a) => [a.name, a.hasAuth]), [['logAudit', true], ['deleteOrder', false], ['renameOrder', true]])
   const noAuth = byId(report, 'server-action-without-auth')
   assert.equal(noAuth.length, 1)
   assert.match(noAuth[0].message, /deleteOrder/)
   assert.equal(noAuth[0].severity, 'high')
-  assert.equal(byId(report, 'server-action-without-validation').length, 2)
+  assert.equal(byId(report, 'server-action-without-validation').length, 3, 'deleteOrder, renameOrder and the 1.3 logAudit parse nothing')
   const handler = byId(report, 'route-handler-without-auth')
   assert.equal(handler.length, 1)
   assert.match(handler[0].message, /POST \/api\/webhooks/)

@@ -45,13 +45,37 @@ export function resolveCompilerOptions(ts, project) {
   const app = pick(candidates.app) ?? pick(candidates.default)
   const server = pick(candidates.server) ?? app
   const def = pick(candidates.default) ?? app
+  // TypeScript project references and workspace packages: each referenced directory keeps its own options
+  const areas = []
+  const addArea = (configFile) => {
+    if (!configFile || !exists(configFile)) return
+    const parsed = parseConfig(ts, configFile)
+    if (!parsed) return
+    const dir = rel(root, dirname(configFile))
+    if (dir === '' || dir === '.' || areas.some((a) => a.dir === dir)) return
+    areas.push({ dir, config: parsed })
+  }
+  const rootConfig = found('tsconfig.json')
+  if (rootConfig) {
+    const raw = ts.readConfigFile(rootConfig, ts.sys.readFile).config
+    for (const ref of raw?.references ?? []) {
+      if (!ref?.path) continue
+      const target = join(root, ref.path)
+      addArea(/\.json$/.test(ref.path) ? target : join(target, 'tsconfig.json'))
+    }
+  }
+  for (const p of project.workspace?.packages ?? []) addArea(join(root, p.dir, 'tsconfig.json'))
+  areas.sort((a, b) => b.dir.length - a.dir.length)
   const describe = (c) => (c ? { file: rel(root, c.file), moduleResolution: ts.ModuleResolutionKind?.[c.options.moduleResolution] ?? c.options.moduleResolution ?? null, paths: Object.keys(c.options.paths ?? {}).length, baseUrl: c.options.baseUrl ? rel(root, c.options.baseUrl) : null } : null)
   return {
     app,
     server,
     default: def,
-    summary: { app: describe(app), server: describe(server), default: describe(def) },
+    areas,
+    summary: { app: describe(app), server: describe(server), default: describe(def), references: areas.map((a) => ({ dir: a.dir, ...describe(a.config) })) },
     forFile(relPath) {
+      const area = areas.find((a) => relPath.startsWith(`${a.dir}/`))
+      if (area) return area.config
       if (relPath.startsWith('server/') && server) return server
       return app ?? def
     },

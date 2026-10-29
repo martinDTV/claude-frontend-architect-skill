@@ -1,0 +1,31 @@
+{
+  "$comment": "Symbol-level ground truth, written from the sources before the symbol resolver ran. For every named import that resolves to a project file: the file that really declares the name, how many barrel hops separate importer and owner, and whether an `export *` was crossed. Default imports of .vue files are declared by the .vue file itself.",
+  "origins": [
+    { "from": "src/features/checkout/total.ts", "specifier": "#core/orders/internal/pricing", "name": "priceWithTax", "file": "src/core/orders/internal/pricing.ts", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/features/checkout/total.ts", "specifier": "#core/orders/internal/pricing", "name": "DEFAULT_TAX", "file": "src/core/orders/internal/pricing.ts", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/features/checkout/total.ts", "specifier": "#core/orders", "name": "Order", "file": "src/core/orders/types.ts", "kind": "type", "hops": 1, "viaStar": false },
+    { "from": "src/features/checkout/total.ts", "specifier": "#core/orders", "name": "orderPaid", "file": "src/core/orders/events.ts", "kind": "value", "hops": 1, "viaStar": true },
+    { "from": "src/features/checkout/label.ts", "specifier": "#core/billing/invoice", "name": "invoiceTitle", "file": "src/core/billing/invoice.ts", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/core/billing/invoice.ts", "specifier": "@/features/checkout/label", "name": "checkoutLabel", "file": "src/features/checkout/label.ts", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/features/reports/report.ts", "specifier": "#ui", "name": "Button", "file": "src/shared/ui/Button.ts", "kind": "value", "hops": 1, "viaStar": false },
+    { "from": "src/features/reports/report.ts", "specifier": "#core/orders/internal/pricing", "name": "PriceInput", "file": "src/core/orders/internal/pricing.ts", "kind": "type", "hops": 0, "viaStar": false },
+    { "from": "src/components/StatusBadge.vue", "specifier": "#core/orders", "name": "OrderStatus", "file": "src/core/orders/types.ts", "kind": "type", "hops": 1, "viaStar": false },
+    { "from": "src/components/OrderCard.vue", "specifier": "#core/orders", "name": "Order", "file": "src/core/orders/types.ts", "kind": "type", "hops": 1, "viaStar": false },
+    { "from": "src/components/OrderCard.vue", "specifier": "@/features/checkout/total", "name": "checkoutTotal", "file": "src/features/checkout/total.ts", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/components/OrderCard.vue", "specifier": "./StatusBadge.vue", "name": "default", "file": "src/components/StatusBadge.vue", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/core/orders/events.ts", "specifier": "./types", "name": "Order", "file": "src/core/orders/types.ts", "kind": "type", "hops": 0, "viaStar": false },
+    { "from": "src/core/orders/index.ts", "specifier": "./internal/pricing", "name": "priceWithTax", "file": "src/core/orders/internal/pricing.ts", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/core/orders/index.ts", "specifier": "./types", "name": "Order", "file": "src/core/orders/types.ts", "kind": "type", "hops": 0, "viaStar": false },
+    { "from": "src/core/orders/index.ts", "specifier": "./types", "name": "OrderStatus", "file": "src/core/orders/types.ts", "kind": "type", "hops": 0, "viaStar": false },
+    { "from": "src/shared/ui/index.ts", "specifier": "./Button", "name": "Button", "file": "src/shared/ui/Button.ts", "kind": "value", "hops": 0, "viaStar": false },
+    { "from": "src/shared/ui/index.ts", "specifier": "./Button", "name": "ButtonProps", "file": "src/shared/ui/Button.ts", "kind": "type", "hops": 0, "viaStar": false }
+  ],
+  "derivedEdgesWithFollowReexports": [
+    { "from": "src/features/checkout/total.ts", "to": "src/core/orders/types.ts", "kind": "type", "through": "src/core/orders/index.ts" },
+    { "from": "src/features/checkout/total.ts", "to": "src/core/orders/events.ts", "kind": "runtime", "through": "src/core/orders/index.ts" },
+    { "from": "src/features/reports/report.ts", "to": "src/shared/ui/Button.ts", "kind": "runtime", "through": "src/shared/ui/index.ts" },
+    { "from": "src/components/StatusBadge.vue", "to": "src/core/orders/types.ts", "kind": "type", "through": "src/core/orders/index.ts" },
+    { "from": "src/components/OrderCard.vue", "to": "src/core/orders/types.ts", "kind": "type", "through": "src/core/orders/index.ts" }
+  ],
+  "notes": "Imports that leave the project (zod, vue) or resolve to no file (./does-not-exist, the non-literal dynamic import) have no origin entry; `export * from './events'` is crossed exactly once (orderPaid)."
+}

@@ -18,6 +18,14 @@ function isDir(p) {
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 
+function readJsonSafe(file) {
+  try {
+    return JSON.parse(require('node:fs').readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 function packageName(specifier) {
   if (specifier.startsWith('@')) return specifier.split('/').slice(0, 2).join('/')
   return specifier.split('/')[0]
@@ -45,10 +53,70 @@ function applyPaths(options, specifier) {
 
 const NODE_BUILTINS = new Set(['fs', 'path', 'crypto', 'url', 'os', 'util', 'events', 'stream', 'http', 'https', 'zlib', 'buffer', 'child_process', 'module', 'assert', 'readline', 'worker_threads', 'perf_hooks', 'async_hooks', 'net', 'tls', 'dns', 'querystring', 'string_decoder', 'timers', 'vm', 'v8', 'process', 'cluster', 'dgram', 'inspector', 'punycode', 'tty', 'constants', 'repl'])
 
+/**
+ * Resolves a package.json entry for a subpath: `exports` (string, conditions object, subpath map with
+ * patterns) or main/module/types. Returns { file (absolute, may lack extension) , exported } or null.
+ */
+function packageEntry(pkgDir, pkg, subpath) {
+  const pick = (v) => {
+    if (v == null) return null
+    if (typeof v === 'string') return v
+    if (Array.isArray(v)) return pick(v[0])
+    for (const cond of ['import', 'default', 'module', 'require', 'types', 'node', 'browser']) if (v[cond] != null) return pick(v[cond])
+    return null
+  }
+  const exp = pkg?.exports
+  if (exp != null) {
+    const key = subpath ? `./${subpath}` : '.'
+    let target = null
+    if (typeof exp === 'string' || Array.isArray(exp)) target = key === '.' ? pick(exp) : null
+    else if (Object.keys(exp).some((k) => k.startsWith('.'))) {
+      target = pick(exp[key])
+      if (!target) for (const [k, v] of Object.entries(exp)) {
+        const star = k.indexOf('*')
+        if (star < 0) continue
+        const prefix = k.slice(0, star)
+        const suffix = k.slice(star + 1)
+        if (key.startsWith(prefix) && key.endsWith(suffix) && key.length >= k.length - 1) {
+          const t = pick(v)
+          target = t ? t.replace('*', key.slice(prefix.length, key.length - suffix.length)) : null
+          break
+        }
+      }
+    } else target = key === '.' ? pick(exp) : null
+    if (target) return { file: resolve(pkgDir, target), exported: true }
+    // not published: fall through to the physical file so the edge still exists, flagged
+    const physical = subpath ? resolve(pkgDir, subpath) : null
+    return physical ? { file: physical, exported: false } : { file: null, exported: false }
+  }
+  if (subpath) return { file: resolve(pkgDir, subpath), exported: true }
+  const entry = pkg?.module ?? pkg?.main ?? pkg?.types ?? 'index'
+  return { file: resolve(pkgDir, entry), exported: true }
+}
+
 export function createResolver(ts, project, compilerOptions) {
   const root = project.root
-  const declared = new Set(Object.keys(project.deps ?? {}))
+  const declaredAtRoot = new Set(Object.keys(project.deps ?? {}))
   const rootPosix = toPosix(root)
+  // workspace packages inside the audited root resolve to files; siblings of an app inside a bigger workspace are named, not followed
+  const workspacePackages = new Map((project.workspace?.packages ?? []).map((p) => [p.name, { dir: join(root, p.dir), rel: p.dir, pkg: p.pkg }]))
+  const siblingPackages = new Map((project.workspaceParent?.packages ?? []).map((p) => [p.name, p.dir]))
+  const depsCache = new Map()
+  /** Dependencies declared by the nearest package.json above `fromRel` (a workspace package) plus the root's. */
+  const declaredFor = (fromRel) => {
+    let dir = dirname(fromRel)
+    while (true) {
+      if (!depsCache.has(dir)) {
+        const pkg = dir === '.' ? null : readJsonSafe(join(root, dir, 'package.json'))
+        depsCache.set(dir, pkg ? new Set([...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {}), ...Object.keys(pkg.peerDependencies ?? {})]) : null)
+      }
+      const set = depsCache.get(dir)
+      if (set) return new Set([...set, ...declaredAtRoot])
+      const parent = dirname(dir)
+      if (parent === dir || dir === '.') return declaredAtRoot
+      dir = parent
+    }
+  }
   const toRel = (abs) => {
     const p = toPosix(abs)
     return p.startsWith(`${rootPosix}/`) ? p.slice(rootPosix.length + 1) : null
@@ -69,6 +137,23 @@ export function createResolver(ts, project, compilerOptions) {
     if (!specifier) return { status: 'unknown', reason: 'non-literal specifier', confidence: 'unknown' }
     const fromAbs = join(root, fromRel)
     const options = compilerOptions.forFile(fromRel)?.options ?? {}
+    // 0. workspace packages: by name, through their package.json exports/main (independent of node_modules links)
+    if (!specifier.startsWith('.') && !specifier.startsWith('/') && !/^[~@#]\/|^~~|^@@|^#/.test(specifier)) {
+      const pkgName = packageName(specifier)
+      const subpath = specifier.length > pkgName.length ? specifier.slice(pkgName.length + 1) : ''
+      const ws = workspacePackages.get(pkgName)
+      if (ws) {
+        const entry = packageEntry(ws.dir, ws.pkg, subpath)
+        if (entry?.file) {
+          for (const ext of EXTENSIONS) {
+            const abs = entry.file + ext
+            if (exists(abs) && !isDir(abs)) return { ...classifyFile(abs, 'workspace'), confidence: 'verified', package: pkgName, subpath: subpath || null, exported: entry.exported }
+          }
+        }
+        return { status: 'unknown', reason: entry?.exported === false ? `subpath "${subpath}" is not exported by ${pkgName} and no such file exists` : `entry of workspace package ${pkgName} not found`, confidence: 'unknown', package: pkgName }
+      }
+      if (siblingPackages.has(pkgName)) return { status: 'workspace-sibling', name: pkgName, method: 'workspace', confidence: 'verified', dir: siblingPackages.get(pkgName) }
+    }
     // 1. TypeScript's resolver
     try {
       const r = ts.resolveModuleName(specifier, fromAbs, options, ts.sys)
@@ -109,7 +194,7 @@ export function createResolver(ts, project, compilerOptions) {
     if (/^node:/.test(specifier) || NODE_BUILTINS.has(specifier)) return { status: 'package', name: 'node', method: 'builtin', confidence: 'verified' }
     if (!/^[~@#]\/|^~~|^@@|^#/.test(specifier)) {
       const pkg = packageName(specifier)
-      if (declared.has(pkg)) return { status: 'package', name: pkg, method: 'package.json', confidence: 'verified' }
+      if (declaredFor(fromRel).has(pkg)) return { status: 'package', name: pkg, method: 'package.json', confidence: 'verified' }
       let dir = dirname(fromAbs)
       for (let i = 0; i < 12; i++) {
         if (exists(join(dir, 'node_modules', pkg))) return { status: 'package', name: pkg, method: 'node_modules', confidence: 'verified' }
