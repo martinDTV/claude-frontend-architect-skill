@@ -1,0 +1,13 @@
+{
+ "tool": "leak-patterns",
+ "fixture": "monorepo",
+ "engine": "semantic",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "filesScanned",
+  "filesWithResources",
+  "potentialLeaks",
+  "resourcesByType"
+ ],
+ "findings": []
+}

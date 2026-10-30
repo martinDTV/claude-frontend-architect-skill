@@ -1,0 +1,19 @@
+{
+ "tool": "state-audit",
+ "fixture": "next-app",
+ "engine": "lexical",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "files",
+  "moduleLevelState",
+  "nuxtStateKeys",
+  "piniaStores",
+  "queryCache",
+  "ssr",
+  "webStorageWrites"
+ ],
+ "findings": [
+  "module-level-client-store|src/stores/preferences.store.ts|3|info|low",
+  "module-level-http-client-mutable-auth|src/lib/http/client.ts|2|confirmed|critical"
+ ]
+}

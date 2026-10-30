@@ -1,0 +1,4 @@
+{
+  "$comment": "Findings present in a frozen baseline that a later version is allowed to drop. Each entry names the baseline version, a regex over `id|file|line|level|severity` and the reason. Anything removed without an entry fails baseline-findings.test.mjs.",
+  "1.3.0": []
+}

@@ -1,0 +1,16 @@
+{
+ "tool": "leak-patterns",
+ "fixture": "vue-templates",
+ "engine": "semantic",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "filesScanned",
+  "filesWithResources",
+  "potentialLeaks",
+  "resourcesByType"
+ ],
+ "findings": [
+  "leak-channel|app/composables/useChannel.ts|3|heuristic|medium",
+  "leak-worker|app/composables/useChannel.ts|4|heuristic|high"
+ ]
+}

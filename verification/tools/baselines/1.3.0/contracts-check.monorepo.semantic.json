@@ -1,0 +1,13 @@
+{
+ "tool": "contracts-check",
+ "fixture": "monorepo",
+ "engine": "semantic",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "internalImports",
+  "modules",
+  "publicExports",
+  "withEntry"
+ ],
+ "findings": []
+}

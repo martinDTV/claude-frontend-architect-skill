@@ -1,0 +1,20 @@
+{
+ "tool": "routes-audit",
+ "fixture": "nuxt-app",
+ "engine": "lexical",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "byGlobal",
+  "globalMiddleware",
+  "guarded",
+  "namedMiddleware",
+  "pages",
+  "public",
+  "routeRulesSsrFalse",
+  "ssr",
+  "unguarded"
+ ],
+ "findings": [
+  "page-without-guard|app/pages/planos/index.vue||heuristic|medium"
+ ]
+}

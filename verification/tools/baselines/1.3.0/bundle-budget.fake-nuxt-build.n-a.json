@@ -1,0 +1,27 @@
+{
+ "tool": "bundle-budget",
+ "fixture": "fake-nuxt-build",
+ "engine": "n-a",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "assetScope",
+  "buildId",
+  "entryCssGzipKb",
+  "entryJsGzipKb",
+  "files",
+  "inventoryComplete",
+  "kind",
+  "largest",
+  "measuredFiles",
+  "newestAsset",
+  "otherBuilds",
+  "output",
+  "sharedChunks",
+  "staleFiles",
+  "staleJsGzipKb",
+  "totalJsGzipKb",
+  "totalJsRawKb",
+  "unreferencedFiles"
+ ],
+ "findings": []
+}

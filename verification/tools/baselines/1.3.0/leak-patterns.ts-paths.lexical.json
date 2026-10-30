@@ -1,0 +1,13 @@
+{
+ "tool": "leak-patterns",
+ "fixture": "ts-paths",
+ "engine": "lexical",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "filesScanned",
+  "filesWithResources",
+  "potentialLeaks",
+  "resourcesByType"
+ ],
+ "findings": []
+}

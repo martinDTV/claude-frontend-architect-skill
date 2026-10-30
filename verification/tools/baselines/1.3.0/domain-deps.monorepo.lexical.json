@@ -1,0 +1,36 @@
+{
+ "tool": "domain-deps",
+ "fixture": "monorepo",
+ "engine": "lexical",
+ "version": "1.3.0",
+ "summaryKeys": [
+  "autoImportComponents",
+  "autoImportSymbols",
+  "catalogSource",
+  "componentsByResolution",
+  "derivedEdges",
+  "domains",
+  "dynamicComponents",
+  "edges",
+  "edgesByConfidence",
+  "edgesByDependencyKind",
+  "edgesByKind",
+  "edgesByResolution",
+  "engine",
+  "files",
+  "horizontalEdges",
+  "metadata",
+  "packageSymbolsUsed",
+  "packagesByScope",
+  "packagesImported",
+  "policy",
+  "symbolResolution",
+  "unclassifiedFiles",
+  "unknownSymbols",
+  "unresolvedImports",
+  "workspace"
+ ],
+ "findings": [
+  "unclassified-files|||info|info"
+ ]
+}
