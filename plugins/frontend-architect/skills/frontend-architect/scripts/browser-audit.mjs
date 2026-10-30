@@ -211,6 +211,23 @@ window.__fa = {
     const r = el.getBoundingClientRect()
     return [r.top, r.left, r.width, r.height].map((n) => Math.round(n)).join(',')
   },
+  // The computed properties that decide a contrast result: the element's own text styling plus the background,
+  // opacity and compositing of every ancestor (the effective background behind the text). A page that reacts to the
+  // second pass by recolouring without moving is caught by comparing these keys. \`cache\` memoises ancestors.
+  styleKey(el, cache) {
+    const s = getComputedStyle(el)
+    let key = [s.color, s.backgroundColor, s.backgroundImage, s.opacity, s.fontSize, s.fontWeight, s.visibility, s.textShadow, s.webkitTextFillColor, s.filter, s.mixBlendMode].join(';')
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      let k = cache.get(a)
+      if (k === undefined) {
+        const as = getComputedStyle(a)
+        k = [as.backgroundColor, as.backgroundImage, as.opacity, as.filter, as.mixBlendMode, as.visibility].join(';')
+        cache.set(a, k)
+      }
+      key += '|' + k
+    }
+    return key
+  },
   // 1.4.1: the denominator of the colour-contrast coverage. Elements that own visible text (letters or digits in a
   // direct text node), inside the viewport, with a real box (visually-hidden patterns of 1px or clip excluded).
   // \`excluded\` marks what axe leaves out by design: disabled or inert content and text clipped by a non-root
@@ -250,16 +267,21 @@ window.__fa = {
   // why the others were not: a root (html/body) with overflow: hidden whose box does not overlap the element is the
   // axe-core visibility gate that fixed app shells and modal scroll locks trip; anything else is \`other\`.
   contrastCoverage(results) {
+    // evaluated = decided (pass or violation); undecided = axe looked and could not decide (incomplete): neither
+    // is a gap, and undecided never becomes coverage of a result
     const evaluated = new Set()
-    for (const list of [results.passes || [], results.violations || [], results.incomplete || []]) for (const rule of list) if (rule.id === 'color-contrast') for (const n of rule.nodes) if (n.element) evaluated.add(n.element)
+    const undecided = new Set()
+    for (const list of [results.passes || [], results.violations || []]) for (const rule of list) if (rule.id === 'color-contrast') for (const n of rule.nodes) if (n.element) evaluated.add(n.element)
+    for (const rule of results.incomplete || []) if (rule.id === 'color-contrast') for (const n of rule.nodes) if (n.element && !evaluated.has(n.element)) undecided.add(n.element)
     const overlaps = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom)
     const roots = [document.documentElement, document.body].filter((e) => e && getComputedStyle(e).overflow === 'hidden').map((e) => ({ e, box: e.getBoundingClientRect() }))
     const candidates = window.__fa.textCandidates()
-    const out = { candidates: 0, evaluated: 0, excludedByDesign: 0, skippedByRootOverflow: 0, skippedOther: 0, skippedSamples: [], rootClippers: roots.map((r) => r.e.tagName.toLowerCase()), gate: null }
+    const out = { candidates: 0, evaluated: 0, undecided: 0, excludedByDesign: 0, skippedByRootOverflow: 0, skippedOther: 0, skippedSamples: [], rootClippers: roots.map((r) => r.e.tagName.toLowerCase()), gate: null }
     for (const c of candidates) {
       if (c.excluded) { out.excludedByDesign++; continue }
       out.candidates++
       if (evaluated.has(c.el)) { out.evaluated++; continue }
+      if (undecided.has(c.el)) { out.undecided++; continue }
       const r = c.el.getBoundingClientRect()
       const fixed = getComputedStyle(c.el).position === 'fixed'
       const byRoot = !fixed && roots.some(({ box }) => box.width < 2 || box.height < 2 || !overlaps(r, box))
@@ -283,22 +305,30 @@ window.__fa = {
   },
   // Second pass for the colour-contrast rule: overflow: clip on the roots that have overflow: hidden (clip keeps
   // the content clipped and the viewport unscrollable, introduces no scrollbar and is not the value axe treats as
-  // clipping), run the rule, compare the geometry of every candidate, restore in finally, verify the restore.
+  // clipping), run the rule, compare the geometry and the contrast-relevant computed styles of every candidate,
+  // restore in finally (also when axe throws), verify the restore. Equivalence is claimed only when nothing moved,
+  // nothing was restyled and the scroll did not change; otherwise the pass is diagnostic.
   async recoverContrast() {
     const roots = [document.documentElement, document.body].filter((e) => e && getComputedStyle(e).overflow === 'hidden')
     const cands = window.__fa.textCandidates().filter((c) => !c.excluded)
     const geomBefore = cands.map((c) => window.__fa.rectKey(c.el))
+    const beforeCache = new Map()
+    const styleBefore = cands.map((c) => window.__fa.styleKey(c.el, beforeCache))
     const scrollBefore = { x: window.scrollX, y: window.scrollY, body: [document.body.scrollLeft, document.body.scrollTop], html: [document.documentElement.scrollLeft, document.documentElement.scrollTop] }
     const snap = roots.map((e) => ({ e, value: e.style.getPropertyValue('overflow'), priority: e.style.getPropertyPriority('overflow'), cssText: e.style.cssText, computed: getComputedStyle(e).overflow }))
-    const out = { roots: roots.map((e) => e.tagName.toLowerCase()), comparable: false, moved: 0, scrollChanged: false, restored: false, restoreProblems: [], error: null, coverage: null, violations: [], incomplete: 0 }
+    const out = { roots: roots.map((e) => e.tagName.toLowerCase()), comparable: false, moved: 0, restyled: 0, restyledSamples: [], scrollChanged: false, restored: false, restoreProblems: [], error: null, coverage: null, violations: [], incomplete: 0 }
     try {
       for (const s of snap) s.e.style.setProperty('overflow', 'clip', 'important')
       void document.body.offsetHeight
       const r = await window.axe.run(document, { runOnly: ['color-contrast'], resultTypes: ['violations', 'incomplete', 'passes'], elementRef: true })
       const geomDuring = cands.map((c) => window.__fa.rectKey(c.el))
+      const duringCache = new Map()
+      const styleDuring = cands.map((c) => window.__fa.styleKey(c.el, duringCache))
       out.moved = geomBefore.filter((g, i) => g !== geomDuring[i]).length
+      out.restyled = styleBefore.filter((k, i) => k !== styleDuring[i]).length
+      out.restyledSamples = cands.filter((c, i) => styleBefore[i] !== styleDuring[i]).slice(0, 3).map((c) => window.__fa.selector(c.el))
       out.scrollChanged = window.scrollX !== scrollBefore.x || window.scrollY !== scrollBefore.y
-      out.comparable = out.moved === 0 && !out.scrollChanged
+      out.comparable = out.moved === 0 && out.restyled === 0 && !out.scrollChanged
       out.coverage = window.__fa.contrastCoverage(r)
       out.incomplete = r.incomplete.reduce((n, v) => n + v.nodes.length, 0)
       out.violations = r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, helpUrl: v.helpUrl, tags: v.tags, count: v.nodes.length, nodes: v.nodes.map((n) => ({ target: n.target.join(' '), summary: (n.failureSummary || '').split('\\n')[0].slice(0, 120) })) }))
@@ -324,6 +354,9 @@ window.__fa = {
     if (window.scrollX !== scrollBefore.x || window.scrollY !== scrollBefore.y) out.restoreProblems.push('scroll position')
     const geomAfter = cands.map((c) => window.__fa.rectKey(c.el))
     if (geomAfter.some((g, i) => g !== geomBefore[i])) out.restoreProblems.push('geometry')
+    const afterCache = new Map()
+    const styleAfter = cands.map((c) => window.__fa.styleKey(c.el, afterCache))
+    if (styleAfter.some((k, i) => k !== styleBefore[i])) out.restoreProblems.push('computed styles')
     out.restored = out.restoreProblems.length === 0
     return out
   },
@@ -523,11 +556,11 @@ export async function run(argv) {
   const axeRecords = report.data.pages.map((p) => p.checks.axe).filter((a) => a && a.coverage)
   const sum = (key) => axeRecords.reduce((n, a) => n + (a.coverage[key] ?? 0), 0)
   const axeSummary = axeRecords.length
-    ? { pages: axeRecords.length, textElements: sum('candidates'), evaluated: sum('evaluated'), skippedByRootOverflow: sum('skippedByRootOverflow'), skippedOther: sum('skippedOther'), pagesWithCoverageGap: axeRecords.filter((a) => a.coverage.skippedByRootOverflow > 0).length, pagesWithNothingEvaluated: axeRecords.filter((a) => a.coverage.candidates === 0 || a.coverage.evaluated === 0).length, secondPassViolations: axeRecords.reduce((n, a) => n + (a.recovery?.violations ?? 0), 0), denominator: 'visible elements with their own text inside the viewport at the initial viewport; disabled, inert and ancestor-clipped text excluded' }
+    ? { pages: axeRecords.length, textElements: sum('candidates'), evaluated: sum('evaluated'), undecided: sum('undecided'), skippedByRootOverflow: sum('skippedByRootOverflow'), skippedOther: sum('skippedOther'), pagesWithCoverageGap: axeRecords.filter((a) => a.coverage.skippedByRootOverflow > 0).length, pagesWithNothingEvaluated: axeRecords.filter((a) => a.coverage.candidates === 0 || a.coverage.evaluated === 0).length, secondPassComparable: axeRecords.filter((a) => a.recovery?.attempted && a.recovery.comparable).length, secondPassDiagnosticOnly: axeRecords.filter((a) => a.recovery?.attempted && !a.recovery.comparable).length, secondPassViolations: axeRecords.reduce((n, a) => n + (a.recovery?.violations ?? 0), 0), denominator: 'visible elements with their own text inside the viewport at the initial viewport; disabled, inert and ancestor-clipped text excluded; evaluated = decided by the rule, undecided = incomplete; a measure of what axe looked at, never of WCAG conformance' }
     : null
   const timed = report.data.pages.filter((p) => typeof p.durationMs === 'number')
   report.summary = { pages: visited, findings: report.findings.length, confirmed: report.findings.filter((f) => f.level === 'confirmed').length, heuristic: report.findings.filter((f) => f.level === 'heuristic').length, byId, blockedRequests: report.data.blockedRequests.length, screenshots: report.data.screenshots.length, viewports: viewports.join(','), checks: [...checks].join(','), browser: `${report.analysis.browser.name} ${report.analysis.browser.version}`, axe: tooling.axeVersion ?? 'n/a', outDir, msPerPage: timed.length ? Math.round(timed.reduce((n, p) => n + p.durationMs, 0) / timed.length) : null, axeCoverage: axeSummary }
-  if (axeSummary) report.notes.push(`axe-core colour contrast: ${axeSummary.evaluated} of ${axeSummary.textElements} visible text elements evaluated across ${axeSummary.pages} page(s)${axeSummary.pagesWithCoverageGap ? `; ${axeSummary.pagesWithCoverageGap} page(s) had a coverage gap caused by a root overflow: hidden (axe-coverage-gap)` : ''}${axeSummary.pagesWithNothingEvaluated ? `; ${axeSummary.pagesWithNothingEvaluated} page(s) had nothing evaluated: zero violations there is not evidence` : ''}. Denominator: ${axeSummary.denominator}.`)
+  if (axeSummary) report.notes.push(`axe-core colour contrast: ${axeSummary.evaluated} of ${axeSummary.textElements} visible text elements decided across ${axeSummary.pages} page(s)${axeSummary.undecided ? `, ${axeSummary.undecided} undecided (incomplete)` : ''}${axeSummary.pagesWithCoverageGap ? `; ${axeSummary.pagesWithCoverageGap} page(s) had a coverage gap caused by a root overflow: hidden (axe-coverage-gap)${axeSummary.secondPassDiagnosticOnly ? `, ${axeSummary.secondPassDiagnosticOnly} of them with a second pass that is diagnostic only` : ''}` : ''}${axeSummary.pagesWithNothingEvaluated ? `; ${axeSummary.pagesWithNothingEvaluated} page(s) had nothing decided: zero violations there is not evidence` : ''}. Coverage says what the rule looked at, not whether the page conforms. Denominator: ${axeSummary.denominator}.`)
   report.notes.push('Browser evidence: every finding names a page, a viewport when relevant and a selector; text is truncated and masked elements are excluded. axe findings carry basis (wcag or best-practice), criteria and impact; best-practice rules are heuristic, not WCAG failures. Passing axe-core is not WCAG conformance: reading order, meaningful alternatives, timing and cognitive criteria need human review.')
   if (report.data.blockedRequests.length) report.notes.push(`${report.data.blockedRequests.length} request(s) to hosts outside the allowlist were blocked (see data.blockedRequests).`)
   writeFileSync(join(outDir, 'browser-audit.json'), JSON.stringify(report, null, 2))
@@ -580,7 +613,7 @@ function emitAxeViolation(emit, path, v, { pass = 1, comparable = true, where = 
   const wcagTags = v.tags.filter((t) => /^wcag\d+(a+)?$/.test(t))
   const basisText = cls.basis === 'wcag' ? `WCAG ${cls.criteria.join(', ') || wcagTags.join(', ')}${cls.criteria.length && wcagTags.length ? ` (${wcagTags.join(', ')})` : ''}` : cls.basis === 'best-practice' ? 'axe best practice, not a WCAG criterion' : 'experimental rule'
   const count = v.count ?? v.nodes.length
-  const prefix = `${where ? `${where}: ` : ''}${pass === 2 ? `second pass (root overflow neutralised${comparable ? '' : ', layout changed: not comparable'}): ` : ''}`
+  const prefix = `${where ? `${where}: ` : ''}${pass === 2 ? `second pass (root overflow neutralised${comparable ? '' : ', page changed: not comparable, diagnostic only'}): ` : ''}`
   const level = pass === 2 && !comparable ? 'heuristic' : cls.level
   emit({ id: `axe-${v.id}`, level, severity: cls.severity, file: path, message: `${prefix}${v.help} (${count} element${count === 1 ? '' : 's'}, impact ${v.impact}; ${basisText})${cls.note ? `; ${cls.note}` : ''}`, evidence: v.nodes.slice(0, 5).map((n) => n.target).join(' | '), fix: `${v.nodes[0]?.summary ?? ''} ${v.helpUrl}`.trim(), rule: v.id, basis: cls.basis, criteria: cls.criteria, impact: v.impact, pass, ...(where ? { viewport: where } : {}) })
 }
@@ -612,19 +645,34 @@ async function checkAxe(page, axeSource, path, emit, record) {
   const cov = results.coverage
   let recovery = { attempted: false, reason: cov.skippedByRootOverflow > 0 ? null : cov.candidates === 0 ? 'nothing to evaluate' : 'no visible text element was skipped because of a root overflow: hidden' }
   if (cov.skippedByRootOverflow > 0) {
-    recovery = await page.evaluate(() => window.__fa.recoverContrast())
+    try {
+      recovery = await page.evaluate(() => window.__fa.recoverContrast())
+    } catch (error) {
+      // the evaluation itself failed (navigation, a page script, a killed context): the in-page finally may or may
+      // not have run; check the roots and the scroll against the gate recorded before the pass
+      const state = await page.evaluate(() => ({ bodyOverflow: getComputedStyle(document.body).overflow, htmlOverflow: getComputedStyle(document.documentElement).overflow, bodyInline: document.body.style.getPropertyValue('overflow'), htmlInline: document.documentElement.style.getPropertyValue('overflow'), scroll: [window.scrollX, window.scrollY] })).catch(() => null)
+      const problems = []
+      if (!state) problems.push('page state unreadable')
+      else {
+        if (state.bodyOverflow !== cov.gate.bodyOverflow || state.bodyInline !== cov.gate.bodyOverflowInline.value) problems.push('body overflow')
+        if (state.htmlOverflow !== cov.gate.htmlOverflow || state.htmlInline !== cov.gate.htmlOverflowInline.value) problems.push('html overflow')
+        if (state.scroll[0] !== cov.gate.scroll[0] || state.scroll[1] !== cov.gate.scroll[1]) problems.push('scroll position')
+      }
+      recovery = { roots: cov.rootClippers, comparable: false, moved: 0, restyled: 0, restyledSamples: [], scrollChanged: false, restored: problems.length === 0, restoreProblems: problems, error: String(error.message).split('\n')[0].slice(0, 200), coverage: null, violations: [], incomplete: 0 }
+    }
     recovery.attempted = true
   }
   const pass1Targets = new Set(results.violations.find((v) => v.id === 'color-contrast')?.targets ?? [])
   const recovered = recovery.attempted && !recovery.error ? recovery.violations.map((v) => ({ ...v, nodes: v.nodes.filter((n) => !pass1Targets.has(n.target)) })).map((v) => ({ ...v, count: v.nodes.length })).filter((v) => v.count > 0) : []
+  const changed = recovery.attempted && !recovery.error && !recovery.comparable ? [recovery.moved ? `${recovery.moved} element(s) moved` : null, recovery.restyled ? `${recovery.restyled} element(s) changed colours, background or opacity` : null, recovery.scrollChanged ? 'the scroll position changed' : null].filter(Boolean).join(', ') : ''
   record.checks.axe = {
     violations: results.violations.length,
     incomplete: results.incomplete.length,
     rulesRun: results.rulesRun,
     ms: Date.now() - started,
-    coverage: { rule: 'color-contrast', candidates: cov.candidates, evaluated: cov.evaluated, excludedByDesign: cov.excludedByDesign, skippedByRootOverflow: cov.skippedByRootOverflow, skippedOther: cov.skippedOther, ratio: cov.candidates ? Number((cov.evaluated / cov.candidates).toFixed(3)) : null, denominator: 'visible elements with their own text inside the viewport; disabled, inert and ancestor-clipped text excluded', skippedSamples: cov.skippedSamples, rootClippers: cov.rootClippers, gate: cov.gate },
+    coverage: { rule: 'color-contrast', candidates: cov.candidates, evaluated: cov.evaluated, undecided: cov.undecided, excludedByDesign: cov.excludedByDesign, skippedByRootOverflow: cov.skippedByRootOverflow, skippedOther: cov.skippedOther, ratio: cov.candidates ? Number((cov.evaluated / cov.candidates).toFixed(3)) : null, denominator: 'visible elements with their own text inside the viewport; disabled, inert and ancestor-clipped text excluded; ratio = decided (pass or violation) over candidates, undecided (incomplete) counted apart; a measure of what the rule looked at, not of conformance', skippedSamples: cov.skippedSamples, rootClippers: cov.rootClippers, gate: cov.gate },
     recovery: recovery.attempted
-      ? { attempted: true, method: 'overflow: clip !important on the roots with overflow: hidden, restored in finally', roots: recovery.roots, comparable: recovery.comparable, moved: recovery.moved, scrollChanged: recovery.scrollChanged, restored: recovery.restored, restoreProblems: recovery.restoreProblems, error: recovery.error, evaluated: recovery.coverage?.evaluated ?? null, candidates: recovery.coverage?.candidates ?? null, violations: recovered.reduce((n, v) => n + v.count, 0), incomplete: recovery.incomplete }
+      ? { attempted: true, method: 'overflow: clip !important on the roots with overflow: hidden, restored in finally; equivalence = no candidate moved, none changed contrast-relevant computed styles (own colour, background, opacity, font; ancestors\' background, opacity, filter, blend), scroll unchanged', roots: recovery.roots, comparable: recovery.comparable, moved: recovery.moved, restyled: recovery.restyled, restyledSamples: recovery.restyledSamples, scrollChanged: recovery.scrollChanged, restored: recovery.restored, restoreProblems: recovery.restoreProblems, error: recovery.error, evaluated: recovery.coverage?.evaluated ?? null, undecided: recovery.coverage?.undecided ?? null, candidates: recovery.coverage?.candidates ?? null, violations: recovered.reduce((n, v) => n + v.count, 0), incomplete: recovery.incomplete, diagnostic: recovered.map((v) => ({ rule: v.id, count: v.count, targets: v.nodes.slice(0, 5).map((n) => n.target) })), verdict: recovery.error ? 'failed' : recovery.comparable ? 'comparable' : 'not-comparable: diagnostic only' }
       : { attempted: false, reason: recovery.reason },
   }
   for (const v of results.violations) emitAxeViolation(emit, path, v)
@@ -633,11 +681,11 @@ async function checkAxe(page, axeSource, path, emit, record) {
   if (cov.skippedByRootOverflow > 0) {
     const roots = cov.rootClippers.join(' and ')
     const box = cov.rootClippers.includes('body') ? cov.gate.bodyBox : cov.gate.htmlBox
-    const tail = !recovery.attempted ? '' : recovery.error ? `; the second pass failed (${recovery.error})` : recovery.comparable ? `; a second pass with overflow: clip evaluated ${recovery.coverage.evaluated} of ${recovery.coverage.candidates} and found ${recovered.reduce((n, v) => n + v.count, 0)} new violation(s), reported as pass 2` : `; a second pass moved ${recovery.moved} element(s), so its results are reported as heuristic`
+    const tail = !recovery.attempted ? '' : recovery.error ? `; the second pass failed (${recovery.error}) and the page was ${recovery.restored ? 'restored' : `not restored exactly (${recovery.restoreProblems.join(', ')})`}: the gap stands unrecovered` : recovery.comparable ? `; a second pass with overflow: clip evaluated ${recovery.coverage.evaluated} of ${recovery.coverage.candidates} and found ${recovered.reduce((n, v) => n + v.count, 0)} new violation(s), reported as pass 2` : `; a second pass changed the page (${changed}), so it is diagnostic only: its ${recovered.reduce((n, v) => n + v.count, 0)} violation(s) are reported as heuristic and its passes are not evidence`
     emit({ id: 'axe-coverage-gap', level: 'heuristic', severity: 'medium', file: path, message: `axe-core evaluated colour contrast on ${cov.evaluated} of ${cov.candidates} visible text elements; ${cov.skippedByRootOverflow} were skipped because ${roots} has overflow: hidden with a ${box[0]}×${box[1]} px box, which axe-core treats as a clipping ancestor (fixed app shells and modal scroll locks do this)${cov.skippedOther ? `; ${cov.skippedOther} more were skipped for reasons this tool does not diagnose` : ''}${tail}`, evidence: cov.skippedSamples.map((s) => s.selector).join(' | '), fix: 'give html and body a real height (height: 100% or min-height: 100dvh) or lock scrolling with overflow: clip instead of hidden; until then a clean axe contrast result on this page is not evidence', basis: 'coverage', pass: 1 })
   } else if (cov.skippedOther > 0 && cov.evaluated === 0 && cov.candidates > 0) emit({ id: 'axe-coverage-gap', level: 'heuristic', severity: 'low', file: path, message: `axe-core evaluated colour contrast on none of the ${cov.candidates} visible text elements, for a reason this tool does not diagnose (sample: ${cov.skippedSamples.map((s) => s.selector).slice(0, 3).join(', ')})`, evidence: cov.skippedSamples.map((s) => s.selector).join(' | '), fix: 'treat the contrast result of this page as not evaluated and check it manually', basis: 'coverage', pass: 1 })
-  if (recovery.attempted && !recovery.error) {
-    if (!recovery.comparable) emit({ id: 'axe-recovery-not-comparable', level: 'info', severity: 'low', file: path, message: `${recovery.moved} of ${cov.candidates} text elements moved${recovery.scrollChanged ? ' and the scroll position changed' : ''} when the root overflow was neutralised for the second pass; its findings are reported as heuristic, not as equivalent to the original layout`, fix: 'fix the root overflow in the page and audit again; the second-pass findings still deserve a look', basis: 'coverage', pass: 2 })
+  if (recovery.attempted) {
+    if (!recovery.error && !recovery.comparable) emit({ id: 'axe-recovery-not-comparable', level: 'info', severity: 'low', file: path, message: `when the root overflow was neutralised for the second pass, ${changed} (of ${cov.candidates} text elements${recovery.restyledSamples.length ? `; e.g. ${recovery.restyledSamples.join(', ')}` : ''}); the pass is diagnostic only: its violations are reported as heuristic and its passes are not evidence of the original page`, fix: 'fix the root overflow in the page and audit again; the second-pass findings still deserve a look', basis: 'coverage', pass: 2 })
     if (!recovery.restored) emit({ id: 'axe-recovery-restore-failed', level: 'info', severity: 'low', file: path, message: `after the second pass the page was not restored exactly (${recovery.restoreProblems.join(', ')}); later checks on this page saw that state`, fix: 'report this with the page; the tool restores inline styles and scroll positions and expected them to match', basis: 'coverage', pass: 2 })
     for (const v of recovered) emitAxeViolation(emit, path, v, { pass: 2, comparable: recovery.comparable })
   }
