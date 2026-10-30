@@ -11,8 +11,10 @@ Read-only, dependency-free Node (>= 18) tools that turn the skill's rules into m
 | `leak-patterns.mjs` | Listeners, intervals, observers, streams, GSAP, Lenis, Three.js and subscriptions created without a visible cleanup | No |
 | `contracts-check.mjs` | Module entry points, internal imports, module cycles, and breaking changes against a baseline | Only with `--write-baseline` |
 | `bundle-budget.mjs` | Startup and chunk sizes (gzip) of an existing build against budgets | No (never builds) |
+| `ui-audit.mjs` (1.4) | Accessibility and form-quality patterns provable from Vue templates and JSX; every finding says whether the markup proves it (`static`), needs reading (`review`) or needs a rendered page (`browser`); controls inside a component that declares a label-like prop are counted as encapsulated, not reported | No |
+| `browser-audit.mjs` (1.4, opt-in **browser mode**) | What a rendered page shows: axe-core violations, keyboard reachability, dialogs, form behaviour, responsive defects per viewport and text scale, server HTML against the hydrated DOM, visual regression against approved baselines | Only under `--out` (report, optional masked screenshots) and, with `--write-baseline` / `--approve`, under `--baseline-dir`; nothing elsewhere |
 
-Every tool supports `--help`, `--json`, `--md` and `--fail-on confirmed|any|none`. Exit codes: `0` nothing to fail on, `1` findings matched `--fail-on` (default: any **confirmed** finding), `2` the tool could not run (no `package.json`, no build, bad config).
+Every tool supports `--help`, `--json`, `--md` and `--fail-on confirmed|any|none`. The static tools (all but `browser-audit`) are read-only toward the project and spawn nothing; `browser-audit` is the one tool that drives a browser, and only when you hand it one (`--playwright <dir>`); the section *Browser mode* below lists what it will and will not do. Exit codes: `0` nothing to fail on, `1` findings matched `--fail-on` (default: any **confirmed** finding), `2` the tool could not run (no `package.json`, no build, bad config).
 
 ## Levels: what a finding means
 
@@ -22,7 +24,7 @@ Every tool supports `--help`, `--json`, `--md` and `--fail-on confirmed|any|none
 
 ## Analysis engine (1.2.0, extended in 1.3.0)
 
-The six graph-based tools (`domain-deps`, `contracts-check`, `state-audit`, `routes-audit`, `leak-patterns`, `component-complexity`) build the file graph with one of two engines:
+The seven graph-based tools (`domain-deps`, `contracts-check`, `state-audit`, `routes-audit`, `leak-patterns`, `component-complexity` and, since 1.4, `ui-audit`) build the file graph with one of two engines:
 
 | Engine | How | When |
 |---|---|---|
@@ -48,6 +50,56 @@ The one thing to know before running it on code you do not trust: with the seman
 | Next.js | `client-only-in-server`; Server Action modules exempt from `server-env-in-client` | directive prologues from the AST (semantic) or the first statement (lexical) |
 | `bundle-budget` scope | `assetScope` (`manifest` / `directory`), `staleFiles`, `staleJsGzipKb`, `unreferencedFiles`, `inventoryComplete`, `buildId`, `otherBuilds`, `sharedChunks`; `stale-build-artifacts` | manifests of the current build; stale only when provable (complete inventory or another build id); nothing is guessed |
 | Main-module guard | all seven tools run through symbolic links, relative paths and paths with spaces | `isMainModule()` compares real paths |
+
+### What 1.4.0 adds on top
+
+| Capability | Where | Resolution level it reports |
+|---|---|---|
+| Static UI audit | `ui-audit.mjs`: elements from the compiler-sfc template AST (`.vue`) or the TypeScript JSX AST (`.tsx`/`.jsx`), with attributes, bindings, events, parents and children; lexical fallback over the template text without parents | `verification: static` (the markup proves it, level confirmed), `review` (heuristic), `browser` (info); `summary.byVerification`, `encapsulatedByComponent`, `unverifiable`, `browserChecks`, `data.files[].source` (`ast` / `lexical`) |
+| SSR and hydration rules | `state-audit.mjs`: `browser-api-in-setup`, `nondeterministic-render`, from the AST context of each identifier (enclosing calls, function, guards) | confirmed at the top level of `<script setup>` / module scope with SSR on; heuristic in a React render body; low when `ssr: false`; silent inside lifecycle hooks, handlers, client guards and `.client.` files; never emitted by the lexical engine |
+| `definePageMeta` from the AST | `routes-audit.mjs`: `middleware` strings, arrays (comments ignored), identifiers and inline functions (`middlewareUnknown`), `layout`, `redirect`; redirect-only pages (`navigateTo` / `router.replace` with an empty template, or `definePageMeta({ redirect })`) are `status: redirect` with `redirectTo` and `redirectGuarded` (`redirect-page`, info; medium when the target is unguarded) | `summary.metaParser` (`ast` / `lexical`); lexical mode strips comments but keeps strings |
+| Type-checker budgets | `domain-deps --typecheck --typecheck-max-files 2500 --typecheck-max-source-mb 20 --typecheck-max-heap-mb 1024`; `analysis.typechecker` records root files, source files loaded, wall ms, CPU ms, heap MB and RSS MB | over budget, or on any failure, the checker is skipped with a reason and the syntactic origins stand; nothing partial is hidden |
+| Browser mode | `browser-audit.mjs` (below) | `confirmed` observed in the page, `heuristic` observed but context may justify it, `info` evidence; `verification` is always `browser` |
+| Frozen 1.3 behaviour | `verification/tools/baselines/1.3.0/` (finding fingerprints per tool and fixture) and `contracts/1.3.0/` (JSON shapes); a 1.3 finding may disappear or change grade only through `baselines/migrations.json` | test suites, not report fields |
+
+## Static UI audit (1.4.0)
+
+`node ui-audit.mjs <project-root> [--rules a11y,forms] [--exclude …] [--engine …]`. It reads the same graph as the other tools and judges native elements (components are never judged, their inner markup lives in their own file). What it can prove from markup alone is small and it says so with the `verification` field:
+
+| Verification | Level | Examples |
+|---|---|---|
+| `static` | confirmed | `<img>` with no `alt` attribute at all; `<input>` with no `<label for>`, no wrapping `<label>`, no `aria-label`/`aria-labelledby`; `<div @click>` without role; `role="buton"`; `tabindex="3"`; `<iframe>` without title; `<button aria-hidden="true">`; a focusable element nested in `<a>`/`<button>` |
+| `review` | heuristic | an icon-only button whose child is a component that may render a name; a heading jump (h1 → h3); a `<table>` without `<th>`; hover handlers without focus handlers; `aria-invalid` without `aria-describedby`/`aria-errormessage`; a form with a submit handler and no pending-like identifier anywhere in the component; an asterisk in a label without `required` |
+| `browser` | info | `:alt`, `:aria-label`, `:id` bound to expressions: the rendered value decides |
+
+Names come from content: text or interpolation anywhere inside a `<button>` (a nested `<span>`, a `<div>` of lines) counts as its name, and a component anywhere inside makes the absence of a name `review`, not `static`. A click handler makes an element interactive only when it does something: `@click.stop` or `@click.prevent` with no expression, or a handler that only calls `stopPropagation()`/`preventDefault()`, is event plumbing and is never reported; a handler that only focuses an inner control (`@click="input?.focus()"`) is `review`. A control with the HTML `hidden` attribute is skipped; one hidden by a class that usually means display:none (`hidden`, `d-none`, `display-none`, `is-hidden`) without a label is a `browser` check (the typical hidden `<input type="file">` behind a visible button). These four rules came from reading every static finding on an 80k-line Nuxt application (`docs/ui-verification.md`, *Calibration on real code*).
+
+Encapsulation: a control inside a custom component that declares a label-like prop (`label`, `aria-label`, `title`, `legend`, `name`, static or bound) is counted in `encapsulatedByComponent` and not reported; a spread (`v-bind="$attrs"`, `{...props}`) makes the element `unverifiable` (counted, not reported). The lexical engine has no parent chain: findings that need it (wrapping labels, nesting) degrade to `review`, facts provable from the attributes alone stay `static`, JSX is not scanned, and the note says so. Passing this audit is not WCAG conformance: contrast, reading order, timing, media alternatives and real accessible names need the browser pass and human review (`references/ui-verification.md` lists the human criteria).
+
+## Browser mode (1.4.0)
+
+`node browser-audit.mjs <url> --playwright <dir> [--checks …] [--paths …] [--viewports …] [--text-scale …] [--interact] [--allow-submit] [--allow-host …] [--out …] [--screenshots] [--baseline-dir …]`. Everything below is enforced by the tool and covered by tests, not only documented:
+
+- **Nothing runs unless you hand it a browser.** `--playwright <dir>` is mandatory: a directory whose `node_modules` provides `playwright` (and `axe-core`, or `--axe`). The plugin installs nothing and bundles no browser; `verification/browser/package.json` pins the versions the fixture was validated with.
+- **Only hosts you allow.** `localhost` and `127.0.0.1` by default; anything else needs `--allow-host`. Every other request the page makes is blocked at the network layer and listed in `data.blockedRequests`. Production is never a default and never a recommendation.
+- **No automatic login.** A login wall is reported as `auth-required` and the page is skipped; the tool never receives credentials.
+- **No form submission without `--allow-submit`** (the `forms` check refuses to run without it). `--interact` clicks `type="button"` controls to discover dialogs and menus, never those whose name matches delete, remove, destroy, pay, purchase, buy, send, submit, confirm, archive, publish, reset, revoke, logout or their Spanish equivalents. Values typed into forms are marked (`Audit value`) and never appear in the report.
+- **Budgets.** `--max-time` (90 s) and `--max-pages` (10); when the budget runs out the remaining pages are listed as not visited.
+- **Evidence only where you say.** `--out` must be under the working directory or the OS temp dir (default: a new temp directory); the report `browser-audit.json` and, only with `--screenshots`, masked PNGs go there. Elements matching `--mask` (default `input[type=password],[data-sensitive],[data-fa-mask]`) are blacked out in screenshots and their text is dropped from every evidence string.
+
+| Check | Findings | Level |
+|---|---|---|
+| `axe` | `axe-<rule>` for impact critical and serious; `axe-needs-review` for the rest | confirmed / info |
+| `keyboard` | `keyboard-unreachable` (visible focusable elements never reached by Tab in document order), `hover-only-disclosure` (a `:hover` rule of the page's stylesheets reveals content with no `:focus`/`:focus-within` equivalent) | heuristic |
+| `dialogs` | `dialog-focus-not-moved`, `dialog-focus-not-restored` (confirmed); `custom-modal-without-dialog-role`, `dialog-escape-does-not-close` (heuristic); triggers are buttons with `aria-haspopup`/`aria-controls`, plus any non-destructive button with `--interact` | confirmed / heuristic |
+| `forms` (needs `--allow-submit`) | `form-double-submit` (confirmed: two quick clicks on submit sent two or more requests), `form-no-validation-feedback`, `form-error-not-associated`, `form-focus-not-moved-to-error`, `form-no-pending-state` (button neither disabled nor `aria-busy` while the request was in flight), `form-no-success-feedback` (no `role="status"`/`aria-live` region changed and no navigation) | confirmed / heuristic |
+| `responsive` (per viewport and text scale) | `horizontal-overflow` naming the culprits (elements inside an `overflow-x: auto|scroll` ancestor or marked `data-allow-overflow` are never culprits), `control-cut-off`, `control-covered` (another element sits on top of a control at its centre), `dialog-exceeds-viewport`, `navigation-unreachable` | confirmed |
+| `hydration` | `hydration-mismatch` (the framework logged a hydration warning or error; confirmed), `client-only-rendered-content` (five or more words exist only after client rendering, comparing the server HTML text, scripts and styles excluded, with the hydrated DOM; info) | confirmed / info |
+| `visual` (needs `--baseline-dir`) | `visual-baseline-missing`, `visual-baseline-written`, `visual-environment-mismatch`, `visual-regression`, `visual-difference-accepted`, `visual-compare-failed` | info / confirmed |
+
+Visual baselines are one PNG plus one JSON per page and viewport (browser name, version and platform, Node and Playwright versions, viewport, device scale factor, reduced-motion and animation settings, generation time). They are written only with `--write-baseline` (when none exists) or `--approve <page@viewport,…>`; a run never updates an approved baseline on its own; without a baseline the screenshot is saved as a candidate under `--out` and reported as `visual-baseline-missing`. Animations are disabled, fonts awaited, `prefers-reduced-motion: reduce` emulated and `--freeze-time` fixes `Date`; when the baseline's browser name, major version, platform or viewport differs from the run, the status is `environment-mismatch` and no regression verdict is given. Differences above `--visual-threshold` (ratio of differing pixels, default 0.001) are `visual-regression` with bounding boxes; below it, `visual-difference-accepted`. The PNG codec is in `lib/png.mjs` (zero dependencies).
+
+Passing axe-core and these checks is not WCAG conformance. Reading order, the meaning of alternatives, timing, cognitive load, error prevention and most of the "understandable" criteria need a person; `references/ui-verification.md` lists them. The fixture that proves each finding fires, and does not fire on the correct page, is `verification/browser/fixture/` (served locally by `server.mjs`); `verification/browser/browser-audit.test.mjs` runs it in CI with Chromium.
 
 ## Dependency confidence (domain-deps, contracts-check, state-audit)
 

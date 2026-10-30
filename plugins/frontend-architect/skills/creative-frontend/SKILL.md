@@ -15,7 +15,7 @@ Read `references/visual-design.md` for the criteria; the order of decisions is:
 1. **Direction statement** (three lines): product, audience, context → how it should feel and what it must never do. Enterprise tool, marketing page and consumer app get different statements; write it down before any component.
 2. **Hierarchy**: the focal point and the one primary action per view; what the user came for sits above the fold.
 3. **Type, spacing and color as tokens**: one UI family (system fonts are legitimate for enterprise), a modular scale, a 4/8 px spacing scale, role-based colors with one accent ramp; contrast checked. Tokens go into the project's design system (`design-systems.md`).
-4. **Layout**: grid, breakpoints by content, density mode, mobile and tablet behavior, internationalization room (`references/layout-and-responsive.md`).
+4. **Layout**: grid, breakpoints by content, density mode, mobile and tablet behavior, internationalization room (`references/layout-and-responsive.md`). When a local build can be served, verify it at mobile, tablet and desktop and at 125% text size with the `frontend-architect` skill's browser audit (responsive and visual checks, opt-in; its `ui-verification.md` reference explains what it proves and what still needs eyes).
 5. **States and patterns**: loading, empty, error, partial and success for every data region; dashboards, forms, tables and navigation follow `references/enterprise-ui-patterns.md`.
 6. **Motion last**, and only what passes the purpose test (`references/motion-design.md`).
 

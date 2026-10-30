@@ -51,6 +51,7 @@ Every reference of the `frontend-architect` skill with the situation that justif
 | `references/component-libraries.md` | Nuxt UI, shadcn/ui and alternatives |
 | `references/design-systems.md` | Tokens, theming, multi-brand, component API conventions, governance, UI states |
 | `references/accessibility.md` | Accessible components, forms, focus, motion, audits |
+| `references/ui-verification.md` | Verifying built screens: the static UI audit and its verification levels, the opt-in browser mode (axe-core, keyboard, dialogs, forms, responsive, hydration, visual regression), what each can and cannot prove, authorization and evidence rules, human-review criteria that no tool replaces |
 
 ## Identity, security and operations
 

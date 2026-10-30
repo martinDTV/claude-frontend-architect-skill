@@ -9,19 +9,20 @@ plugins/frontend-architect/
 ├── skills/
 │   ├── frontend-architect/               core skill
 │   │   ├── SKILL.md                      workflow, stages, task → references selection, defaults, rules, scripts (~2.7k tokens on invoke)
-│   │   ├── references/ (38 files + index.md)  capability packs loaded on demand; index.md is the full catalog
-│   │   ├── scripts/ (7 tools + lib/)     read-only audit scripts, dependency-free Node; lib/semantic/ = TypeScript/SFC engine (1.2), symbols, workspaces, optional checker (1.3)
+│   │   ├── references/ (39 files + index.md)  capability packs loaded on demand; index.md is the full catalog
+│   │   ├── scripts/ (9 tools + lib/)     8 read-only audit scripts + the opt-in browser mode (browser-audit, 1.4), dependency-free Node; lib/semantic/ = TypeScript/SFC engine (1.2), symbols, workspaces, optional checker (1.3), element and identifier context (1.4); lib/png.mjs = PNG decode/diff
 │   │   └── assets/                       ADR template, audit report template, audit config example, Lighthouse budgets
 │   └── creative-frontend/                visual design, motion and 3D skill
 │       ├── SKILL.md
 │       └── references/ (11 files)
 ├── agents/frontend-reviewer.md           read-only audit subagent (runs the scripts)
-└── evals/ (66 scenarios)                 claude plugin eval suite; one scaffolded audit case
+└── evals/ (77 scenarios)                 claude plugin eval suite; one scaffolded audit case
 verification/                             compiles and tests the documented code and the scripts (not installed)
 ├── extract.mjs, vue/ react/ next/ nuxt/ creative/   @verify extraction and real compilers
 ├── ssr-test/                             SSR cross-request leak test
 ├── depcruise/                            boundary rules fixture
-├── tools/                                node:test suites (82), five fixture apps (nuxt, next, ts-paths, vue-templates, monorepo; three with ground truths), 1.2.0 JSON contract snapshots and the lexical-vs-semantic benchmark
+├── tools/                                node:test suites (98), seven fixture apps (nuxt, next, ts-paths, vue-templates, monorepo, ui-app, ssr-app; five with ground truths), 1.2.0/1.3.0 JSON contract snapshots, frozen 1.3.0 finding baselines and the benchmark (edges, symbols, rule-level precision)
+├── browser/                              browser-mode suite: pinned Playwright + axe-core (package.json), static HTML fixture with a counting server, expected findings per page
 └── plugin-check.mjs                      manifests, references, scripts and evals consistency
 docs/                                     research, this document, validation report
 ```

@@ -126,6 +126,33 @@ Baseline before any change: HEAD `06ff657` (1.2.0), 42/42 tests, `plugin-check` 
 
 Not run in this pass: paid evaluations (cases 49–66 have no scores); the TypeScript Program on the real projects (opt-in, measured only on the fixtures: 150–175 ms and 40–48 MB for a dozen files); a real Next.js project (none on this machine).
 
+## 1.4.0 addendum: UI quality, accessibility, visual verification, runtime diagnostics (2026-10-29, same machine)
+
+Versions under test: Node 22.23.4; the verification `vue` project's TypeScript and `vue/compiler-sfc` for the fixtures; Playwright 1.64.1 with its Chromium build and axe-core 4.14.0 pinned in `verification/browser/package.json` (installed only there; the plugin ships none of it).
+
+| Check | Result |
+|---|---|
+| 1.3 debt D1 (`routes-audit` with a commented middleware array and redirect pages): reproduced on the Nuxt fixture before the fix (`unknown-middleware` for `'    '`, redirect pages as unguarded), fixed by the AST page-meta parser and the string-preserving lexical fallback; positive controls (a wrong name stays confirmed, a redirect to an unguarded page is medium, a handler that navigates stays unguarded) | 4/4 tests, both engines |
+| 1.3 debt D2 (`--typecheck` cost): measured read-only on the two calibration projects (`docs/benchmarks.md`); budgets for files, source size and heap; CPU and RSS in `analysis.typechecker`; the declaration-file disagreement bug found by the measurement and fixed | measured, no budget triggered |
+| 1.3 debt D3 (freeze before change): 61 JSON shapes and 61 finding baselines of 1.3.0 captured before any 1.4 change; `baseline-findings.test.mjs` fails on any removed or re-graded 1.3 finding without a migration entry | `migrations.json` 1.4.0: empty |
+| Static UI audit on `ui-app` (truth of 30 findings written first): semantic engine | precision 100%, recall 100%; clean files clean; 1 encapsulated, 3 browser-only |
+| Static UI audit, lexical degradation | measured (`docs/benchmarks.md`): 77.8% precision, 70% recall, JSX not scanned, note present |
+| SSR rules on `ssr-app` (truth of 5) and the Next.js fixture (`WindowInRender` reported heuristic, `WindowInEffect` clean), `ssr: false` copy at low severity, lexical silent | exact match |
+| Browser mode on the fixture (six pages, three viewports, two text scales, interact, submissions, screenshots) | every must-have present, every must-not-have absent, intentional scroller never a culprit, `form-double-submit` proven by the counting server, masked card number absent from the report, 18 screenshots under `--out`, about 25 s |
+| Browser mode refusals (no tooling, remote host, forms without consent, output outside allowed paths) | exit 2 with the reason, each |
+| Visual regression lifecycle (missing → candidate; `--write-baseline`; identical → match; altered platform → environment mismatch, no verdict) | pass |
+| Read-only guarantee: static scan (browser exception bounded to `--out` writes; no static tool imports browser tooling; PNG codec depends on `node:zlib` only); byte-identical Nuxt fixture after every static tool including `ui-audit` | pass |
+| `node --test verification/tools/*.test.mjs` | 98/98 |
+| `verification/browser/browser-audit.test.mjs` (`FA_REQUIRE_BROWSER=1`) | 3/3 |
+| `plugin-check.mjs` (references linked, 9 scripts documented and executable, 77 eval cases well formed) | pass |
+| Benchmark CI row (`ts-paths` semantic 19/19) unchanged; new rule-level section | pass |
+| Evals 67–77 | structure validated; not run (no paid run authorised) |
+| Static UI audit on real code (read-only): Nuxt enterprise application, 210 files, 9,002 elements; every static finding of the first run read | first run 52 static; four false-positive patterns found (nested-text buttons 15, `@click.stop` plumbing 7, focus delegation 1, hidden file inputs 14) and fixed with negative controls in the fixture; after calibration 15 static (clickable rows and divs, all true by reading), 12 review, 33 browser, 11 encapsulated, 12 unverifiable |
+| Static UI audit on real code: Medical SaaS, 68 files, 1,338 elements | 0 static, 2 review (pending flag not visible), 0 browser |
+| SSR rules on real code (both apps are `ssr: false`): enterprise app 7 `nondeterministic-render` (`new Date` in render, low); medical SaaS 4 `browser-api-in-setup` at module scope of auth files and 3 `nondeterministic-render`, all low as "blocks enabling SSR" | plausible by reading the listed lines; no confirmed-level finding is possible with `ssr: false`, by design |
+| `routes-audit` on real code after D1: enterprise app 84 pages, `metaParser: ast`, 77 guarded, 0 unguarded, 0 redirect pages, no findings; medical SaaS 16 pages, `metaParser: ast`, no findings | consistent with the 1.3 results |
+| Browser mode against a real application | not run in this pass (needs the owner's authorisation and a served build) |
+
 ## Not verified (honest limits)
 
 - **Eval scores**: need `claude plugin eval` with an authenticated account (43 cases × 3 runs × 2 arms by default; the audit case additionally needs `--allow-tools Bash`). Structure validated offline by `plugin-check.mjs`.

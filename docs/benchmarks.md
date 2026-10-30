@@ -60,6 +60,38 @@ Symbol and component statistics of the semantic engine (1.3 only):
 
 Read against 1.2 (`docs/validation-report.md`, 1.2.0 addendum): the enterprise application's unknown components went from 3 to 1 (the two special elements are now built-ins; the remaining unknown is a component name the installed UI library does not register), the three lexical auto-import false positives stay removed, and the two `not found` names are imports of names that no module in their re-export chain declares (worth a look in the project; the type checker would say the same). In the medical SaaS the first 1.3 run reported 28 names as not found: all were default exports of `.vue` components re-exported by feature barrels, which the resolver now treats as declared by the component file; the seven `declaration files` are type imports from a generated OpenAPI schema `.d.ts`. `contracts-check` on the enterprise application's six module entries reports, per module, the names it publishes that are declared outside the modules tree (49 of 49, the expected state of barrels created before the files move); on the medical SaaS it reports 203 public exports never imported from outside (a large public surface to prune).
 
+## 1.4.0 addendum (2026-10-29, same machine)
+
+### Type-checker cost on real projects (read-only, `domain-deps`)
+
+Measured with `/usr/bin/time -l` on the two calibration projects, default budgets (`--typecheck-max-files 2500`, `--typecheck-max-source-mb 20`, `--typecheck-max-heap-mb 1024`), nothing modified in either project:
+
+| Project | Run | Wall | User CPU | Peak RSS | Program | Checker result |
+|---|---|---|---|---|---|---|
+| Nuxt enterprise application (80k lines, two layers) | plain | 1.51 s | 2.78 s | 266 MB | – | – |
+| same | `--typecheck` | 3.48 s | 5.9 s | 636 MB | 94 root files, 1,436 source files loaded, 2,154 ms, +386 MB heap | 273 origins checked, 273 agree; 725 names in `.vue` importers reported as outside the Program |
+| Medical SaaS (Nuxt 4 + Pinia Colada) | plain | 0.77 s | not recorded | 193 MB | – | – |
+| same | `--typecheck` | 2.66 s | not recorded | 555 MB | – | 551 origins checked, all agree (before the 1.4 fix, 7 `declaration-file` agreements were counted as disagreements) |
+
+No budget triggered on either project. The budgets are enforced before the Program is created (files and source MB) and after it (heap: a synchronous `Program` cannot be interrupted, so an over-budget heap discards the checker results and keeps the syntactic origins, with the reason in `analysis.typechecker`). `analysis.typechecker` now records root files, source files, wall ms, CPU ms, heap MB and RSS MB, so a CI reader can tell whether the checker ran completely.
+
+### Rule-level precision on the fixtures with finding truths
+
+Output of `node --expose-gc verification/tools/benchmark.mjs` (new section; truths written before the rules ran):
+
+| fixture | tool | engine | expected | reported | TP | FP | FN | precision | recall | F1 | time ms | peak RSS MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ui-app | ui-audit.mjs | lexical | 32 | 29 | 23 | 6 | 9 | 79.3% | 71.9% | 75.4% | 65 | 51 |
+| ui-app | ui-audit.mjs | semantic | 32 | 32 | 32 | 0 | 0 | 100% | 100% | 100% | 269 | 129 |
+| ssr-app | state-audit.mjs | lexical | 5 | 0 | 0 | 0 | 5 | 100% | 0% | 0% | 60 | 51 |
+| ssr-app | state-audit.mjs | semantic | 5 | 5 | 5 | 0 | 0 | 100% | 100% | 100% | 261 | 128 |
+
+Reading the lexical rows: the lexical engine has no element tree, so the four unlabelled controls of `BadForm.vue` are reported as `review` instead of `static` (counted as a false positive and a false negative each, because the key includes the verification level), the wrapped control of `Wrapped.vue` and a label-wrapped input of `GoodForm.vue` become `review` (no parent chain to prove the wrapping label), the nested interactive is missed, and `Card.tsx` is not scanned at all. The SSR rules need the identifier context and are never emitted lexically: recall 0 is the documented behaviour, not a defect. The semantic rows are 100% on fixtures that were written to cover each rule once positively and once negatively; they say nothing about recall on patterns the fixtures do not contain.
+
+### Browser mode on the local fixture
+
+Six pages, three viewports, two text scales, `--interact --allow-submit --screenshots`, Chromium through Playwright 1.64.1 with axe-core 4.14.0: 27 findings and 18 masked screenshots in about 25 s; the complete browser suite (refusals, fixture truth, five-run visual lifecycle) takes 34 s on this machine. The refusal paths (no `--playwright`, remote host, forms without `--allow-submit`, output outside the allowed paths) return in well under a second each. These are local measurements on a static fixture; a framework application with a dev server will take longer per page.
+
 ## Reading these numbers
 
 - Precision and recall exist only where a truth exists; on the real projects the comparison is a diff, with each differing edge read in the code.

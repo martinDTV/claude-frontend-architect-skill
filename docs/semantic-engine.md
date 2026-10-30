@@ -184,3 +184,30 @@ Every component tag of a template is classified (`componentsByResolution`): `loc
 ### Main-module guard
 
 The seven tools start with `isMainModule(import.meta.url)`: real paths of `process.argv[1]` and of the module are compared, so symbolic links, relative invocations from another directory and paths with spaces run the analysis. The harness and CI run a tool through a symbolic link and fail when it prints nothing.
+
+## 1.4.0: element records, identifier context, page meta
+
+What the engine adds in 1.4, all computed from the same syntax trees and the same two compilers; the trust boundary of section *Safety and trust boundary* is unchanged, and browser mode (`docs/ui-verification.md`) is a separate tool that the engine never loads.
+
+| Addition | Where | Content |
+|---|---|---|
+| Vue element records | `lib/semantic/vue-sfc.mjs` → `info.semantic.elements` | one record per template element, in document order: `tag`, `line`, `isComponent`, `attrs` (static), `bound` (`:x`, `v-bind:x`, `v-model`), `events` (`@x`) with `eventHandlers` (expression text) and `eventModifiers` (`stop`, `prevent`, …), `directives`, `hasText` and `childTags` collected through the whole subtree (accessible names come from any descendant text), `hasSlot`, `parents` (nearest first), `depth` |
+| JSX element records | `lib/semantic/ts-module.mjs` → `info.semantic.jsxElements` | same shape from the TypeScript JSX nodes; attribute values are strings, `true`, numeric literals as strings, or `'{expr}'`; `handlers` keeps the source text of `onX={…}` expressions; `hasText`/`childTags` are collected through the subtree (fragments included); `...spread` is recorded as an attribute so rules can mark the element unverifiable |
+| Identifier context | `ts-module.mjs` `contextOf(node)` → `info.semantic.browserApiUses` | for each browser global (`window`, `document`, storages, `navigator`, `location`, `history`, `screen`, `matchMedia`, `requestAnimationFrame`, the observers, `customElements`, `indexedDB`, `Notification`): `line`, `topLevel`, `inFunction`, `enclosingFunction`, `calls` (callee names up the tree, so `onMounted(() => window…)` is recognisable), `guarded` and `guard` (`if`/ternary/`&&` tests matching `import.meta.client`, `process.client`, `typeof window !== 'undefined'`, `isClient`, `onNuxtReady`), and `nondeterministic` for `Date.now`, `Math.random`, `crypto.randomUUID`, `performance.now`, `new Date` |
+| `.vue` script blocks | `vue-sfc.mjs` | `jsxElements` and `browserApiUses` of `<script>`/`<script setup>` are merged with their line offset, so `.vue` files get the same context as `.ts` files |
+| Comment stripping that keeps strings | `lib/source.mjs` `stripComments()` | used by the lexical `definePageMeta` parser: `//` and `/* */` are blanked outside strings; string contents and line structure survive (the previous `stripped` text blanked strings too, which turned middleware names into spaces) |
+| `definePageMeta` from the AST | `routes-audit.mjs` `parsePageMetaAst()` | finds the call, reads `middleware` (string, array of strings, identifiers and inline functions → `middlewareUnknown`), `layout`, `redirect`, `auth`; `summary.metaParser` is `ast` or `lexical` |
+| Host exposure | `lib/graph.mjs` | after a semantic build the graph carries a non-enumerable `host` with the loaded `typescript`, so a tool can parse a small snippet with the same compiler without re-detecting it (JSON output is unaffected) |
+| Type-checker budgets | `lib/semantic/checker.mjs` | `maxFiles`, `maxSourceMb` (summed root file sizes before `createProgram`), `maxHeapMb` (checked after); `stats` with `files`, `sourceMb`, `sourceFiles`, `durationMs`, `cpuMs`, `heapMb`, `rssMb`; `declaration-file` origins at the same file count as agreements |
+
+Walker order: the template walker now pushes children in reverse so the stack yields document order; before 1.4 siblings came out reversed, which did not affect edge extraction (sets) but hid heading-order facts.
+
+### JSON additions in 1.4
+
+- `routes-audit`: `summary.redirects`, `summary.metaParser`; pages with `status: 'redirect'`, `redirectTo`, `redirectGuarded`; finding `redirect-page`.
+- `state-audit`: findings `browser-api-in-setup`, `nondeterministic-render`.
+- `domain-deps`: `analysis.typechecker.budgets` and the extended `stats`.
+- `ui-audit` (new report): `summary.filesWithMarkup`, `elements`, `nativeElements`, `findings`, `byVerification` (`static`, `review`, `browser`), `encapsulatedByComponent`, `unverifiable`, `browserChecks`, `rules`; `data.files[]` with `source` (`ast`/`lexical`), element counts and findings; every finding carries `verification`.
+- `browser-audit` (new report, `framework: 'browser'`): `analysis.mode`, `playwright`, `axe`, `browser`, `viewports`, `textScales`, `checks`, `interact`, `allowSubmit`, `allowedHosts`, `budgets`, `outDir`; `data.pages`, `blockedRequests`, `screenshots`, `visual`; every finding carries `verification: 'browser'`.
+
+Every 1.2.0 and 1.3.0 key path survives with its type (`compat.test.mjs`), and every 1.3.0 finding on the fixtures is still produced with the same grade (`baseline-findings.test.mjs`, `baselines/migrations.json` empty for 1.4.0).
