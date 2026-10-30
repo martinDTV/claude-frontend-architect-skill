@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bad form</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<header class="site"><a href="/">Home</a></header>
+<main id="main">
+  <h1>Profile</h1>
+  <form id="bad" novalidate>
+    <input name="name" type="text" placeholder="Name">
+    <input name="email" type="email" placeholder="Email">
+    <p class="error" id="bad-error"></p>
+    <button type="submit" id="bad-submit">Save</button>
+  </form>
+</main>
+<script>
+  const form = document.getElementById('bad'); const err = document.getElementById('bad-error')
+  form.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const email = form.elements.email
+    if (!email.value) { err.textContent = 'Email is required'; return } // not associated, focus not moved
+    // no pending flag: every click sends another request, nothing confirms success
+    fetch('/api/submit?form=bad&delay=600', { method: 'POST', body: new FormData(form) })
+  })
+</script>
+</body>
+</html>

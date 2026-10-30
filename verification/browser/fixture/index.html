@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Fixture home</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <strong>Fixture</strong>
+  <nav aria-label="Primary">
+    <a href="/form-good.html">Good form</a>
+    <a href="/form-bad.html">Bad form</a>
+    <a href="/dialog-good.html">Good dialog</a>
+    <a href="/dialog-bad.html">Bad dialog</a>
+    <a href="/responsive.html">Responsive</a>
+  </nav>
+</header>
+<main id="main">
+  <h1>Browser-mode fixture</h1>
+  <p>Pages that behave well and pages that do not, so the audit can be checked against a known truth.</p>
+  <div class="hover-menu"><span>Hover me (mouse only)</span><div class="items"><a href="/x">Hidden link</a></div></div>
+  <div class="kb-menu"><button type="button" id="menu" aria-expanded="false" aria-controls="menu-items">Menu</button><div id="menu-items" hidden><a href="/y">Reachable link</a></div></div>
+  <p class="low-contrast">Low contrast paragraph for the contrast check.</p>
+  <img src="/logo.svg" alt="Fixture logo" width="40" height="40">
+  <img src="/logo.svg" width="40" height="40">
+  <p data-sensitive class="sensitive">Account 4111 1111 1111 1111 (masked in evidence)</p>
+</main>
+<script>
+  const b = document.getElementById('menu'); const items = document.getElementById('menu-items')
+  b.addEventListener('click', () => { const open = items.hidden; items.hidden = !open; b.setAttribute('aria-expanded', String(open)) })
+</script>
+</body>
+</html>

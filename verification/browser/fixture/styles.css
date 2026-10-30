@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; color: #1b1b1f; background: #fff; }
+header.site { display: flex; gap: 1rem; align-items: center; padding: .75rem 1rem; border-bottom: 1px solid #ddd; }
+nav a { color: #0b57d0; }
+main { padding: 1rem; max-width: 60rem; margin: 0 auto; }
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem; }
+button, input, select, textarea { font: inherit; }
+button { padding: .5rem 1rem; }
+.error { color: #b3261e; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.low-contrast { color: #bbb; background: #fff; }
+.hover-menu .items { display: none; }
+.hover-menu:hover .items { display: block; }
+.kb-menu .items[hidden] { display: none; }
+.card { border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; }
+.wide-table { width: 1400px; }
+.scroller { overflow-x: auto; }
+.scroller table { width: 1400px; }
+.fixed-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 64px; background: #eee; }
+.covered-button { margin-bottom: 0; }
+.tall-dialog { height: 1400px; }
+.cut { width: 120%; }
+.fake-modal { position: fixed; inset: 20% 10%; background: #fff; border: 1px solid #333; padding: 1rem; }
+.fake-modal[hidden] { display: none; }
+.sensitive { font-family: monospace; }

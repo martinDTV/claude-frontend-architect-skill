@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Good dialog</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<header class="site"><a href="/">Home</a></header>
+<main id="main">
+  <h1>Dialog that manages focus</h1>
+  <button type="button" id="open-good" aria-haspopup="dialog">Show details</button>
+  <dialog id="dlg" aria-labelledby="dlg-title">
+    <h2 id="dlg-title">Project details</h2>
+    <p>Created last week.</p>
+    <button type="button" id="cancel">Cancel</button>
+    <button type="button" id="confirm">Close</button>
+  </dialog>
+</main>
+<script>
+  const dlg = document.getElementById('dlg'); const open = document.getElementById('open-good')
+  open.addEventListener('click', () => { dlg.showModal(); document.getElementById('cancel').focus() })
+  document.getElementById('cancel').addEventListener('click', () => dlg.close())
+  document.getElementById('confirm').addEventListener('click', () => dlg.close())
+</script>
+</body>
+</html>

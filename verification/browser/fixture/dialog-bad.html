@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bad dialog</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<header class="site"><a href="/">Home</a></header>
+<main id="main">
+  <h1>Dialog that loses focus</h1>
+  <button type="button" id="open-bad">Show details</button>
+  <div id="fake" class="fake-modal" hidden>
+    <p>Project details</p>
+    <button type="button" id="fake-cancel">Cancel</button>
+  </div>
+  <a href="/">Another link after the modal</a>
+</main>
+<script>
+  const fake = document.getElementById('fake'); const open = document.getElementById('open-bad')
+  open.addEventListener('click', () => { fake.hidden = false; open.blur() }) // focus not moved, no Escape, no aria-modal
+  document.getElementById('fake-cancel').addEventListener('click', () => { fake.hidden = true })
+</script>
+</body>
+</html>

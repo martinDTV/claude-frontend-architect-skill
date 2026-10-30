@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Good form</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<header class="site"><a href="/">Home</a></header>
+<main id="main">
+  <h1>Invite a teammate</h1>
+  <form id="good" novalidate>
+    <div>
+      <label for="email">Email <span aria-hidden="true">*</span></label>
+      <input id="email" name="email" type="email" required aria-required="true" aria-describedby="email-error">
+      <p id="email-error" class="error" role="alert"></p>
+    </div>
+    <div>
+      <label for="role">Role</label>
+      <select id="role" name="role"><option value="">Choose</option><option value="viewer">Viewer</option></select>
+    </div>
+    <button type="submit" id="good-submit">Send invite</button>
+    <p id="good-status" role="status" aria-live="polite"></p>
+  </form>
+</main>
+<script>
+  const form = document.getElementById('good'); const btn = document.getElementById('good-submit'); const status = document.getElementById('good-status')
+  const email = document.getElementById('email'); const err = document.getElementById('email-error')
+  let pending = false
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    if (pending) return
+    if (!email.value) { err.textContent = 'Email is required'; email.setAttribute('aria-invalid', 'true'); email.focus(); return }
+    err.textContent = ''; email.removeAttribute('aria-invalid')
+    pending = true; btn.disabled = true; btn.setAttribute('aria-busy', 'true'); status.textContent = 'Sending…'
+    try {
+      const res = await fetch('/api/submit?form=good&delay=400', { method: 'POST', body: new FormData(form) })
+      const data = await res.json()
+      status.textContent = `Invite sent (${data.count})`
+    } catch { status.textContent = 'Could not send the invite' }
+    finally { pending = false; btn.disabled = false; btn.removeAttribute('aria-busy') }
+  })
+</script>
+</body>
+</html>

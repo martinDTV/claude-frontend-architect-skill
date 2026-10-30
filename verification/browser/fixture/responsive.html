@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Responsive</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<header class="site"><a href="/">Home</a><nav aria-label="Sections"><a href="#intentional">Scroller</a><a href="#overflow">Overflow</a></nav></header>
+<main id="main">
+  <h1>Responsive checks</h1>
+  <section id="intentional" class="card">
+    <h2>Intentional horizontal scroller</h2>
+    <div class="scroller" role="region" aria-label="Wide report" tabindex="0" data-allow-overflow>
+      <table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td>1</td><td>2</td><td>3</td></tr></tbody></table>
+    </div>
+  </section>
+  <section id="overflow" class="card">
+    <h2>Unintentional overflow</h2>
+    <table class="wide-table"><thead><tr><th>Wide</th><th>table</th><th>without</th><th>scroll</th></tr></thead><tbody><tr><td>1</td><td>2</td><td>3</td><td>4</td></tr></tbody></table>
+    <p class="cut">This paragraph is wider than the viewport on purpose (width: 120%).</p>
+  </section>
+  <section class="card">
+    <h2>Covered control</h2>
+    <p data-i18n-long="This is a much longer translation of the same label used to stress the layout with longer strings">Short label</p>
+    <button type="button" id="covered" class="covered-button">Save changes</button>
+  </section>
+</main>
+<div class="fixed-bar" aria-hidden="true"></div>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{
+  "$comment": "Must-have findings per fixture page (browser mode, Chromium headless, viewports mobile 375x667 / tablet 768x1024 / desktop 1280x800) and pages that must stay clean for a check. Written before the tool ran; uncertain items are left unasserted on purpose.",
+  "pages": {
+    "/": {
+      "mustHave": [
+        "axe-image-alt",
+        "axe-color-contrast",
+        "hover-only-disclosure"
+      ],
+      "mustNotHave": [
+        "form-double-submit",
+        "dialog-focus-not-moved"
+      ]
+    },
+    "/form-good.html": {
+      "mustHave": [],
+      "cleanFor": [
+        "forms",
+        "axe"
+      ],
+      "mustNotHave": [
+        "form-double-submit",
+        "form-no-pending-state",
+        "form-error-not-associated",
+        "form-focus-not-moved-to-error",
+        "form-no-success-feedback",
+        "axe-label",
+        "hover-only-disclosure"
+      ]
+    },
+    "/form-bad.html": {
+      "mustHave": [
+        "form-error-not-associated",
+        "form-focus-not-moved-to-error",
+        "form-double-submit",
+        "form-no-pending-state",
+        "form-no-success-feedback"
+      ],
+      "mustNotHave": [],
+      "note": "axe-core's label rule passes an input that has a non-empty placeholder (check non-empty-placeholder), so axe-label is not expected here; the static ui-audit rule does not accept placeholder as a label. Recorded 2026-10-29 after reading axe-core 4.14's rule, before the test was written."
+    },
+    "/dialog-good.html": {
+      "mustHave": [],
+      "cleanFor": [
+        "dialogs"
+      ],
+      "mustNotHave": [
+        "dialog-focus-not-moved",
+        "dialog-escape-does-not-close",
+        "dialog-focus-not-restored",
+        "custom-modal-without-dialog-role",
+        "hover-only-disclosure"
+      ]
+    },
+    "/dialog-bad.html": {
+      "mustHave": [
+        "custom-modal-without-dialog-role",
+        "dialog-focus-not-moved"
+      ],
+      "mustNotHave": []
+    },
+    "/responsive.html": {
+      "mustHave": [
+        "horizontal-overflow",
+        "control-covered"
+      ],
+      "mustNotHave": [],
+      "overflowCulpritsInclude": [
+        "table.wide-table",
+        "p.cut"
+      ],
+      "overflowCulpritsExclude": [
+        "div.scroller"
+      ]
+    }
+  },
+  "safety": {
+    "blockedHostsExample": "https://example.com/embed must be blocked when not allowed",
+    "secretsNeverInEvidence": "4111 1111 1111 1111"
+  }
+}
