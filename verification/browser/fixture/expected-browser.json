@@ -5,7 +5,8 @@
       "mustHave": [
         "axe-image-alt",
         "axe-color-contrast",
-        "hover-only-disclosure"
+        "hover-only-disclosure",
+        "keyboard-unreachable"
       ],
       "mustNotHave": [
         "form-double-submit",
@@ -72,10 +73,26 @@
       "overflowCulpritsExclude": [
         "div.scroller"
       ]
+    },
+    "/login.html": {
+      "mustHave": [
+        "form-skipped-credentials"
+      ],
+      "mustNotHave": [
+        "form-double-submit",
+        "form-no-pending-state",
+        "form-no-success-feedback",
+        "form-no-validation-feedback"
+      ],
+      "note": "credential forms are never submitted; the server count for form=login must stay 0"
     }
   },
   "safety": {
     "blockedHostsExample": "https://example.com/embed must be blocked when not allowed",
-    "secretsNeverInEvidence": "4111 1111 1111 1111"
+    "secretsNeverInEvidence": [
+      "4111 1111 1111 1111",
+      "Owner Jane Private"
+    ],
+    "neverSubmitted": "login"
   }
 }

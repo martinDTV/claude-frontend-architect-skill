@@ -67,6 +67,12 @@ test('browser mode refuses to run without explicit tooling, a non-local host, or
     const badOut = spawnSync(process.execPath, [tool, url, '--playwright', here, '--out', '/etc/fa-not-allowed', '--json'], { encoding: 'utf8' })
     assert.equal(badOut.status, 2)
     assert.match(badOut.stderr, /--out must be under/)
+    const badBaseline = spawnSync(process.execPath, [tool, url, '--playwright', here, '--checks', 'visual', '--baseline-dir', '/etc/fa-baselines', '--json'], { encoding: 'utf8' })
+    assert.equal(badBaseline.status, 2)
+    assert.match(badBaseline.stderr, /--baseline-dir must be under/)
+    assert.ok(!existsSync('/etc/fa-baselines'))
+    const sibling = spawnSync(process.execPath, [tool, url, '--playwright', here, '--out', `${process.cwd()}-sibling`, '--json'], { encoding: 'utf8' })
+    assert.equal(sibling.status, 2, 'a sibling directory that shares the cwd prefix is outside the cwd')
   } finally {
     server.close()
   }
@@ -97,8 +103,16 @@ browserTest('browser mode on the fixture: axe, keyboard, dialogs, forms and resp
     assert.ok(byId(report, 'dialog-focus-not-moved').every((f) => f.file === '/dialog-bad.html'))
     // evidence privacy: masked text never reaches the report, screenshots were written under --out
     const text = JSON.stringify(report)
-    assert.ok(!text.includes(truth.safety.secretsNeverInEvidence), 'sensitive text must not appear in evidence')
+    for (const secret of [].concat(truth.safety.secretsNeverInEvidence)) assert.ok(!text.includes(secret), `sensitive text must not appear in evidence: ${secret}`)
+    assert.ok(text.includes('[masked]'), 'the masked control reached a finding and was scrubbed')
     assert.ok(!text.includes('Audit value'), 'form values must not appear in evidence')
+    assert.ok(!text.includes('[object '), 'selectors never stringify DOM nodes (a field named id must not shadow form.id)')
+    assert.ok(text.includes('form#good'), 'the form with a child named id is still identified by its id attribute')
+    // credential forms are never submitted: the counting server saw no login submission
+    const counts = await fetch(`${url}/api/count`).then((r) => r.json())
+    assert.equal(counts[truth.safety.neverSubmitted] ?? 0, 0, 'the login form must never be submitted')
+    assert.ok((counts['bad'] ?? 0) >= 2, 'the defective form was submitted (double submission observed)')
+    assert.equal(byId(report, 'form-skipped-credentials').length, 1)
     assert.ok(report.data.screenshots.length >= paths.length * 3)
     assert.ok(readdirSync(join(out, 'screenshots')).length >= paths.length * 3)
     assert.ok(existsSync(join(out, 'browser-audit.json')))

@@ -10,13 +10,14 @@
 //   - never runs unless --playwright <dir> names a directory you control that provides playwright (and axe-core);
 //   - only localhost targets by default; other hosts need --allow-host; every request to a host outside the
 //     allowlist is blocked at the network layer and counted;
-//   - no authentication, no cookies or storage state; a login wall is reported as auth-required;
+//   - no authentication, no cookies or storage state; a login wall is reported as auth-required; forms with a
+//     password field are never submitted (form-skipped-credentials);
 //   - clicks only with --interact and never on buttons whose text looks destructive; submits forms only with
 //     --allow-submit (fixtures and staging); writes only under --out (screenshots need --screenshots);
 //   - evidence keeps selectors, roles and short messages, never form values; elements matching --mask are
 //     masked in screenshots and omitted from text evidence.
 import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { addFinding, finish, isMainModule, parseArgs, TOOL_VERSION, usage } from './lib/report.mjs'
@@ -97,13 +98,25 @@ function hostAllowed(hostname, allowed) {
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || allowed.has(h)
 }
 
-function safeOutDir(out) {
-  const dir = out ? resolve(out) : join(tmpdir(), `fa-browser-${Date.now()}`)
-  const cwd = process.cwd()
-  if (!(dir.startsWith(cwd) || dir.startsWith(tmpdir()))) throw new Error(`--out must be under the current directory or the OS temp dir (got ${dir})`)
-  mkdirSync(dir, { recursive: true })
+/** A directory the tool may write to: under the working directory or the OS temp dir (symlinks resolved, path-segment aware). */
+function safeDir(given, flag, { create }) {
+  const dir = given ? resolve(given) : join(tmpdir(), `fa-browser-${Date.now()}`)
+  const real = (p) => {
+    try {
+      return realpathSync(p)
+    } catch {
+      return p
+    }
+  }
+  const candidate = real(existsSync(dir) ? dir : dirname(dir)) + (existsSync(dir) ? '' : `/${basename(dir)}`)
+  const inside = (base) => candidate === base || candidate.startsWith(base.endsWith('/') ? base : `${base}/`)
+  // allowed roots: the working directory, the OS temp dir, and /tmp when it exists (macOS keeps them apart)
+  const roots = [real(process.cwd()), real(tmpdir()), ...(existsSync('/tmp') ? [real('/tmp')] : [])]
+  if (!roots.some(inside)) throw new Error(`${flag} must be under the current directory or the OS temp dir (got ${dir})`)
+  if (create) mkdirSync(dir, { recursive: true })
   return dir
 }
+const safeOutDir = (out) => safeDir(out, '--out', { create: true })
 
 // ---------------------------------------------------------------- in-page helpers (serialised into the page)
 const PAGE_HELPERS = `
@@ -114,7 +127,8 @@ window.__fa = {
     let node = el
     while (node && node.nodeType === 1 && parts.length < 5) {
       let part = node.tagName.toLowerCase()
-      if (node.id) { parts.unshift(part + '#' + node.id); break }
+      const id = typeof node.getAttribute === 'function' ? node.getAttribute('id') : '' // not node.id: a form child named "id" shadows it
+      if (id) { parts.unshift(part + '#' + id); break }
       const cls = [...node.classList].slice(0, 2).map((c) => '.' + c).join('')
       const role = node.getAttribute('role') ? '[role=' + node.getAttribute('role') + ']' : ''
       parts.unshift(part + cls + role)
@@ -161,6 +175,14 @@ export async function run(argv) {
   for (const c of checks) if (!['axe', 'keyboard', 'dialogs', 'responsive', 'hydration', 'forms', 'visual'].includes(c)) return failNow(`unknown check: ${c}`)
   if (checks.has('forms') && !args['allow-submit']) return failNow('the forms check submits forms: pass --allow-submit (fixtures and staging only)')
   if (checks.has('visual') && !args['baseline-dir']) return failNow('the visual check needs --baseline-dir <dir>')
+  let baselineDir = null
+  if (checks.has('visual')) {
+    try {
+      baselineDir = safeDir(String(args['baseline-dir']), '--baseline-dir', { create: false })
+    } catch (error) {
+      return failNow(error.message)
+    }
+  }
   if (checks.has('axe') && !tooling.axeSource) return failNow(`axe-core not found next to playwright in ${tooling.dir}; install it there or pass --axe <dir>`)
   const viewports = String(args.viewports ?? 'mobile,tablet,desktop').split(',').map((s) => s.trim()).filter((v) => VIEWPORTS[v])
   const textScales = String(args['text-scale'] ?? '1,1.25').split(',').map(Number).filter((n) => n > 0)
@@ -177,7 +199,7 @@ export async function run(argv) {
   const deadline = Date.now() + maxTime
   const timeLeft = () => Math.max(0, deadline - Date.now())
 
-  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, textScales, checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir } }
+  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, textScales, checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir, baselineDir } }
   const emit = (f) => addFinding(report, { verification: 'browser', ...f })
 
   const { chromium } = tooling.playwright
@@ -224,43 +246,65 @@ export async function run(argv) {
     const url = new URL(path, target.origin).href
     const pageRecord = { url, title: null, status: null, checks: {}, console: [] }
     report.data.pages.push(pageRecord)
+    // text of masked elements (--mask) is removed from every evidence string of this page; the global emit is not used below
+    let maskedTexts = []
+    const scrubText = (value) => {
+      if (typeof value !== 'string' || !maskedTexts.length) return value
+      let out = value
+      for (const t of maskedTexts) out = out.split(t).join('[masked]')
+      return out
+    }
+    const pageEmit = (f) => emit({ ...f, message: scrubText(f.message), evidence: scrubText(f.evidence) })
     const page = await context.newPage()
     const consoleMessages = []
-    page.on('console', (m) => consoleMessages.push({ type: m.type(), text: m.text().slice(0, 200) }))
+    page.on('console', (m) => consoleMessages.push({ type: m.type(), text: scrubText(m.text().slice(0, 200)) }))
     page.on('pageerror', (e) => consoleMessages.push({ type: 'pageerror', text: String(e.message).slice(0, 200) }))
     try {
       const response = await page.goto(url, { waitUntil: 'load' })
       pageRecord.status = response?.status() ?? null
-      pageRecord.title = await page.title()
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {})
+      maskedTexts = await page.evaluate((selector) => {
+        const out = new Set()
+        for (const el of document.querySelectorAll(selector)) {
+          for (const raw of [el.textContent, el.value, el.getAttribute('aria-label'), el.getAttribute('title'), el.getAttribute('placeholder')]) {
+            const trimmed = (raw || '').trim()
+            if (trimmed.length < 4) continue
+            out.add(trimmed)
+            out.add(trimmed.replace(/\s+/g, ' '))
+            if (trimmed.length > 60) out.add(trimmed.slice(0, 60))
+          }
+        }
+        return [...out].sort((a, b) => b.length - a.length)
+      }, masks.join(',')).catch(() => [])
+      pageRecord.title = scrubText(await page.title())
       // login wall: a password field on a different path than requested
       const loginWall = await page.evaluate(() => Boolean(document.querySelector('input[type="password"]')))
       if (loginWall && new URL(page.url()).pathname !== new URL(url).pathname) {
-        emit({ id: 'auth-required', level: 'info', severity: 'info', file: path, message: `redirected to a login page (${new URL(page.url()).pathname}); the browser mode never authenticates`, fix: 'audit public pages, or run the audit inside an authorised session you start yourself' })
+        pageEmit({ id: 'auth-required', level: 'info', severity: 'info', file: path, message: `redirected to a login page (${new URL(page.url()).pathname}); the browser mode never authenticates`, fix: 'audit public pages, or run the audit inside an authorised session you start yourself' })
         pageRecord.checks.authRequired = true
         continue
       }
-      if (checks.has('hydration')) await checkHydration(page, url, path, consoleMessages, emit, pageRecord)
-      if (checks.has('axe')) await checkAxe(page, tooling.axeSource, path, emit, pageRecord)
-      if (checks.has('keyboard')) await checkKeyboard(page, path, emit, pageRecord)
-      if (checks.has('dialogs')) await checkDialogs(page, path, Boolean(args.interact), emit, pageRecord)
-      if (checks.has('forms')) await checkForms(page, context, url, path, emit, pageRecord)
+      if (checks.has('hydration')) await checkHydration(page, url, path, consoleMessages, pageEmit, pageRecord)
+      if (checks.has('axe')) await checkAxe(page, tooling.axeSource, path, pageEmit, pageRecord)
+      if (checks.has('keyboard')) await checkKeyboard(page, path, pageEmit, pageRecord)
+      if (checks.has('dialogs')) await checkDialogs(page, path, Boolean(args.interact), pageEmit, pageRecord)
+      if (checks.has('forms')) await checkForms(page, context, url, path, pageEmit, pageRecord)
       if (checks.has('responsive') || checks.has('visual') || args.screenshots) {
         for (const vp of viewports) {
           await page.setViewportSize(VIEWPORTS[vp])
           await page.goto(url, { waitUntil: 'load' })
           await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {})
-          if (checks.has('responsive')) for (const scale of textScales) await checkResponsive(page, path, vp, scale, emit, pageRecord)
+          if (checks.has('responsive')) for (const scale of textScales) await checkResponsive(page, path, vp, scale, pageEmit, pageRecord)
           await page.evaluate(() => { document.documentElement.style.fontSize = '' })
           if (args.screenshots || checks.has('visual')) {
             const shot = await screenshot(page, masks, outDir, path, vp, report)
-            if (checks.has('visual')) await compareVisual(shot, path, vp, args, report, emit, outDir)
+            if (checks.has('visual')) await compareVisual(shot, path, vp, args, report, pageEmit, outDir)
           }
         }
       }
     } catch (error) {
       pageRecord.error = String(error.message).split('\n')[0].slice(0, 200)
-      emit({ id: 'page-check-failed', level: 'info', severity: 'info', file: path, message: `could not complete the checks: ${pageRecord.error}`, fix: 'check the URL, the server and the time budget; the page was not audited' })
+      pageEmit({ id: 'page-check-failed', level: 'info', severity: 'info', file: path, message: `could not complete the checks: ${pageRecord.error}`, fix: 'check the URL, the server and the time budget; the page was not audited' })
     } finally {
       pageRecord.console = consoleMessages.slice(0, 50)
       await page.close()
@@ -432,11 +476,17 @@ async function checkForms(page, context, url, path, emit, record) {
   const forms = await page.evaluate(() => [...document.querySelectorAll('form')].map((f, i) => {
     f.setAttribute('data-fa-form', String(i))
     const submit = f.querySelector('button[type="submit"], input[type="submit"], button:not([type])')
-    return { i, id: f.id || null, selector: window.__fa.selector(f), hasSubmit: Boolean(submit), fields: [...f.querySelectorAll('input:not([type=hidden]):not([type=submit]), select, textarea')].length }
+    return { i, id: f.id || null, selector: window.__fa.selector(f), hasSubmit: Boolean(submit), hasPassword: Boolean(f.querySelector('input[type="password"]')), fields: [...f.querySelectorAll('input:not([type=hidden]):not([type=submit]), select, textarea')].length }
   }))
-  record.checks.forms = { forms: forms.length, tested: 0 }
+  record.checks.forms = { forms: forms.length, tested: 0, skippedCredentials: 0 }
   for (const f of forms.slice(0, 5)) {
     if (!f.hasSubmit) continue
+    if (f.hasPassword) {
+      // a sign-in, sign-up or password-change form: never submitted (no login attempts, no lockouts, no accounts created)
+      record.checks.forms.skippedCredentials++
+      emit({ id: 'form-skipped-credentials', level: 'info', severity: 'info', file: path, message: `${f.selector}: contains a password field; credential forms are never submitted by the browser mode`, fix: 'test sign-in and password flows in a session you drive yourself; the tool never authenticates' })
+      continue
+    }
     record.checks.forms.tested++
     const formSel = `form[data-fa-form="${f.i}"]`
     const submitSel = `${formSel} button[type="submit"], ${formSel} input[type="submit"], ${formSel} button:not([type])`
@@ -576,8 +626,7 @@ async function screenshot(page, masks, outDir, path, viewport, report) {
 }
 
 async function compareVisual(shot, path, viewport, args, report, emit, outDir) {
-  const baselineDir = resolve(String(args['baseline-dir']))
-  mkdirSync(baselineDir, { recursive: true })
+  const baselineDir = report.analysis.baselineDir
   const meta = { browser: report.analysis.browser, playwright: report.analysis.playwright, viewport: VIEWPORTS[viewport], deviceScaleFactor: 1, reducedMotion: 'reduce', fonts: 'document.fonts.ready awaited', animations: 'disabled', generatedAt: new Date().toISOString() }
   const baseFile = join(baselineDir, `${shot.name}.png`)
   const metaFile = join(baselineDir, `${shot.name}.json`)
@@ -587,6 +636,7 @@ async function compareVisual(shot, path, viewport, args, report, emit, outDir) {
   report.data.visual.push(record)
   if (!existsSync(baseFile) || approve.has(shot.name)) {
     if (args['write-baseline'] || approve.has(shot.name)) {
+      mkdirSync(baselineDir, { recursive: true })
       writeFileSync(baseFile, shot.buffer)
       writeFileSync(metaFile, JSON.stringify(meta, null, 2))
       record.status = approve.has(shot.name) ? 'baseline-approved' : 'baseline-written'
