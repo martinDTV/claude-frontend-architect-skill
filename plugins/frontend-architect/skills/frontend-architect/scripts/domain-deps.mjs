@@ -24,6 +24,8 @@ usage: node domain-deps.mjs <project-root> [options]
   --typecheck          verify symbol origins with a TypeScript Program and its type checker (lazy, opt-in:
                        memory grows with the project; .vue importers are outside the Program)
   --typecheck-max-files <n>  file budget above which --typecheck is skipped with a reason (default 2500)
+  --typecheck-max-source-mb <n>  source-size budget for the Program's root files (default 20)
+  --typecheck-max-heap-mb <n>  heap budget: a Program that used more is discarded with a reason (default 1024)
   --include-tests      include test files in the graph
   --suggest-config     print a starter .frontend-audit.json built from the folders found
   --exclude <globs>   comma-separated project-relative globs to leave out (also "exclude" in .frontend-audit.json)
@@ -85,7 +87,7 @@ export function run(argv) {
   const report = createReport('domain-deps', project)
   let graph
   try {
-    graph = buildGraph(project, { autoImports: !args['no-auto-imports'], ...engineOptionsFrom(args), typecheck: Boolean(args.typecheck), typecheckMaxFiles: args['typecheck-max-files'] ? Number(args['typecheck-max-files']) : undefined })
+    graph = buildGraph(project, { autoImports: !args['no-auto-imports'], ...engineOptionsFrom(args), typecheck: Boolean(args.typecheck), typecheckMaxFiles: args['typecheck-max-files'] ? Number(args['typecheck-max-files']) : undefined, typecheckMaxSourceMb: args['typecheck-max-source-mb'] ? Number(args['typecheck-max-source-mb']) : undefined, typecheckMaxHeapMb: args['typecheck-max-heap-mb'] ? Number(args['typecheck-max-heap-mb']) : undefined })
   } catch (error) {
     return fail(error.message)
   }
@@ -301,7 +303,7 @@ export function run(argv) {
   if (typeOnlyCycles.length) report.notes.push(`${typeOnlyCycles.length} domain pair(s) reference each other only through type-only imports (no runtime cycle, still design-time coupling): ${typeOnlyCycles.slice(0, 5).join(', ')}.`)
   if (analysis?.typechecker) {
     const t = analysis.typechecker
-    report.notes.push(t.enabled ? `type checker: ${t.namesChecked} imported name(s) verified against a TypeScript Program of ${t.files} file(s) (${t.agreements} agree with the syntactic origin, ${t.disagreements} corrected, ${t.resolvedByChecker} resolved only by the checker, ${t.unresolvedByChecker} unresolved; ${t.skippedVueImporters} name(s) in .vue importers outside the Program; ${t.durationMs} ms, ${t.heapMb} MB)` : `type checker requested but not used: ${t.reason}`)
+    report.notes.push(t.enabled ? `type checker: ${t.namesChecked} imported name(s) verified against a TypeScript Program of ${t.files} root file(s) (${t.sourceFiles} source files loaded; ${t.agreements} agree with the syntactic origin, ${t.disagreements} corrected, ${t.resolvedByChecker} resolved only by the checker, ${t.unresolvedByChecker} unresolved; ${t.skippedVueImporters} name(s) in .vue importers outside the Program; ${t.durationMs} ms wall, ${t.cpuMs} ms CPU, +${t.heapMb} MB heap, ${t.rssMb} MB RSS)` : `type checker requested but not used: ${t.reason}`)
   }
   if (policyCfg) report.notes.push(`dependency policy applied: ${allowedPairs.size} allowed pair(s), ${exceptions.size} exception(s); pairs outside the list are forbidden.`)
 

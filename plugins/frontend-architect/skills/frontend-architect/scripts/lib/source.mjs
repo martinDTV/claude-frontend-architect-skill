@@ -263,6 +263,49 @@ export function templateExpressions(template) {
   return parts.join('\n')
 }
 
+/** Blanks comments only (strings and template literals keep their contents), preserving line structure. */
+export function stripComments(code) {
+  let out = ''
+  let state = 'code'
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i]
+    const d = code[i + 1]
+    if (state === 'code') {
+      if (c === '/' && d === '/') {
+        state = 'line'
+        out += '  '
+        i++
+      } else if (c === '/' && d === '*') {
+        state = 'block'
+        out += '  '
+        i++
+      } else {
+        if (c === "'" || c === '"' || c === '`') state = c
+        out += c
+      }
+    } else if (state === 'line') {
+      if (c === '\n') {
+        state = 'code'
+        out += c
+      } else out += ' '
+    } else if (state === 'block') {
+      if (c === '*' && d === '/') {
+        state = 'code'
+        out += '  '
+        i++
+      } else out += c === '\n' ? c : ' '
+    } else {
+      // inside a string: copy, honour escapes, leave on the matching quote
+      out += c
+      if (c === '\\' && d !== undefined) {
+        out += d
+        i++
+      } else if (c === state) state = 'code'
+    }
+  }
+  return out
+}
+
 /** Count regex matches in text. */
 export function countMatches(text, re) {
   return (text.match(re) ?? []).length

@@ -100,14 +100,15 @@ function lineAt(text, index) {
  * Analyzes every source file and returns { files: Map<rel, info>, edges, catalog, unknown, packageUses }.
  * Edge: { from, to, via: 'import'|'auto-import'|'component', confidence, name, line, typeOnly, specifier }.
  */
-export function buildGraph(project, { autoImports = true, engine = 'auto', typescript, vueCompiler, typecheck = false, typecheckMaxFiles } = {}) {
+export function buildGraph(project, { autoImports = true, engine = 'auto', typescript, vueCompiler, typecheck = false, typecheckMaxFiles, typecheckMaxSourceMb, typecheckMaxHeapMb } = {}) {
   const requested = engine
   let g
   if (engine !== 'lexical') {
     const host = createSemanticHost(project, { typescript, vueCompiler })
     if (host.available) {
-      g = buildSemanticGraph(project, host, { autoImports, builtins: { composables: BUILTIN_COMPOSABLES, components: BUILTIN_COMPONENTS }, typecheck, typecheckMaxFiles })
+      g = buildSemanticGraph(project, host, { autoImports, builtins: { composables: BUILTIN_COMPOSABLES, components: BUILTIN_COMPONENTS }, typecheck, typecheckMaxFiles, typecheckMaxSourceMb, typecheckMaxHeapMb })
       g.analysis.requested = requested
+      Object.defineProperty(g, 'host', { value: host, enumerable: false })
     } else {
       if (engine === 'semantic') throw new Error(`semantic engine requested but unavailable: ${host.typescript.reason}`)
       g = buildLexicalGraph(project, { autoImports })

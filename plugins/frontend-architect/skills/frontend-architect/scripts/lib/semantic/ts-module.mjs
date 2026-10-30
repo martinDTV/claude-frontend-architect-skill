@@ -62,8 +62,13 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
     calls: new Map(),
     memberCalls: [],
     jsxTags: new Map(),
+    jsxElements: [], // { tag, line, attrs: { name: string|true|'{expr}' }, selfClosing, hasText, parents: [tags], depth }
+    browserApiUses: [], // { name, line, topLevel, inFunction, calls: [enclosing callee names], guarded, guard }
     parseDiagnostics: sf.parseDiagnostics?.length ?? 0,
   }
+  const BROWSER_GLOBALS = new Set(['window', 'document', 'localStorage', 'sessionStorage', 'navigator', 'location', 'history', 'screen', 'matchMedia', 'requestAnimationFrame', 'IntersectionObserver', 'ResizeObserver', 'MutationObserver', 'customElements', 'indexedDB', 'Notification'])
+  const CLIENT_GUARD_RE = /import\.meta\.client|process\.client|typeof\s+window\s*(?:!==?|!=)\s*['"]undefined['"]|typeof\s+document\s*(?:!==?|!=)\s*['"]undefined['"]|\bisClient\b|\bonNuxtReady\b/
+  const NONDETERMINISTIC_RE = /^(?:Date\.now|Math\.random|crypto\.randomUUID|performance\.now|new Date)$/
 
   // directives: leading expression statements that are string literals
   for (const st of sf.statements) {
@@ -125,6 +130,41 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
     }
   }
 
+  /** Context of a node: enclosing callee names, function nesting, top-level position and client guards. */
+  const contextOf = (node) => {
+    const calls = []
+    let inFunction = false
+    let guarded = false
+    let guard = null
+    let enclosingFunction = null
+    let n = node.parent
+    while (n && !ts.isSourceFile(n)) {
+      if (ts.isCallExpression(n)) {
+        const callee = n.expression
+        const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : null
+        if (name) calls.push(name)
+      }
+      if (ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n) || ts.isMethodDeclaration(n)) {
+        inFunction = true
+        if (!enclosingFunction) enclosingFunction = n.name?.text ?? (n.parent && ts.isVariableDeclaration(n.parent) && ts.isIdentifier(n.parent.name) ? n.parent.name.text : null) ?? '(anonymous)'
+      }
+      if (ts.isIfStatement(n) || ts.isConditionalExpression(n)) {
+        const cond = n.condition ?? n.expression
+        const text = cond ? cond.getText(sf) : ''
+        if (CLIENT_GUARD_RE.test(text)) {
+          guarded = true
+          guard = text.slice(0, 60)
+        }
+      }
+      if (ts.isBinaryExpression(n) && (n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken || n.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) && CLIENT_GUARD_RE.test(n.left.getText(sf))) {
+        guarded = true
+        guard = n.left.getText(sf).slice(0, 60)
+      }
+      n = n.parent
+    }
+    return { calls, inFunction, enclosingFunction, guarded, guard, topLevel: !inFunction }
+  }
+
   const visit = (node) => {
     // declarations
     if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) bindingNames(ts, node.name, out.declared)
@@ -147,11 +187,56 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
         out.memberCalls.push({ object, name: callee.name.text, line })
       }
     }
-    // JSX tags
+    // JSX tags and elements (attributes kept for the UI audit)
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(sf)
       if (!out.jsxTags.has(tag)) out.jsxTags.set(tag, [])
       out.jsxTags.get(tag).push(lineOf(sf, node.getStart(sf)))
+      const attrs = {}
+      const handlers = {}
+      for (const a of node.attributes?.properties ?? []) {
+        if (ts.isJsxSpreadAttribute(a)) {
+          attrs['...spread'] = '{expr}'
+          continue
+        }
+        if (!ts.isJsxAttribute(a)) continue
+        const name = a.name.getText(sf)
+        if (!a.initializer) attrs[name] = true
+        else if (ts.isStringLiteral(a.initializer)) attrs[name] = a.initializer.text
+        else if (ts.isJsxExpression(a.initializer)) attrs[name] = a.initializer.expression && (ts.isStringLiteral(a.initializer.expression) || ts.isNoSubstitutionTemplateLiteral(a.initializer.expression) || ts.isNumericLiteral(a.initializer.expression)) ? a.initializer.expression.text : '{expr}'
+        else attrs[name] = '{expr}'
+        if (/^on[A-Z]/.test(name) && a.initializer && ts.isJsxExpression(a.initializer) && a.initializer.expression) handlers[name.slice(2).toLowerCase()] = a.initializer.expression.getText(sf).replace(/\s+/g, ' ').slice(0, 160)
+      }
+      const parents = []
+      let p = node.parent
+      while (p && !ts.isSourceFile(p)) {
+        if (ts.isJsxElement(p) && p.openingElement !== node) parents.push(p.openingElement.tagName.getText(sf))
+        p = p.parent
+      }
+      const element = ts.isJsxSelfClosingElement(node) ? node : node.parent
+      // text and child tags through the whole subtree (accessible names come from any descendant text)
+      let hasText = false
+      const childTags = []
+      const visitDeep = (children) => {
+        for (const c of children) {
+          if ((ts.isJsxText(c) && c.text.trim()) || (ts.isJsxExpression(c) && c.expression)) hasText = true
+          if (ts.isJsxElement(c)) {
+            childTags.push(c.openingElement.tagName.getText(sf))
+            visitDeep(c.children)
+          } else if (ts.isJsxSelfClosingElement(c)) childTags.push(c.tagName.getText(sf))
+          else if (ts.isJsxFragment(c)) visitDeep(c.children)
+        }
+      }
+      if (ts.isJsxElement(element)) visitDeep(element.children)
+      out.jsxElements.push({ tag, line: lineOf(sf, node.getStart(sf)), attrs, handlers, selfClosing: ts.isJsxSelfClosingElement(node), hasText, childTags, parents, depth: parents.length })
+    }
+    // browser globals and non-deterministic values, with the context that decides whether they run on the server
+    if (ts.isIdentifier(node) && BROWSER_GLOBALS.has(node.text) && !(node.parent && ((ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) || (ts.isPropertyAssignment(node.parent) && node.parent.name === node) || ts.isTypeReferenceNode(node.parent) || (ts.isVariableDeclaration(node.parent) && node.parent.name === node) || (ts.isParameter(node.parent) && node.parent.name === node) || (ts.isTypeOfExpression(node.parent))))) {
+      out.browserApiUses.push({ name: node.text, line: lineOf(sf, node.getStart(sf)), ...contextOf(node) })
+    }
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      const text = node.expression.getText(sf)
+      if (NONDETERMINISTIC_RE.test(ts.isNewExpression(node) ? `new ${text}` : text)) out.browserApiUses.push({ name: ts.isNewExpression(node) ? `new ${text}` : text, line: lineOf(sf, node.getStart(sf)), nondeterministic: true, ...contextOf(node) })
     }
     // identifiers in value position
     if (ts.isIdentifier(node)) {

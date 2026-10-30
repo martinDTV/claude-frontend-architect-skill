@@ -12,16 +12,21 @@
 import { join } from 'node:path'
 import { toPosix } from '../fs.mjs'
 
-export function createTypeChecker(ts, project, compilerOptions, files, { maxFiles = 2500 } = {}) {
+export function createTypeChecker(ts, project, compilerOptions, files, { maxFiles = 2500, maxSourceMb = 20, maxHeapMb = 1024 } = {}) {
   const root = project.root
   const rootPosix = toPosix(root)
   const rootNames = [...files.keys()].filter((r) => /\.(?:[cm]?[jt]sx?)$/.test(r) && !r.endsWith('.d.ts')).map((r) => join(root, r))
   if (!rootNames.length) return { available: false, reason: 'no TypeScript or JavaScript files to check' }
   if (rootNames.length > maxFiles) return { available: false, reason: `${rootNames.length} files exceed the --typecheck-max-files budget (${maxFiles})` }
+  let sourceBytes = 0
+  for (const r of rootNames) sourceBytes += files.get(toPosix(r).slice(toPosix(root).length + 1))?.text?.length ?? 0
+  const sourceMb = Math.round((sourceBytes / 1024 / 1024) * 100) / 100
+  if (sourceBytes > maxSourceMb * 1024 * 1024) return { available: false, reason: `${sourceMb} MB of TypeScript/JavaScript sources exceed the --typecheck-max-source-mb budget (${maxSourceMb}); the Program would also load every library those files reach` }
   const base = compilerOptions.app?.options ?? compilerOptions.default?.options ?? {}
   const options = { ...base, noEmit: true, skipLibCheck: true, allowJs: true, checkJs: false, declaration: false, composite: false, incremental: false, tsBuildInfoFile: undefined }
   delete options.plugins
   const t0 = performance.now()
+  const cpu0 = process.cpuUsage()
   const heap0 = process.memoryUsage().heapUsed
   let program
   let checker
@@ -32,7 +37,11 @@ export function createTypeChecker(ts, project, compilerOptions, files, { maxFile
   } catch (error) {
     return { available: false, reason: `program creation failed: ${error?.message ?? error}` }
   }
-  const stats = { files: rootNames.length, sourceFiles: program.getSourceFiles().length, durationMs: Math.round(performance.now() - t0), heapMb: Math.round(((process.memoryUsage().heapUsed - heap0) / 1024 / 1024) * 10) / 10 }
+  const cpu = process.cpuUsage(cpu0)
+  const mem = process.memoryUsage()
+  const stats = { files: rootNames.length, sourceMb, sourceFiles: program.getSourceFiles().length, durationMs: Math.round(performance.now() - t0), cpuMs: Math.round((cpu.user + cpu.system) / 1000), heapMb: Math.round(((mem.heapUsed - heap0) / 1024 / 1024) * 10) / 10, rssMb: Math.round(mem.rss / 1024 / 1024) }
+  // A synchronous Program cannot be interrupted; what can be done is to refuse to use one that blew the budget
+  if (stats.heapMb > maxHeapMb) return { available: false, reason: `the Program used ${stats.heapMb} MB of heap, over the --typecheck-max-heap-mb budget (${maxHeapMb}); its results were discarded (syntactic origins stand)`, stats }
   const toRel = (abs) => {
     const p = toPosix(abs)
     return p.startsWith(`${rootPosix}/`) && !p.includes('/node_modules/') ? p.slice(rootPosix.length + 1) : null

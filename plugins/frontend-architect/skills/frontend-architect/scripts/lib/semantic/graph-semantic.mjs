@@ -104,6 +104,9 @@ function fileRecord(project, f, host, fallbacks) {
       calls: parsed.calls,
       memberCalls: parsed.memberCalls,
       jsxTags: parsed.jsxTags,
+      jsxElements: parsed.jsxElements ?? [],
+      browserApiUses: parsed.browserApiUses ?? [],
+      elements: sfc?.elements ?? [],
       sfc: sfc ? { setup: sfc.setup, lang: sfc.lang, props: sfc.props, setupRefs: sfc.setupRefs, setupConsts: sfc.setupConsts, emits: sfc.emits, exposes: sfc.exposes, models: sfc.models, lifecycle: sfc.lifecycle, watchers: sfc.watchers, computed: sfc.computed, templateDepth: sfc.templateDepth, templateElements: sfc.templateElements, templateComponents: [...sfc.templateComponents.keys()], componentUses: sfc.componentUses ?? [], dynamicComponents: sfc.dynamicComponents ?? [], compileError: sfc.compileError } : null,
       clientBoundary: parsed.directives.includes('use client'),
       serverDirective: parsed.directives.includes('use server'),
@@ -132,7 +135,7 @@ const BUILTIN_COMPOSABLES_FALLBACK = ['useState', 'useFetch', 'useAsyncData', 'u
  * module so both engines share one list. Returns the lexical shape plus `analysis`, `unknownImports`
  * and `packageImports`.
  */
-export function buildSemanticGraph(project, host, { autoImports = true, builtins, typecheck = false, typecheckMaxFiles = 2500 } = {}) {
+export function buildSemanticGraph(project, host, { autoImports = true, builtins, typecheck = false, typecheckMaxFiles = 2500, typecheckMaxSourceMb = 20, typecheckMaxHeapMb = 1024 } = {}) {
   const BUILTIN_COMPOSABLES = builtins?.composables ?? new Set(BUILTIN_COMPOSABLES_FALLBACK)
   const BUILTIN_COMPONENTS = builtins?.components ?? new Set()
   const started = performance.now()
@@ -294,8 +297,8 @@ export function buildSemanticGraph(project, host, { autoImports = true, builtins
   // the syntactic origins for TypeScript/JavaScript importers; .vue importers are outside the Program.
   let typechecker = null
   if (typecheck) {
-    const tc = createTypeChecker(host.ts, project, compilerOptions, files, { maxFiles: typecheckMaxFiles })
-    typechecker = { requested: true, enabled: tc.available, reason: tc.reason ?? null, ...(tc.stats ?? {}), namesChecked: 0, agreements: 0, disagreements: 0, resolvedByChecker: 0, unresolvedByChecker: 0, skippedVueImporters: 0 }
+    const tc = createTypeChecker(host.ts, project, compilerOptions, files, { maxFiles: typecheckMaxFiles, maxSourceMb: typecheckMaxSourceMb, maxHeapMb: typecheckMaxHeapMb })
+    typechecker = { requested: true, enabled: tc.available, reason: tc.reason ?? null, budgets: { maxFiles: typecheckMaxFiles, maxSourceMb: typecheckMaxSourceMb, maxHeapMb: typecheckMaxHeapMb }, ...(tc.stats ?? {}), namesChecked: 0, agreements: 0, disagreements: 0, resolvedByChecker: 0, unresolvedByChecker: 0, skippedVueImporters: 0 }
     if (tc.available) {
       for (const { edge } of importEdges) {
         if (edge.from.endsWith('.vue')) {
@@ -307,7 +310,7 @@ export function buildSemanticGraph(project, host, { autoImports = true, builtins
           if (!c || c.status === 'skipped') continue
           typechecker.namesChecked++
           if (c.status === 'declared') {
-            if (o.status === 'declared' && o.file === c.file) {
+            if ((o.status === 'declared' || o.status === 'declaration-file') && o.file === c.file) {
               o.verifiedBy = 'checker'
               typechecker.agreements++
             } else if (o.status === 'declared' || o.status === 'declaration-file') {

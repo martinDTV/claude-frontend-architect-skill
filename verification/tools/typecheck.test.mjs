@@ -51,6 +51,23 @@ test('--typecheck-max-files: over budget the checker is skipped with a reason an
   assert.ok(report.notes.some((n) => /type checker requested but not used/.test(n)))
 })
 
+test('1.4 budgets: --typecheck-max-source-mb is checked before the Program exists, --typecheck-max-heap-mb after it; both keep the syntactic origins', () => {
+  const source = runTool('domain-deps.mjs', [tsPaths, ...semantic, '--typecheck', '--typecheck-max-source-mb', '0.0001', '--fail-on', 'none'])
+  assert.equal(source.code, 0)
+  assert.equal(source.report.analysis.typechecker.enabled, false)
+  assert.match(source.report.analysis.typechecker.reason, /MB of TypeScript\/JavaScript sources exceed the --typecheck-max-source-mb budget \(0.0001\)/)
+  assert.equal(source.report.summary.symbolResolution.declared, 18, 'syntactic origins stand')
+  const heap = runTool('domain-deps.mjs', [tsPaths, ...semantic, '--typecheck', '--typecheck-max-heap-mb', '0.001', '--fail-on', 'none'])
+  assert.equal(heap.code, 0)
+  const t = heap.report.analysis.typechecker
+  assert.equal(t.enabled, false)
+  assert.match(t.reason, /over the --typecheck-max-heap-mb budget \(0.001\); its results were discarded \(syntactic origins stand\)/)
+  assert.ok(t.heapMb > 0 && t.durationMs >= 0 && typeof t.cpuMs === 'number' && t.rssMb > 0 && t.sourceFiles > t.files, 'the measurement of the discarded Program is still reported (heap, wall, CPU, RSS, source files loaded)')
+  assert.deepEqual(t.budgets, { maxFiles: 2500, maxSourceMb: 20, maxHeapMb: 0.001 })
+  assert.equal(heap.report.summary.symbolResolution.declared, 18)
+  assert.ok(heap.report.notes.some((n) => /type checker requested but not used/.test(n)))
+})
+
 test('without --typecheck no Program is created; with the lexical engine the flag is reported as not applicable', () => {
   const plain = runTool('domain-deps.mjs', [tsPaths, ...semantic, '--fail-on', 'none'])
   assert.equal(plain.report.analysis.typechecker, null)
