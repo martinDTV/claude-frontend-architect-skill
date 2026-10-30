@@ -173,7 +173,7 @@ test('every graph tool accepts --format and --engine and keeps its JSON contract
     assert.equal(r.code, 0, `${tool}: ${r.stderr}`)
     const report = JSON.parse(r.stdout)
     for (const key of ['tool', 'version', 'root', 'framework', 'summary', 'findings', 'notes', 'data', 'analysis']) assert.ok(key in report, `${tool} lacks ${key}`)
-    assert.equal(report.version, '1.4.0')
+    assert.equal(report.version, '1.4.1')
     assert.equal(report.analysis.engine, 'lexical')
     assert.equal(report.analysis.requested, 'lexical')
   }
