@@ -508,13 +508,16 @@ async function checkForms(page, context, url, path, emit, record) {
       const associated = invalid.some((i) => i.getAttribute('aria-describedby') || i.getAttribute('aria-errormessage'))
       const active = document.activeElement
       const focusOnField = Boolean(active && form.contains(active) && /^(input|select|textarea)$/i.test(active.tagName))
-      return { invalid: invalid.length, alerts: alerts.length, alertAssociated: associated || alerts.some((a) => a.getAttribute('role') === 'alert' && invalid.some((i) => (i.getAttribute('aria-describedby') || '').split(/\s+/).includes(a.id))), focusOnField, nativeValidation: invalid.some((i) => !i.hasAttribute('aria-invalid')) && form.noValidate === false }
+      return { invalid: invalid.length, alerts: alerts.length, alertAssociated: associated || alerts.some((a) => a.id && [...form.querySelectorAll('input, select, textarea')].some((c) => `${c.getAttribute('aria-describedby') || ''} ${c.getAttribute('aria-errormessage') || ''}`.split(/\s+/).includes(a.id))), focusOnField, nativeValidation: form.noValidate === false && invalid.some((i) => typeof i.checkValidity === 'function' && i.validity && !i.validity.valid) }
     }, formSel)
     page.off('request', onRequest)
     if (feedback) {
       if (!feedback.alerts && !feedback.invalid && requestsBefore.length === 0 && f.fields > 0) emit({ id: 'form-no-validation-feedback', level: 'heuristic', severity: 'medium', file: path, message: `${f.selector}: submitting empty produced no visible message, no aria-invalid and no request`, evidence: f.selector, fix: 'validate on submit and show field errors linked with aria-describedby; move focus to the first invalid field' })
       if (feedback.alerts && !feedback.alertAssociated && !feedback.nativeValidation) emit({ id: 'form-error-not-associated', level: 'confirmed', severity: 'medium', file: path, message: `${f.selector}: an error message appeared but no field is marked aria-invalid with aria-describedby pointing at it`, evidence: f.selector, fix: 'set aria-invalid="true" on the field and aria-describedby to the message id' })
-      if ((feedback.alerts || feedback.invalid) && !feedback.focusOnField && !feedback.nativeValidation) emit({ id: 'form-focus-not-moved-to-error', level: 'heuristic', severity: 'low', file: path, message: `${f.selector}: after a failed submit focus did not move to a field`, evidence: f.selector, fix: 'focus the first invalid field (or an error summary) so keyboard and screen-reader users land on the problem' })
+      // a field-level error: a field is marked invalid, or an error appeared that no field points to; a form-level
+      // message announced by an associated alert ("you must be signed in") does not ask for focus on a field
+      const fieldLevelError = feedback.invalid > 0 || (feedback.alerts > 0 && !feedback.alertAssociated)
+      if (fieldLevelError && !feedback.focusOnField && !feedback.nativeValidation) emit({ id: 'form-focus-not-moved-to-error', level: 'heuristic', severity: 'low', file: path, message: `${f.selector}: after a failed submit focus did not move to a field`, evidence: f.selector, fix: 'focus the first invalid field (or an error summary) so keyboard and screen-reader users land on the problem' })
     }
     // 2. filled submission: pending state, double submission, confirmation
     await page.goto(url, { waitUntil: 'load' })
@@ -537,26 +540,55 @@ async function checkForms(page, context, url, path, emit, record) {
       }
     }, formSel)
     const posts = []
+    const finished = new Map()
     const onPost = (r) => {
-      if (r.method() !== 'GET') posts.push({ url: r.url(), at: Date.now() })
+      if (r.method() !== 'GET') posts.push({ url: r.url(), at: Date.now(), request: r })
+    }
+    const onFinished = (r) => {
+      if (r.method() !== 'GET') finished.set(r, Date.now())
     }
     page.on('request', onPost)
-    const statusBefore = await page.evaluate(() => [...document.querySelectorAll('[role="status"], [aria-live]')].map((e) => (e.textContent || '').trim()).join('|'))
+    page.on('requestfinished', onFinished)
+    page.on('requestfailed', onFinished)
+    const feedbackSelector = '[role="status"], [aria-live], [role="alert"]'
+    const readFeedback = () => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((e) => (e.textContent || '').trim()).join('|'), feedbackSelector)
+    const statusBefore = await readFeedback()
     await page.click(submitSel).catch(() => {})
-    await page.waitForTimeout(80)
-    const pending = await page.evaluate((sel) => {
-      const btn = document.querySelector(sel)
-      return btn ? { disabled: btn.disabled || btn.getAttribute('aria-disabled') === 'true', busy: btn.getAttribute('aria-busy') === 'true' || Boolean(btn.closest('form')?.getAttribute('aria-busy')) } : null
-    }, submitSel)
+    // observe the submit control while the first request is in flight (every 10 ms, at most 300 ms); a response
+    // faster than the first sample leaves the pending state unobservable, which is recorded, not reported
+    let samples = 0
+    let lockedWhileInFlight = false
+    const clickedAt = Date.now()
+    while (Date.now() - clickedAt < 300) {
+      const first = posts[0]
+      if (first && finished.has(first.request)) break
+      if (first) {
+        samples++
+        const locked = await page.evaluate((sel) => {
+          const btn = document.querySelector(sel)
+          return btn ? btn.disabled || btn.getAttribute('aria-disabled') === 'true' || btn.getAttribute('aria-busy') === 'true' || Boolean(btn.closest('form')?.getAttribute('aria-busy')) : null
+        }, submitSel)
+        if (locked) lockedWhileInFlight = true
+      }
+      await page.waitForTimeout(10)
+    }
+    // the second click of a double click: while the first request is still in flight for slow actions, right after
+    // it finished for fast ones
     await page.click(submitSel, { force: true }).catch(() => {})
     await page.waitForTimeout(1500)
     page.off('request', onPost)
-    const statusAfter = await page.evaluate(() => [...document.querySelectorAll('[role="status"], [aria-live]')].map((e) => (e.textContent || '').trim()).join('|'))
+    page.off('requestfinished', onFinished)
+    page.off('requestfailed', onFinished)
+    const statusAfter = await readFeedback()
     const navigated = new URL(page.url()).pathname !== new URL(url).pathname
-    record.checks.forms[f.selector] = { posts: posts.length, pending, statusChanged: statusAfter !== statusBefore, navigated }
-    if (posts.length >= 2) emit({ id: 'form-double-submit', level: 'confirmed', severity: 'high', file: path, message: `${f.selector}: two quick clicks on submit sent ${posts.length} requests`, evidence: posts.map((p) => new URL(p.url).pathname).join(', '), fix: 'ignore submits while one is pending (disable the button, keep a pending flag, make the endpoint idempotent)' })
-    if (posts.length >= 1 && pending && !pending.disabled && !pending.busy) emit({ id: 'form-no-pending-state', level: 'heuristic', severity: 'medium', file: path, message: `${f.selector}: while the request was in flight the submit button was neither disabled nor aria-busy`, evidence: f.selector, fix: 'reflect the pending state on the button and the form (aria-busy) so users know the action is running' })
-    if (posts.length >= 1 && !navigated && statusAfter === statusBefore) emit({ id: 'form-no-success-feedback', level: 'heuristic', severity: 'medium', file: path, message: `${f.selector}: the request was sent but no status/live region changed and the page did not navigate`, evidence: f.selector, fix: 'confirm the result in a role="status" region (or navigate); an action that seems to do nothing gets repeated' })
+    const firstEnd = posts[0] ? finished.get(posts[0].request) ?? null : null
+    const firstMs = posts[0] && firstEnd ? firstEnd - posts[0].at : null
+    const concurrent = posts.length >= 2 && (firstEnd === null || posts[1].at < firstEnd)
+    record.checks.forms[f.selector] = { posts: posts.length, concurrent, firstResponseMs: firstMs, pending: samples ? (lockedWhileInFlight ? 'locked while in flight' : 'not locked while in flight') : 'not observable (response faster than the first sample)', statusChanged: statusAfter !== statusBefore, navigated }
+    if (concurrent) emit({ id: 'form-double-submit', level: 'confirmed', severity: 'high', file: path, message: `${f.selector}: two quick clicks on submit sent ${posts.length} requests, the second before the first response arrived`, evidence: posts.map((p) => new URL(p.url).pathname).join(', '), fix: 'ignore submits while one is pending (disable the button, keep a pending flag, make the endpoint idempotent)' })
+    else if (posts.length >= 2) emit({ id: 'form-double-submit', level: 'heuristic', severity: 'medium', file: path, message: `${f.selector}: a double click produced ${posts.length} sequential submissions (the first finished in ${firstMs} ms, before the second click); the form was not kept locked between them`, evidence: posts.map((p) => new URL(p.url).pathname).join(', '), fix: 'make the endpoint idempotent or ignore a second submit right after a completed one; a fast response is not protection on a slow network' })
+    if (posts.length >= 1 && samples > 0 && !lockedWhileInFlight) emit({ id: 'form-no-pending-state', level: 'heuristic', severity: 'medium', file: path, message: `${f.selector}: while the request was in flight (${firstMs ?? '>300'} ms) the submit button was neither disabled nor aria-busy`, evidence: f.selector, fix: 'reflect the pending state on the button and the form (aria-busy) so users know the action is running' })
+    if (posts.length >= 1 && !navigated && statusAfter === statusBefore) emit({ id: 'form-no-success-feedback', level: 'heuristic', severity: 'medium', file: path, message: `${f.selector}: the request was sent but no status, live or alert region changed and the page did not navigate`, evidence: f.selector, fix: 'confirm the result in a role="status" region (or navigate); an action that seems to do nothing gets repeated' })
   }
 }
 
