@@ -35,7 +35,7 @@ Propose it when the question is behavioural (focus, keyboard, double submit, ove
 1. **Which URL**: a local dev server or a staging host they name (`--allow-host` for anything that is not localhost). Production is never a default; if they insist, they say so and accept that the tool never logs in, never submits a form that contains a password field, and that `--allow-submit` is off.
 2. **Which browser installation**: a directory with `playwright` and `axe-core` in its `node_modules` (`--playwright <dir>`). The plugin installs nothing. `verification/browser/package.json` in the repository pins the versions the fixture was validated with.
 3. **Which interactions**: `--interact` (clicks non-destructive buttons to discover dialogs and menus; names matching delete, remove, pay, send, submit, confirm, archive, publish, reset, revoke, logout and their Spanish equivalents are never clicked), `--allow-submit` (fills and submits forms with marked audit values; only where test submissions are acceptable).
-4. **Where evidence goes**: `--out` (and `--baseline-dir`) under the working directory or `/tmp`; `--screenshots` only if they accept image evidence; `--mask` for anything sensitive beyond the defaults (`input[type=password]`, `[data-sensitive]`, `[data-fa-mask]`). Masked text is replaced by `[masked]` in the report; accessible names of other controls can still carry user content, so mask them when the page shows personal data. Do not paste screenshots of real customer data into a chat or a ticket.
+4. **Where evidence goes**: `--out` (and `--baseline-dir`) under the working directory or `/tmp`; `--screenshots` only if they accept image evidence; `--mask` for anything sensitive beyond the defaults (`input[type=password]`, `[data-sensitive]`, `[data-fa-mask]`). Masking is not anonymisation: masked text becomes `[masked]`, but accessible names of other controls, text quoted by axe-core, ids in selectors, URLs and titles can still carry user content. On pages with personal or clinical data use seeded accounts, mask the containers, keep screenshots off, and never paste evidence of real users into a chat or a ticket. The tool stores no credentials or cookies.
 5. **Budget**: `--max-time` (90 s) and `--max-pages` (10); a budget that runs out is noted, never hidden.
 
 ```bash
@@ -52,7 +52,7 @@ Reading the findings: `confirmed` was observed in the page (an axe violation of 
 
 | Concern | Static (`ui-audit`) | Browser (`browser-audit --checks forms --allow-submit`) | Human |
 |---|---|---|---|
-| Duplicate submissions | `form-without-pending-state` (review: no pending-like identifier in the component) | `form-double-submit` (confirmed: two requests on a double click) | idempotency of the endpoint |
+| Duplicate submissions | `form-without-pending-state` (review: no pending-like identifier in the component) | `form-double-submit` (confirmed: the second request left before the first response; heuristic: two sequential submissions because the first finished first) | idempotency of the endpoint |
 | Missing loading state | same review finding | `form-no-pending-state` (button neither disabled nor `aria-busy` while in flight) | whether the feedback is understandable |
 | Errors not associated | `form-error-not-associated` (`aria-invalid` without `aria-describedby`/`aria-errormessage`) | `form-error-not-associated`, `form-no-validation-feedback` after an empty submit | wording of the message |
 | Focus lost on error | | `form-focus-not-moved-to-error` | |
