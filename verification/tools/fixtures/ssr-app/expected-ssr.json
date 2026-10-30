@@ -1,0 +1,15 @@
+{
+  "$comment": "Ground truth written before the rules ran. browser-api-in-setup: a browser global evaluated during server rendering (setup top level, module scope) with no client guard. nondeterministic-render: Date.now/Math.random evaluated during render. Guarded, mounted, deferred (event handler) and .client files produce nothing.",
+  "findings": [
+    { "file": "app/components/UnsafeSetup.vue", "line": 4, "id": "browser-api-in-setup", "level": "confirmed", "name": "window" },
+    { "file": "app/components/UnsafeSetup.vue", "line": 5, "id": "browser-api-in-setup", "level": "confirmed", "name": "localStorage" },
+    { "file": "app/composables/useViewport.ts", "line": 3, "id": "browser-api-in-setup", "level": "confirmed", "name": "window" },
+    { "file": "app/components/RandomRender.vue", "line": 3, "id": "nondeterministic-render", "level": "heuristic", "name": "Math.random" },
+    { "file": "app/components/RandomRender.vue", "line": 4, "id": "nondeterministic-render", "level": "heuristic", "name": "Date.now" }
+  ],
+  "cleanFiles": ["app/components/SafeMounted.vue", "app/components/GuardedClient.vue", "app/components/DeferredHandler.vue", "app/components/RandomMounted.vue", "app/components/Widget.client.vue", "app/composables/useSafeViewport.ts", "app/pages/index.vue"],
+  "next": {
+    "findings": [{ "file": "src/features/orders/components/WindowInRender.tsx", "line": 4, "id": "browser-api-in-setup", "level": "heuristic", "name": "window" }],
+    "cleanFiles": ["src/features/orders/components/WindowInEffect.tsx"]
+  }
+}

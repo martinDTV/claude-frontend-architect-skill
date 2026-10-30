@@ -32,6 +32,12 @@ Findings:
   raw-state-key-shared                 a useState('key') literal repeated across files/domains (heuristic)
   logout-without-cache-clear           a logout function that does not visibly clear query caches or state (heuristic)
   module-level-client-store            Zustand/Redux store created at module scope in a Next.js app (info)
+  browser-api-in-setup                 window/document/localStorage/navigator… evaluated during server rendering: setup top level
+                                       or module scope in a Nuxt app with SSR, the render body of a React component (confirmed in
+                                       Nuxt setup/module scope; heuristic elsewhere; nothing when guarded by import.meta.client,
+                                       typeof window, onMounted/useEffect, an event handler or a .client file) (1.4, semantic engine)
+  nondeterministic-render              Date.now / Math.random / crypto.randomUUID evaluated during render: the server and the client
+                                       disagree (hydration mismatch) (heuristic; nothing inside onMounted/useEffect or guards) (1.4)
 `
 
 const HTTP_RE = /(?:\$fetch|useFetch|useLazyFetch|useAsyncData|apiFetch|fetch)\s*\(|\b(?:\$?api|http|axios|client|request)\.(?:get|post|put|patch|delete|request)\s*\(/g
@@ -217,6 +223,40 @@ export function run(argv) {
             fix: 'read the data from the query (state.data / useQuery) where it is needed; keep the store for client-owned state only; if several components need it, share the query composable, not a copy',
           })
         }
+      }
+    }
+
+    // ---- browser APIs and non-deterministic values evaluated during server rendering (1.4, AST context)
+    if (info.semantic?.browserApiUses?.length) {
+      // only Nuxt's .client suffix skips server rendering; a React 'use client' component still renders on the server
+      const clientOnly = /\.client\.[cm]?[jt]sx?$|\.client\.vue$/.test(rel)
+      const isReactFile = /\.[jt]sx$/.test(rel)
+      const clientLifecycle = new Set(['onMounted', 'onBeforeUnmount', 'onUnmounted', 'onActivated', 'onDeactivated', 'onUpdated', 'useEffect', 'useLayoutEffect', 'onNuxtReady', 'nextTick', 'requestAnimationFrame', 'setTimeout', 'setInterval', 'addEventListener', 'watch', 'watchEffect', 'useEventListener', 'callOnce'])
+      const reported = new Set()
+      for (const u of info.semantic.browserApiUses) {
+        if (clientOnly || u.guarded) continue
+        const inLifecycle = u.calls.some((c) => clientLifecycle.has(c))
+        if (inLifecycle) continue
+        const key = `${u.name}@${u.line}`
+        if (reported.has(key)) continue
+        reported.add(key)
+        if (u.nondeterministic) {
+          if (u.inFunction && !info.isVue && !isReactFile) continue
+          if (u.inFunction && info.isVue && info.setup) continue // a helper called later, not setup itself
+          if (u.inFunction && isReactFile && !/^[A-Z]/.test(u.enclosingFunction ?? '')) continue
+          addFinding(report, { id: 'nondeterministic-render', level: 'heuristic', severity: ssrOff ? 'low' : 'medium', file: rel, line: u.line, message: `${u.name} evaluated during render${ssrOff ? ' (no SSR today: becomes a hydration mismatch the day SSR is enabled)' : ': the server and the client produce different markup (hydration mismatch)'}`, fix: 'compute random ids and timestamps on the client (onMounted / useEffect) or generate them once on the server and pass them down (useId for ids)' })
+          continue
+        }
+        // Vue script setup top level and module scope run on the server; in React the render body does too
+        const setupLevel = info.isVue ? !u.inFunction : !u.inFunction
+        const renderBody = isReactFile && u.inFunction && /^[A-Z]/.test(u.enclosingFunction ?? '') && !u.calls.length
+        if (!setupLevel && !renderBody) continue
+        const sureServer = project.framework === 'nuxt' && !ssrOff && setupLevel
+        addFinding(report, {
+          id: 'browser-api-in-setup', level: sureServer ? 'confirmed' : 'heuristic', severity: ssrOff ? 'low' : sureServer ? 'high' : 'medium', file: rel, line: u.line,
+          message: `${u.name} used ${renderBody ? 'in the render body of ' + u.enclosingFunction : setupLevel && info.isVue && info.setup ? 'at the top level of <script setup>' : 'at module scope'}${ssrOff ? ' (ssr: false today: breaks the day SSR is enabled)' : ': it runs on the server, where it does not exist'}`,
+          fix: 'move the access into onMounted / useEffect, guard it with import.meta.client or typeof window, or make the component client-only (.client.vue, <ClientOnly>, dynamic import without SSR)',
+        })
       }
     }
 
