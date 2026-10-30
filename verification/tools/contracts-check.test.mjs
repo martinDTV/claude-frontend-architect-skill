@@ -43,10 +43,10 @@ test('baseline: writing then removing an export is a breaking change', () => {
 
 test('--modules-dir overrides module discovery', () => {
   const { report } = runTool('contracts-check.mjs', [nuxt, '--modules-dir', 'app/components', '--fail-on', 'none'])
-  assert.ok(report.data.modules.some((m) => m.root === 'app/components/crm'))
-  assert.ok(byId(report, 'module-without-entry').some((f) => f.file === 'app/components/crm'), 'folders without index.ts used by outsiders')
+  assert.ok(report.data.modules.some((m) => m.root === 'app/components/sales'))
+  assert.ok(byId(report, 'module-without-entry').some((f) => f.file === 'app/components/sales'), 'folders without index.ts used by outsiders')
   const implicit = byId(report, 'implicit-cross-module-dependency')
-  assert.ok(implicit.some((f) => f.file === 'app/layouts/default.vue' && f.message.includes('CrmBadge')), 'template component use is an implicit dependency')
+  assert.ok(implicit.some((f) => f.file === 'app/layouts/default.vue' && f.message.includes('SalesBadge')), 'template component use is an implicit dependency')
 })
 
 test('nuxt: feature modules used only through imports have no implicit dependencies', () => {
