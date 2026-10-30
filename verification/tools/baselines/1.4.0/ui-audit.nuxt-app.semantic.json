@@ -1,0 +1,31 @@
+{
+ "tool": "ui-audit",
+ "fixture": "nuxt-app",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "browserChecks",
+  "byVerification",
+  "elements",
+  "encapsulatedByComponent",
+  "filesWithMarkup",
+  "findings",
+  "nativeElements",
+  "rules",
+  "unverifiable"
+ ],
+ "findings": [
+  "click-handler-on-non-interactive|app/components/shell/AppHeader.vue|5|confirmed|medium",
+  "form-control-without-label|app/components/planos/PlanosPersonaSelect.vue|7|confirmed|high",
+  "form-without-pending-state|app/pages/auth/login.vue|6|heuristic|medium",
+  "form-without-pending-state|app/pages/big/index.vue|96|heuristic|medium",
+  "table-without-headers|app/pages/big/index.vue|118|heuristic|low",
+  "table-without-headers|app/pages/big/index.vue|119|heuristic|low",
+  "table-without-headers|app/pages/big/index.vue|120|heuristic|low",
+  "table-without-headers|app/pages/big/index.vue|121|heuristic|low",
+  "table-without-headers|app/pages/big/index.vue|122|heuristic|low",
+  "table-without-headers|app/pages/big/index.vue|123|heuristic|low",
+  "table-without-headers|app/pages/big/index.vue|124|heuristic|low",
+  "table-without-headers|app/pages/big/index.vue|125|heuristic|low"
+ ]
+}

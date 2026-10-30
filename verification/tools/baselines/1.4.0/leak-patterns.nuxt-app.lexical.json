@@ -1,0 +1,18 @@
+{
+ "tool": "leak-patterns",
+ "fixture": "nuxt-app",
+ "engine": "lexical",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "filesScanned",
+  "filesWithResources",
+  "potentialLeaks",
+  "resourcesByType"
+ ],
+ "findings": [
+  "leak-event-listener|app/components/crm/CrmOportunidadModal.vue|9|heuristic|medium",
+  "leak-event-listener|app/pages/big/index.vue|93|heuristic|medium",
+  "leak-gsap|app/components/crm/CrmOportunidadModal.vue|11|heuristic|medium",
+  "leak-interval|app/components/crm/CrmOportunidadModal.vue|10|heuristic|medium"
+ ]
+}

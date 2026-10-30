@@ -1,0 +1,18 @@
+{
+ "tool": "ui-audit",
+ "fixture": "next-app",
+ "engine": "lexical",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "browserChecks",
+  "byVerification",
+  "elements",
+  "encapsulatedByComponent",
+  "filesWithMarkup",
+  "findings",
+  "nativeElements",
+  "rules",
+  "unverifiable"
+ ],
+ "findings": []
+}

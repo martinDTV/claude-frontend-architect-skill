@@ -1,0 +1,8 @@
+{
+ "tool": "routes-audit",
+ "fixture": "ts-paths",
+ "engine": "lexical",
+ "version": "1.4.0",
+ "summaryKeys": [],
+ "findings": []
+}

@@ -1,0 +1,23 @@
+{
+ "tool": "routes-audit",
+ "fixture": "next-app",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "actionsWithoutAuth",
+  "handlers",
+  "matcher",
+  "pages",
+  "proxy",
+  "routeFiles",
+  "serverActions"
+ ],
+ "findings": [
+  "client-boundary-too-high|src/app/page.tsx|1|confirmed|medium",
+  "route-handler-without-auth|src/app/api/webhooks/route.ts|1|heuristic|medium",
+  "server-action-without-auth|src/features/orders/orders.actions.ts|4|heuristic|high",
+  "server-action-without-validation|src/features/orders/audit.actions.ts|5|heuristic|medium",
+  "server-action-without-validation|src/features/orders/orders.actions.ts|4|heuristic|medium",
+  "server-action-without-validation|src/features/orders/orders.actions.ts|9|heuristic|medium"
+ ]
+}

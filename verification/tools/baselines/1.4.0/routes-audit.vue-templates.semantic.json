@@ -1,0 +1,23 @@
+{
+ "tool": "routes-audit",
+ "fixture": "vue-templates",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "byGlobal",
+  "globalMiddleware",
+  "guarded",
+  "metaParser",
+  "namedMiddleware",
+  "pages",
+  "public",
+  "redirects",
+  "routeRulesSsrFalse",
+  "ssr",
+  "unguarded"
+ ],
+ "findings": [
+  "page-without-guard|app/pages/about.vue||heuristic|medium",
+  "page-without-guard|app/pages/index.vue||heuristic|medium"
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "tool": "component-complexity",
+ "fixture": "monorepo",
+ "engine": "lexical",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "components",
+  "largest",
+  "medianLines",
+  "over",
+  "totalLines"
+ ],
+ "findings": []
+}

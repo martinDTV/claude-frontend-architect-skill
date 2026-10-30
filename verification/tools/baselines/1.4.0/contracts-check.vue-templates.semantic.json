@@ -1,0 +1,13 @@
+{
+ "tool": "contracts-check",
+ "fixture": "vue-templates",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "internalImports",
+  "modules",
+  "publicExports",
+  "withEntry"
+ ],
+ "findings": []
+}

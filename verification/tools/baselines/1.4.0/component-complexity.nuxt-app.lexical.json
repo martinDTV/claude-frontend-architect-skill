@@ -1,0 +1,18 @@
+{
+ "tool": "component-complexity",
+ "fixture": "nuxt-app",
+ "engine": "lexical",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "components",
+  "largest",
+  "medianLines",
+  "over",
+  "totalLines"
+ ],
+ "findings": [
+  "mixed-responsibilities|app/pages/big/index.vue||heuristic|medium",
+  "page-talks-to-network|app/pages/big/index.vue||heuristic|low",
+  "watcher-chains|app/pages/big/index.vue||heuristic|low"
+ ]
+}

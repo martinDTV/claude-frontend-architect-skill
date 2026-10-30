@@ -1,0 +1,16 @@
+{
+ "tool": "state-audit",
+ "fixture": "monorepo",
+ "engine": "lexical",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "files",
+  "moduleLevelState",
+  "nuxtStateKeys",
+  "piniaStores",
+  "queryCache",
+  "ssr",
+  "webStorageWrites"
+ ],
+ "findings": []
+}

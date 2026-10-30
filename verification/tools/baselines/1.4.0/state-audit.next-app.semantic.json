@@ -1,0 +1,20 @@
+{
+ "tool": "state-audit",
+ "fixture": "next-app",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "files",
+  "moduleLevelState",
+  "nuxtStateKeys",
+  "piniaStores",
+  "queryCache",
+  "ssr",
+  "webStorageWrites"
+ ],
+ "findings": [
+  "browser-api-in-setup|src/features/orders/components/WindowInRender.tsx|4|heuristic|medium",
+  "module-level-client-store|src/stores/preferences.store.ts|3|info|low",
+  "module-level-http-client-mutable-auth|src/lib/http/client.ts|2|confirmed|critical"
+ ]
+}

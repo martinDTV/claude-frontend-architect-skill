@@ -1,0 +1,41 @@
+{
+ "tool": "domain-deps",
+ "fixture": "ts-paths",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "autoImportComponents",
+  "autoImportSymbols",
+  "catalogSource",
+  "componentsByResolution",
+  "derivedEdges",
+  "domains",
+  "dynamicComponents",
+  "edges",
+  "edgesByConfidence",
+  "edgesByDependencyKind",
+  "edgesByKind",
+  "edgesByResolution",
+  "engine",
+  "files",
+  "horizontalEdges",
+  "metadata",
+  "packageSymbolsUsed",
+  "packagesByScope",
+  "packagesImported",
+  "policy",
+  "symbolResolution",
+  "unclassifiedFiles",
+  "unknownSymbols",
+  "unresolvedImports",
+  "workspace"
+ ],
+ "findings": [
+  "domain-cycle|||confirmed|medium",
+  "shared-imports-domain|src/components/OrderCard.vue|3|confirmed|low",
+  "shared-imports-domain|src/components/OrderCard.vue|4|confirmed|high",
+  "shared-imports-domain|src/components/StatusBadge.vue|2|confirmed|low",
+  "unresolved-import|src/features/checkout/lazy.ts|7|info|low",
+  "unresolved-import|src/features/reports/report.ts|4|info|low"
+ ]
+}

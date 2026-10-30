@@ -1,0 +1,8 @@
+{
+ "tool": "routes-audit",
+ "fixture": "monorepo",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [],
+ "findings": []
+}

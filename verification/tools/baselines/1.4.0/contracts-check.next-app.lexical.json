@@ -1,0 +1,18 @@
+{
+ "tool": "contracts-check",
+ "fixture": "next-app",
+ "engine": "lexical",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "internalImports",
+  "modules",
+  "publicExports",
+  "withEntry"
+ ],
+ "findings": [
+  "internal-import|src/app/(dashboard)/orders/page.tsx|2|confirmed|high",
+  "internal-import|src/app/(dashboard)/orders/widgets/page.tsx|2|confirmed|high",
+  "internal-import|src/app/(dashboard)/orders/widgets/page.tsx|3|confirmed|high",
+  "unused-public-export|src/features/billing/index.ts||info|info"
+ ]
+}

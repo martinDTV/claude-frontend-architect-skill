@@ -1,0 +1,24 @@
+{
+ "tool": "routes-audit",
+ "fixture": "nuxt-app",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "byGlobal",
+  "globalMiddleware",
+  "guarded",
+  "metaParser",
+  "namedMiddleware",
+  "pages",
+  "public",
+  "redirects",
+  "routeRulesSsrFalse",
+  "ssr",
+  "unguarded"
+ ],
+ "findings": [
+  "page-without-guard|app/pages/planos/index.vue||heuristic|medium",
+  "redirect-page|app/pages/legacy/index.vue||info|info",
+  "redirect-page|app/pages/legacy/report.vue||info|info"
+ ]
+}

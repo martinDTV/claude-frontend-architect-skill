@@ -1,0 +1,24 @@
+{
+ "tool": "state-audit",
+ "fixture": "nuxt-app",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "files",
+  "moduleLevelState",
+  "nuxtStateKeys",
+  "piniaStores",
+  "queryCache",
+  "ssr",
+  "webStorageWrites"
+ ],
+ "findings": [
+  "module-level-http-client-mutable-auth|app/composables/useApi.ts|3|confirmed|critical",
+  "module-level-mutable-state|app/composables/catalogos/useCatalogoWbs.ts|1|heuristic|medium",
+  "module-level-mutable-state|app/composables/useCrm.ts|3|heuristic|medium",
+  "server-data-copied-to-store|app/components/crm/CrmSync.vue|8|heuristic|medium",
+  "store-persists-everything|app/stores/auth.ts||heuristic|high",
+  "token-in-web-storage|app/stores/auth.ts|10|confirmed|high",
+  "token-in-web-storage|app/stores/auth.ts|9|confirmed|high"
+ ]
+}

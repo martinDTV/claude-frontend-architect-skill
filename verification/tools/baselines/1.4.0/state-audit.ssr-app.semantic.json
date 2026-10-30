@@ -1,0 +1,22 @@
+{
+ "tool": "state-audit",
+ "fixture": "ssr-app",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "files",
+  "moduleLevelState",
+  "nuxtStateKeys",
+  "piniaStores",
+  "queryCache",
+  "ssr",
+  "webStorageWrites"
+ ],
+ "findings": [
+  "browser-api-in-setup|app/components/UnsafeSetup.vue|4|confirmed|high",
+  "browser-api-in-setup|app/components/UnsafeSetup.vue|5|confirmed|high",
+  "browser-api-in-setup|app/composables/useViewport.ts|3|confirmed|high",
+  "nondeterministic-render|app/components/RandomRender.vue|3|heuristic|medium",
+  "nondeterministic-render|app/components/RandomRender.vue|4|heuristic|medium"
+ ]
+}

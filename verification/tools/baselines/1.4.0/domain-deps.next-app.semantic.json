@@ -1,0 +1,41 @@
+{
+ "tool": "domain-deps",
+ "fixture": "next-app",
+ "engine": "semantic",
+ "version": "1.4.0",
+ "summaryKeys": [
+  "autoImportComponents",
+  "autoImportSymbols",
+  "catalogSource",
+  "componentsByResolution",
+  "derivedEdges",
+  "domains",
+  "dynamicComponents",
+  "edges",
+  "edgesByConfidence",
+  "edgesByDependencyKind",
+  "edgesByKind",
+  "edgesByResolution",
+  "engine",
+  "files",
+  "horizontalEdges",
+  "metadata",
+  "packageSymbolsUsed",
+  "packagesByScope",
+  "packagesImported",
+  "policy",
+  "symbolResolution",
+  "unclassifiedFiles",
+  "unknownSymbols",
+  "unresolvedImports",
+  "workspace"
+ ],
+ "findings": [
+  "client-only-in-server|src/app/(dashboard)/orders/widgets/page.tsx|2|confirmed|high",
+  "feature-internal-import|src/app/(dashboard)/orders/page.tsx|2|confirmed|high",
+  "server-env-in-client|src/features/orders/components/OrderAdminPanel.tsx|4|heuristic|medium",
+  "server-only-in-client|src/features/orders/components/OrderAdminPanel.tsx|3|confirmed|high",
+  "shared-imports-domain|src/components/ui/button.tsx|1|confirmed|high",
+  "unclassified-files|||info|info"
+ ]
+}
