@@ -18,7 +18,7 @@ node extract.mjs
 (cd vue && npx tsc --noEmit && npx vitest run)
 (cd react && npx tsc --noEmit)
 (cd creative && npx tsc --noEmit && npx vitest run)
-(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs)
+(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs)
 (cd nuxt && npx nuxt prepare && node check-layers.mjs && npx nuxt typecheck)
 ./ssr-test/run.sh
 ./ssr-test/run.sh --negative

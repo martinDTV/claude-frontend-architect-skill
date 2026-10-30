@@ -83,44 +83,65 @@ import { z } from 'zod'
 
 const renameSchema = z.object({ id: z.coerce.number().int().positive(), fullName: z.string().trim().min(1).max(200) })
 
-export type RenameState = { ok: true } | { ok: false; errors: Record<string, string[]> }
+export type RenameState = { status: 'idle' } | { status: 'saved' } | { status: 'error'; errors: Record<string, string[]> }
 
 export async function renameUser(_prev: RenameState, formData: FormData): Promise<RenameState> {
   const session = (await cookies()).get('session')?.value
-  if (!session) return { ok: false, errors: { form: ['You must be signed in.'] } }
+  if (!session) return { status: 'error', errors: { form: ['You must be signed in.'] } }
 
   const parsed = renameSchema.safeParse(Object.fromEntries(formData))
-  if (!parsed.success) return { ok: false, errors: z.flattenError(parsed.error).fieldErrors }
+  if (!parsed.success) return { status: 'error', errors: z.flattenError(parsed.error).fieldErrors }
 
   const res = await fetch(`${process.env.API_URL}/users/${parsed.data.id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Cookie: `session=${session}` },
     body: JSON.stringify({ fullName: parsed.data.fullName }),
   })
-  if (res.status === 403) return { ok: false, errors: { form: ['Not allowed.'] } }
-  if (!res.ok) return { ok: false, errors: { form: ['Could not save. Try again.'] } }
+  if (res.status === 403) return { status: 'error', errors: { form: ['Not allowed.'] } }
+  if (!res.ok) return { status: 'error', errors: { form: ['Could not save. Try again.'] } }
 
   updateTag(`user-${parsed.data.id}`)
-  return { ok: true }
+  return { status: 'saved' }
 }
 ```
+
+The form that calls it shows the behaviour every mutation form needs (`forms.md`): the pending state locks the control and the form (`disabled`, `aria-busy`), the error text is tied to its field (`aria-describedby`) and the field is marked (`aria-invalid`), focus returns to the first invalid field, and success is confirmed in a `role="status"` region. `browser-audit --checks forms --allow-submit` verifies exactly these points; the harness runs it against this example (`verification/next/check-browser.mjs`).
 
 ```tsx
 // @verify next:features/users/components/RenameUserForm.tsx
 'use client'
-import { useActionState } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { type RenameState, renameUser } from '../users.actions'
 
 export function RenameUserForm({ id, fullName }: { id: number; fullName: string }) {
-  const [state, action, pending] = useActionState<RenameState, FormData>(renameUser, { ok: true })
-  const errors = state.ok ? {} : state.errors
+  const [state, action, pending] = useActionState<RenameState, FormData>(renameUser, { status: 'idle' })
+  const errors = state.status === 'error' ? state.errors : {}
+  const fieldError = errors.fullName?.[0]
+  const formError = errors.form?.[0]
+  const field = useRef<HTMLInputElement>(null)
+
+  // focus goes back to the first invalid field when the server rejects the value
+  useEffect(() => {
+    if (fieldError) field.current?.focus()
+  }, [fieldError, state])
 
   return (
-    <form action={action}>
+    <form action={action} aria-busy={pending}>
       <input type="hidden" name="id" value={id} />
       <label htmlFor="fullName">Full name</label>
-      <input id="fullName" name="fullName" defaultValue={fullName} aria-describedby="fullName-error" />
-      <p id="fullName-error" role="alert">{errors.fullName?.[0] ?? errors.form?.[0]}</p>
+      <input
+        ref={field}
+        id="fullName"
+        name="fullName"
+        defaultValue={fullName}
+        required
+        maxLength={200}
+        aria-invalid={fieldError ? true : undefined}
+        aria-describedby="fullName-error"
+        disabled={pending}
+      />
+      <p id="fullName-error" role="alert">{fieldError ?? formError}</p>
+      <p role="status">{state.status === 'saved' ? 'Name saved.' : ''}</p>
       <button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
     </form>
   )
