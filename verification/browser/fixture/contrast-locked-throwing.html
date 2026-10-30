@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Contrast skipped: the second pass throws</title><link rel="stylesheet" href="/styles.css">
+<style>
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; }
+  #app main { flex: 1; }
+</style>
+<script>
+  // Synthetic: intercept the axe-core global the tool injects and make the colour-contrast-only run (the second
+  // pass) throw. The first full run and the target-size run must keep working; the tool must restore the page.
+  let real
+  Object.defineProperty(window, 'axe', {
+    configurable: true,
+    get() { return real },
+    set(value) {
+      // axe assigns window.axe before it defines run(): wrap whatever run() becomes, through an accessor
+      real = value
+      if (!value || typeof value !== 'object') return
+      let inner = value.run
+      Object.defineProperty(value, 'run', {
+        configurable: true,
+        get() {
+          if (typeof inner !== 'function') return inner
+          return (context, options, callback) => {
+            if (options && Array.isArray(options.runOnly) && options.runOnly.length === 1 && options.runOnly[0] === 'color-contrast') throw new Error('synthetic failure in the second pass')
+            return inner.call(value, context, options, callback)
+          }
+        },
+        set(fn) { inner = fn },
+      })
+    },
+  })
+</script>
+</head>
+<body style="overflow: hidden;">
+<div id="app">
+  <header class="site"><strong>Fixture</strong></header>
+  <main id="main">
+    <h1>The second pass fails</h1>
+    <p>The page must be restored exactly (inline overflow, computed overflow, scroll, geometry) even though the recovery run threw before producing results, and the gap must be reported as unrecovered.</p>
+    <p class="low-contrast">Low contrast text that stays unevaluated on this page.</p>
+  </main>
+</div>
+</body>
+</html>

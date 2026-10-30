@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Contrast skipped: a stylesheet reacts to the inline overflow</title><link rel="stylesheet" href="/styles.css">
+<style>
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; }
+  #app main { flex: 1; }
+  /* no script: an attribute selector on the body's inline style changes the effective background behind the text */
+  body[style*="clip"] #app main { background: #1b1b1f; }
+  body[style*="clip"] #app main .low-contrast { color: #ffffff; }
+  .modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; padding: 1rem; background: #fff; border: 1px solid #333; }
+</style>
+</head>
+<body style="overflow: hidden;">
+<div id="app">
+  <header class="site"><strong>Fixture</strong></header>
+  <main id="main">
+    <h1>A stylesheet that reacts to the inline overflow</h1>
+    <p>Adversarial and synthetic: an attribute selector on the body's style changes the background of the main area and the text colour while the overflow is clip. Geometry is identical; the effective colours are not.</p>
+    <p class="low-contrast">Low contrast in the original page, white on dark during the second pass.</p>
+  </main>
+</div>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <h2 id="modal-title">Details</h2>
+  <button type="button">Close</button>
+</div>
+</body>
+</html>

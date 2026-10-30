@@ -107,14 +107,16 @@
   },
   "runs": {
     "axe": {
-      "$comment": "1.4.1: contrast coverage, the root overflow gate and its recovery, grades by basis, target-size per viewport (the responsive check makes the viewport loop run), landmarks. Initial viewport mobile (first of the list), so the coverage gate is measured at 375 px.",
+      "$comment": "1.4.1: contrast coverage, the root overflow gate and its recovery, grades by basis, target-size per viewport (the responsive check makes the viewport loop run), landmarks. Initial viewport mobile (first of the list), so the coverage gate is measured at 375 px. Adversarial pages (recolored, recolored-css, throwing) prove that a second pass that changes computed styles or fails is never presented as equivalent to the original page.",
       "args": [
         "--checks",
         "axe,responsive",
         "--viewports",
         "mobile,desktop",
         "--max-time",
-        "180"
+        "240",
+        "--max-pages",
+        "20"
       ],
       "pages": {
         "/contrast-evaluated.html": {
@@ -321,6 +323,91 @@
             "axe-region"
           ],
           "note": "the same badge and user block as landmarks-bad.html: one finding of scope shell lists both pages, this page reports none."
+        },
+        "/contrast-locked-recolored.html": {
+          "mustHave": [
+            "axe-coverage-gap",
+            "axe-recovery-not-comparable"
+          ],
+          "mustNotHave": [
+            "axe-color-contrast",
+            "axe-recovery-restore-failed"
+          ],
+          "noConfirmed": true,
+          "coverage": {
+            "gap": true,
+            "recovery": "not-comparable",
+            "moved": 0,
+            "restyledAtLeast": 1,
+            "restored": true
+          },
+          "messageIncludes": {
+            "axe-recovery-not-comparable": "changed colours, background or opacity",
+            "axe-coverage-gap": "diagnostic only"
+          },
+          "note": "adversarial: a script recolours the low-contrast text while the body overflow is clip; geometry identical, computed styles not. The second pass finds nothing and must not be presented as a clean result."
+        },
+        "/contrast-locked-recolored-css.html": {
+          "mustHave": [
+            "axe-coverage-gap",
+            "axe-recovery-not-comparable"
+          ],
+          "mustNotHave": [
+            "axe-color-contrast",
+            "axe-recovery-restore-failed"
+          ],
+          "noConfirmed": true,
+          "coverage": {
+            "gap": true,
+            "recovery": "not-comparable",
+            "moved": 0,
+            "restyledAtLeast": 1,
+            "restored": true
+          },
+          "messageIncludes": {
+            "axe-recovery-not-comparable": "changed colours, background or opacity"
+          },
+          "note": "adversarial without script: an attribute selector on the body's inline style changes the effective background and the text colour during the second pass."
+        },
+        "/contrast-locked-throwing.html": {
+          "mustHave": [
+            "axe-coverage-gap"
+          ],
+          "mustNotHave": [
+            "axe-color-contrast",
+            "axe-recovery-not-comparable",
+            "axe-recovery-restore-failed"
+          ],
+          "noConfirmed": true,
+          "coverage": {
+            "gap": true,
+            "recovery": "failed",
+            "restored": true
+          },
+          "messageIncludes": {
+            "axe-coverage-gap": "the second pass failed (synthetic failure in the second pass) and the page was restored: the gap stands unrecovered"
+          },
+          "note": "synthetic: axe.run throws on the colour-contrast-only run; the finally block must restore inline overflow, scroll and geometry."
+        },
+        "/contrast-undecided.html": {
+          "mustHave": [
+            "axe-needs-review"
+          ],
+          "mustNotHave": [
+            "axe-color-contrast",
+            "axe-coverage-gap",
+            "axe-no-evaluable-content"
+          ],
+          "noConfirmed": true,
+          "levels": {
+            "axe-needs-review": "info"
+          },
+          "coverage": {
+            "gap": false,
+            "recovery": "none",
+            "undecidedAtLeast": 1
+          },
+          "note": "text over a gradient: incomplete for axe, counted as undecided, never as a decided result and never confirmed."
         }
       }
     },

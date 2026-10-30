@@ -66,12 +66,17 @@ function assertPage(report, path, expected) {
     if ('evaluatedBefore' in c) assert.equal(axe.coverage.evaluated, c.evaluatedBefore, `${path} evaluated before recovery`)
     if (c.partial) assert.ok(axe.coverage.evaluated > 0 && axe.coverage.evaluated < axe.coverage.candidates, `${path} partial coverage`)
     if ('inlineOverflowBefore' in c) assert.equal(axe.coverage.gate.bodyOverflowInline.value, c.inlineOverflowBefore, `${path} inline overflow before`)
+    if ('undecidedAtLeast' in c) assert.ok(axe.coverage.undecided >= c.undecidedAtLeast, `${path} undecided (${axe.coverage.undecided})`)
     if (c.recovery === 'none') assert.equal(axe.recovery.attempted, false, `${path} no recovery`)
-    if (c.recovery === 'comparable') assert.ok(axe.recovery.attempted && axe.recovery.comparable && !axe.recovery.error, `${path} comparable recovery (${JSON.stringify(axe.recovery)})`)
-    if (c.recovery === 'not-comparable') assert.ok(axe.recovery.attempted && axe.recovery.comparable === false && axe.recovery.moved > 0, `${path} not comparable (${JSON.stringify(axe.recovery)})`)
+    if (c.recovery === 'comparable') assert.ok(axe.recovery.attempted && axe.recovery.comparable && !axe.recovery.error && axe.recovery.restyled === 0 && axe.recovery.verdict === 'comparable', `${path} comparable recovery (${JSON.stringify(axe.recovery)})`)
+    if (c.recovery === 'not-comparable') assert.ok(axe.recovery.attempted && !axe.recovery.error && axe.recovery.comparable === false && (axe.recovery.moved > 0 || axe.recovery.restyled > 0) && /diagnostic only/.test(axe.recovery.verdict), `${path} not comparable (${JSON.stringify(axe.recovery)})`)
+    if (c.recovery === 'failed') assert.ok(axe.recovery.attempted && axe.recovery.error && axe.recovery.comparable === false && axe.recovery.violations === 0 && axe.recovery.verdict === 'failed', `${path} failed recovery (${JSON.stringify(axe.recovery)})`)
+    if ('moved' in c) assert.equal(axe.recovery.moved, c.moved, `${path} moved`)
+    if ('restyledAtLeast' in c) assert.ok(axe.recovery.restyled >= c.restyledAtLeast && axe.recovery.restyledSamples.length >= 1, `${path} restyled (${JSON.stringify(axe.recovery)})`)
     if ('restored' in c) assert.equal(axe.recovery.restored, c.restored, `${path} restored (${JSON.stringify(axe.recovery)})`)
     if ('recoveredAtLeast' in c) assert.ok(axe.recovery.violations >= c.recoveredAtLeast, `${path} recovered violations (${axe.recovery.violations})`)
   }
+  if (expected.noConfirmed) assert.deepEqual(findings.filter((f) => f.level === 'confirmed').map((f) => f.id), [], `${path} must have no confirmed finding`)
   for (const [viewport, t] of Object.entries(expected.targets ?? {})) {
     const rec = pageRecord(report, path)?.checks[`targets:${viewport}`]
     assert.ok(rec, `${path} has target-size data for ${viewport}`)
@@ -179,7 +184,7 @@ browserTest('browser mode on the fixture: axe, keyboard, dialogs, forms and resp
     assert.equal(report.summary.axeCoverage.pagesWithCoverageGap, 0)
     assert.ok(report.data.pages.every((p) => typeof p.durationMs === 'number' && p.durationMs > 0))
     assert.ok(report.summary.msPerPage > 0)
-    assert.ok(report.notes.some((n) => /colour contrast: \d+ of \d+ visible text elements evaluated/.test(n)))
+    assert.ok(report.notes.some((n) => /colour contrast: \d+ of \d+ visible text elements decided/.test(n)))
   } finally {
     server.close()
   }
@@ -196,9 +201,21 @@ for (const [name, run] of Object.entries(truth.runs)) {
       if (name === 'axe') {
         // the second pass never leaves a trace: every page restored, and the coverage summary counts the gaps
         for (const p of report.data.pages) if (p.checks.axe?.recovery?.attempted) assert.equal(p.checks.axe.recovery.restored, true, `${p.url} restored`)
-        assert.equal(report.summary.axeCoverage.pagesWithCoverageGap, 3)
+        assert.equal(report.summary.axeCoverage.pagesWithCoverageGap, 6)
+        assert.equal(report.summary.axeCoverage.secondPassComparable, 2)
+        assert.equal(report.summary.axeCoverage.secondPassDiagnosticOnly, 4, 'moving, recolored, recolored-css and the failed pass are diagnostic only')
         assert.ok(report.summary.axeCoverage.secondPassViolations >= 4, JSON.stringify(report.summary.axeCoverage))
+        assert.ok(report.summary.axeCoverage.undecided >= 1)
         assert.ok(report.summary.axeCoverage.pagesWithNothingEvaluated >= 1)
+        assert.ok(report.notes.some((n) => /Coverage says what the rule looked at, not whether the page conforms/.test(n)))
+        // adversarial pages: no finding of any kind is confirmed, and the recovery record keeps the diagnostic result
+        for (const path of ['/contrast-locked-recolored.html', '/contrast-locked-recolored-css.html', '/contrast-locked-throwing.html']) {
+          const rec = pageRecord(report, path).checks.axe.recovery
+          assert.equal(rec.comparable, false, path)
+          assert.ok(Array.isArray(rec.diagnostic), path)
+          assert.ok(rec.restored, `${path} restored (${JSON.stringify(rec.restoreProblems)})`)
+        }
+        assert.ok(pageRecord(report, '/contrast-locked-recolored-css.html').checks.axe.recovery.restyledSamples.some((s) => /low-contrast/.test(s)))
         const gap = byId(report, 'axe-coverage-gap').find((f) => f.file === '/contrast-locked-shell.html')
         assert.match(gap.message, /0 of \d+ visible text elements/)
         assert.match(gap.message, /body has overflow: hidden with a \d+×0 px box/)
