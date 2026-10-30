@@ -1,0 +1,213 @@
+{
+  "$comment": "Ground truth for ui-audit written from the fixture sources before the tool ran. `static` findings are provable from the markup (confirmed), `review` need a reader (heuristic), `browser` need a rendered page (info). Counters that are not findings: encapsulated (control inside a component that owns the label) and browser checks.",
+  "findings": [
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 9,
+      "id": "form-without-pending-state",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 11,
+      "id": "heading-level-skipped",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 12,
+      "id": "form-control-without-label",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 13,
+      "id": "form-control-without-label",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 14,
+      "id": "form-control-without-label",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 15,
+      "id": "form-control-without-label",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 15,
+      "id": "form-error-not-associated",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 16,
+      "id": "button-without-accessible-name",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 17,
+      "id": "button-without-accessible-name",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 18,
+      "id": "link-without-href",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 19,
+      "id": "click-handler-on-non-interactive",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 20,
+      "id": "click-handler-on-non-interactive",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 21,
+      "id": "nested-interactive",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 22,
+      "id": "aria-hidden-on-focusable",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 23,
+      "id": "positive-tabindex",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 24,
+      "id": "img-missing-alt",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 25,
+      "id": "image-input-without-alt",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 26,
+      "id": "iframe-without-title",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 27,
+      "id": "invalid-role",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 28,
+      "id": "unknown-aria-attribute",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 29,
+      "id": "dialog-without-name",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 30,
+      "id": "table-without-headers",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 31,
+      "id": "mouse-only-handler",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/Wrapped.vue",
+      "line": 12,
+      "id": "img-alt-dynamic",
+      "verification": "browser"
+    },
+    {
+      "file": "app/components/forms/Wrapped.vue",
+      "line": 13,
+      "id": "form-control-without-label",
+      "verification": "browser"
+    },
+    {
+      "file": "app/components/forms/Wrapped.vue",
+      "line": 14,
+      "id": "button-without-accessible-name",
+      "verification": "browser"
+    },
+    {
+      "file": "app/components/ui/Card.tsx",
+      "line": 9,
+      "id": "img-missing-alt",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/ui/Card.tsx",
+      "line": 12,
+      "id": "form-control-without-label",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/ui/Card.tsx",
+      "line": 13,
+      "id": "click-handler-on-non-interactive",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/ui/Card.tsx",
+      "line": 15,
+      "id": "positive-tabindex",
+      "verification": "static"
+    },
+    {
+      "file": "app/components/forms/BadForm.vue",
+      "line": 32,
+      "id": "click-handler-on-non-interactive",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/Wrapped.vue",
+      "line": 15,
+      "id": "form-control-without-label",
+      "verification": "browser"
+    }
+  ],
+  "cleanFiles": [
+    "app/components/forms/GoodForm.vue",
+    "app/pages/index.vue"
+  ],
+  "counters": {
+    "encapsulatedByComponent": 1,
+    "browserChecks": 4
+  },
+  "totals": {
+    "static": 21,
+    "review": 7,
+    "browser": 4
+  },
+  "notes": [
+    "1.4 calibration on an 80k-line Nuxt application: buttons named by nested text, @click.stop without a handler, click handlers that only focus an inner control (review) and controls hidden by a display:none class (browser) were false positives of the first rule set; GoodForm, BadForm:32, Wrapped:15 and Card.tsx cover them."
+  ]
+}
