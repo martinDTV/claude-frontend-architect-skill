@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reflow at 320 px</title><link rel="stylesheet" href="/styles.css">
+<style>
+  .panel { width: 600px; padding: 1rem; border: 1px solid #ddd; }
+  .scroller table { width: 600px; }
+</style>
+</head>
+<body>
+<header class="site"><strong>Fixture</strong></header>
+<main id="main">
+  <h1>Reflow</h1>
+  <p>Text reflows. The panel below has a fixed width of 600 px and forces horizontal scrolling at 320 px; it is plain content, not an exception of SC 1.4.10.</p>
+  <div class="panel">A fixed-width panel of regular text that should have reflowed.</div>
+  <div class="scroller" role="region" aria-label="Wide report" tabindex="0" data-allow-overflow>
+    <table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td>1</td><td>2</td><td>3</td></tr></tbody></table>
+  </div>
+</main>
+</body>
+</html>

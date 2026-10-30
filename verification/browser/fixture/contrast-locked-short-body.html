@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Contrast skipped: modal beyond a short body</title><link rel="stylesheet" href="/styles.css">
+<style>
+  /* the lock comes from a stylesheet (no inline style): the restore must leave the inline style empty */
+  body { overflow: hidden; }
+  .modal { position: fixed; left: 50%; top: 60%; transform: translate(-50%, -50%); width: 300px; padding: 1rem; background: #fff; border: 1px solid #333; }
+</style>
+</head>
+<body>
+<header class="site"><strong>Fixture</strong></header>
+<main id="main">
+  <h1>Short body, centred modal</h1>
+  <p>The body is only as tall as this text; the modal below sits outside its box.</p>
+</main>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <h2 id="modal-title">Details</h2>
+  <p class="low-contrast">Low contrast text in a modal that axe-core skips while the body is locked.</p>
+  <button type="button">Close</button>
+</div>
+</body>
+</html>

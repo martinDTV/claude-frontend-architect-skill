@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Contrast skipped: locked fixed shell</title><link rel="stylesheet" href="/styles.css">
+<style>
+  /* an app shell positioned out of flow: the body keeps a 0 px box; a modal scroll lock sets overflow: hidden on it */
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; }
+  #app main { flex: 1; }
+  .modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; padding: 1rem; background: #fff; border: 1px solid #333; }
+</style>
+</head>
+<body style="overflow: hidden;">
+<div id="app">
+  <header class="site"><strong>Fixture</strong></header>
+  <main id="main">
+    <h1>Fixed shell with a scroll lock</h1>
+    <p>Every text element here is on screen, yet axe-core 4.x evaluates none of them for contrast: the body has overflow: hidden and a zero-height box.</p>
+    <p class="low-contrast">Low contrast text inside the fixed shell (found only by the second pass).</p>
+    <button type="button">Open</button>
+  </main>
+</div>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <h2 id="modal-title">New item</h2>
+  <ol><li class="low-contrast">1. Low contrast step label in the modal</li></ol>
+  <button type="button">Close</button>
+</div>
+</body>
+</html>

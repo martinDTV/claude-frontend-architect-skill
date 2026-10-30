@@ -6,5 +6,18 @@
       "reason": "D1 (1.4.0): redirect-only pages are classified status: redirect and reported as redirect-page (info). The 1.3.0 scripts reported them as unguarded; these fixture pages were added in 1.4.0 and the 1.3.0 baselines were regenerated with the released 1.3.0 scripts on the renamed fixtures, so the 1.3 misreport is frozen here and released on purpose."
     }
   ],
-  "1.4.0": []
+  "1.4.0": [
+    {
+      "match": "^axe-(accesskeys|aria-dialog-name|aria-text|aria-treeitem-name|frame-tested|label-title-only|tabindex)\\|.*\\|confirmed\\|(critical|high)$",
+      "reason": "1.4.1: browser-audit grades axe violations by basis, not by impact alone. Rules tagged best-practice only (no wcag* tag) are heuristic/low whatever their impact; in axe-core 4.14.0 the enabled best-practice-only rules with impact serious or critical are exactly these seven (verified by verification/browser/axe-classification.test.mjs against the pinned axe metadata). 1.4.0 reported them as confirmed/high or confirmed/critical. No frozen 1.4.0 baseline contains browser-audit findings (browser output is not snapshotted), so this entry documents the re-grade for readers of a 1.4.0 report."
+    },
+    {
+      "match": "^axe-target-size\\|.*\\|confirmed\\|",
+      "reason": "1.4.1: axe's target-size rule (WCAG 2.2 SC 2.5.8) is now enabled per viewport; its violations are heuristic/medium because axe evaluates the spacing and inline exceptions only. 1.4.0 never ran the rule (axe-core ships it disabled), so nothing is dropped; the entry records the grade for the id."
+    },
+    {
+      "match": "^axe-region\\|",
+      "reason": "1.4.1: the region rule, disabled in 1.4.0, runs again and is reported once per page (heuristic/low, basis best-practice) and once per shell when identical on several pages (scope: shell, pages[]). Additive: no 1.4.0 finding is removed."
+    }
+  ]
 }

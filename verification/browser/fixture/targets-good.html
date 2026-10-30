@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Targets with valid exceptions</title><link rel="stylesheet" href="/styles.css">
+<style>
+  .toolbar { display: flex; gap: 32px; }
+  .icon { width: 20px; height: 20px; padding: 0; margin: 0; border: 1px solid #333; background: #fff; }
+  .ok { width: 24px; height: 24px; padding: 0; border: 1px solid #333; background: #fff; }
+</style>
+</head>
+<body>
+<header class="site"><strong>Fixture</strong></header>
+<main id="main">
+  <h1>Small targets that meet SC 2.5.8 through its exceptions</h1>
+  <p>Spacing exception: 20 px buttons 32 px apart, so a 24 px circle centred on each one touches no other target.</p>
+  <div class="toolbar" role="toolbar" aria-label="Actions">
+    <button type="button" class="icon" aria-label="Bold">B</button>
+    <button type="button" class="icon" aria-label="Italic">I</button>
+    <button type="button" class="icon" aria-label="Underline">U</button>
+  </div>
+  <p>Inline exception: a <a href="/contrast-evaluated.html">link inside a sentence</a> is sized by the line height of the text around it.</p>
+  <p>Minimum met: <button type="button" class="ok" aria-label="Close">×</button> is exactly 24 by 24 CSS pixels.</p>
+</main>
+</body>
+</html>

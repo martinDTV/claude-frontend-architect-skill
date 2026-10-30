@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Contrast evaluated</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<header class="site"><strong>Fixture</strong></header>
+<main id="main">
+  <h1>Contrast evaluated normally</h1>
+  <p>A page in normal flow: the body has a real height and no overflow lock, so axe-core evaluates every visible text element.</p>
+  <p class="low-contrast">This paragraph has low contrast and must be reported in the first pass.</p>
+  <p>This paragraph has enough contrast and counts as evaluated.</p>
+  <button type="button">A button with readable text</button>
+</main>
+</body>
+</html>

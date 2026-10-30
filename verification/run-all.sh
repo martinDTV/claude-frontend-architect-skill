@@ -7,7 +7,7 @@ node plugin-check.mjs
 node --test tools/*.test.mjs
 # 1.4: browser mode against the local fixture (Playwright + axe-core pinned in browser/package.json, Chromium via
 # `npx playwright install chromium`). FA_REQUIRE_BROWSER=1 (CI) turns a missing browser into a failure instead of a skip.
-if [ -d browser/node_modules/playwright ]; then (cd browser && node --test browser-audit.test.mjs); else
+if [ -d browser/node_modules/playwright ]; then (cd browser && node --test ./*.test.mjs); else
   echo "browser suite skipped: run 'npm ci && npx playwright install chromium' in verification/browser" >&2
   [ "${FA_REQUIRE_BROWSER:-0}" != 1 ] || { echo "FA_REQUIRE_BROWSER=1 but the browser tooling is missing" >&2; exit 1; }
 fi

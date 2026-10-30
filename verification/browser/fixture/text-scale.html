@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Text scale 200%</title><link rel="stylesheet" href="/styles.css">
+<style>
+  body, p, h1, button { font-size: 1rem; }
+  h1 { font-size: 1.5rem; }
+  .clamp { height: 48px; overflow: hidden; border: 1px solid #ddd; }
+  .clamp p { margin: 0; line-height: 1.2; }
+</style>
+</head>
+<body>
+<header class="site"><strong>Fixture</strong></header>
+<main id="main">
+  <h1>Text sized in rem</h1>
+  <p>Text follows the root font-size. The box below is 48 px tall with overflow hidden: two lines fit at 100% and are cut off at 200%.</p>
+  <div class="clamp"><p>First line of a two-line note<br>second line that disappears when text doubles</p></div>
+  <button type="button">A button</button>
+</main>
+</body>
+</html>

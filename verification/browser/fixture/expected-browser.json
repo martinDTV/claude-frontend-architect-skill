@@ -1,17 +1,33 @@
 {
-  "$comment": "Must-have findings per fixture page (browser mode, Chromium headless, viewports mobile 375x667 / tablet 768x1024 / desktop 1280x800) and pages that must stay clean for a check. Written before the tool ran; uncertain items are left unasserted on purpose.",
+  "$comment": "Must-have findings per fixture page (browser mode, Chromium headless, viewports mobile 375x667 / tablet 768x1024 / desktop 1280x800) and pages that must stay clean for a check. Written before the tool ran; uncertain items are left unasserted on purpose. 1.4.1 adds `runs` (pages audited with their own flags) and per-page expectations on levels, basis, pass, viewports, coverage and collapsed shell findings.",
   "pages": {
     "/": {
       "mustHave": [
         "axe-image-alt",
         "axe-color-contrast",
         "hover-only-disclosure",
-        "keyboard-unreachable"
+        "keyboard-unreachable",
+        "axe-target-size"
       ],
       "mustNotHave": [
         "form-double-submit",
         "dialog-focus-not-moved"
-      ]
+      ],
+      "levels": {
+        "axe-image-alt": "confirmed",
+        "axe-color-contrast": "confirmed",
+        "axe-target-size": "heuristic"
+      },
+      "basis": {
+        "axe-image-alt": "wcag",
+        "axe-color-contrast": "wcag"
+      },
+      "coverage": {
+        "gap": false,
+        "recovery": "none",
+        "evaluatedAll": true
+      },
+      "note": "axe-target-size: at 375 px one control of the header falls under 24 px with no spacing exception; the finding names the viewport."
     },
     "/form-good.html": {
       "mustHave": [],
@@ -26,7 +42,9 @@
         "form-focus-not-moved-to-error",
         "form-no-success-feedback",
         "axe-label",
-        "hover-only-disclosure"
+        "hover-only-disclosure",
+        "axe-coverage-gap",
+        "axe-no-evaluable-content"
       ]
     },
     "/form-bad.html": {
@@ -86,6 +104,325 @@
       ],
       "note": "credential forms are never submitted; the server count for form=login must stay 0"
     }
+  },
+  "runs": {
+    "axe": {
+      "$comment": "1.4.1: contrast coverage, the root overflow gate and its recovery, grades by basis, target-size per viewport (the responsive check makes the viewport loop run), landmarks. Initial viewport mobile (first of the list), so the coverage gate is measured at 375 px.",
+      "args": [
+        "--checks",
+        "axe,responsive",
+        "--viewports",
+        "mobile,desktop",
+        "--max-time",
+        "180"
+      ],
+      "pages": {
+        "/contrast-evaluated.html": {
+          "mustHave": [
+            "axe-color-contrast"
+          ],
+          "mustNotHave": [
+            "axe-coverage-gap",
+            "axe-no-evaluable-content",
+            "axe-recovery-not-comparable",
+            "axe-recovery-restore-failed"
+          ],
+          "levels": {
+            "axe-color-contrast": "confirmed"
+          },
+          "basis": {
+            "axe-color-contrast": "wcag"
+          },
+          "criteria": {
+            "axe-color-contrast": [
+              "1.4.3"
+            ]
+          },
+          "pass": {
+            "axe-color-contrast": 1
+          },
+          "coverage": {
+            "gap": false,
+            "recovery": "none",
+            "evaluatedAll": true
+          }
+        },
+        "/contrast-locked-shell.html": {
+          "mustHave": [
+            "axe-coverage-gap",
+            "axe-color-contrast"
+          ],
+          "mustNotHave": [
+            "axe-recovery-not-comparable",
+            "axe-recovery-restore-failed",
+            "axe-no-evaluable-content"
+          ],
+          "levels": {
+            "axe-color-contrast": "confirmed",
+            "axe-coverage-gap": "heuristic"
+          },
+          "basis": {
+            "axe-color-contrast": "wcag",
+            "axe-coverage-gap": "coverage"
+          },
+          "pass": {
+            "axe-color-contrast": 2
+          },
+          "coverage": {
+            "gap": true,
+            "evaluatedBefore": 0,
+            "recovery": "comparable",
+            "restored": true,
+            "recoveredAtLeast": 2
+          },
+          "note": "variant a of the reproduction: fixed app shell, body box of 0 px, overflow: hidden inline. Nothing is evaluated in the first pass; the second pass finds the shell text and the modal step label."
+        },
+        "/contrast-locked-short-body.html": {
+          "mustHave": [
+            "axe-coverage-gap",
+            "axe-color-contrast"
+          ],
+          "mustNotHave": [
+            "axe-recovery-not-comparable",
+            "axe-recovery-restore-failed"
+          ],
+          "levels": {
+            "axe-color-contrast": "confirmed"
+          },
+          "pass": {
+            "axe-color-contrast": 2
+          },
+          "coverage": {
+            "gap": true,
+            "partial": true,
+            "recovery": "comparable",
+            "restored": true,
+            "inlineOverflowBefore": "",
+            "recoveredAtLeast": 1
+          },
+          "note": "variant d: static short body, lock from a stylesheet. The main text is evaluated, the modal is not; the restore leaves the inline style empty as it was."
+        },
+        "/contrast-locked-moving.html": {
+          "mustHave": [
+            "axe-coverage-gap",
+            "axe-recovery-not-comparable",
+            "axe-color-contrast"
+          ],
+          "mustNotHave": [
+            "axe-recovery-restore-failed"
+          ],
+          "levels": {
+            "axe-color-contrast": "heuristic",
+            "axe-recovery-not-comparable": "info"
+          },
+          "pass": {
+            "axe-color-contrast": 2
+          },
+          "coverage": {
+            "gap": true,
+            "recovery": "not-comparable",
+            "restored": true
+          },
+          "note": "synthetic: a MutationObserver shifts the layout when the body overflow changes; the second pass is not comparable and its findings are heuristic."
+        },
+        "/contrast-empty.html": {
+          "mustHave": [
+            "axe-no-evaluable-content"
+          ],
+          "mustNotHave": [
+            "axe-color-contrast",
+            "axe-coverage-gap"
+          ],
+          "levels": {
+            "axe-no-evaluable-content": "info"
+          },
+          "coverage": {
+            "candidates": 0,
+            "recovery": "none"
+          }
+        },
+        "/targets-bad.html": {
+          "mustHave": [
+            "axe-target-size"
+          ],
+          "mustNotHave": [
+            "axe-coverage-gap"
+          ],
+          "levels": {
+            "axe-target-size": "heuristic"
+          },
+          "basis": {
+            "axe-target-size": "wcag"
+          },
+          "criteria": {
+            "axe-target-size": [
+              "2.5.8"
+            ]
+          },
+          "viewports": {
+            "axe-target-size": [
+              "mobile",
+              "desktop"
+            ]
+          },
+          "targets": {
+            "mobile": {
+              "violationsAtLeast": 3
+            }
+          }
+        },
+        "/targets-good.html": {
+          "mustHave": [],
+          "mustNotHave": [
+            "axe-target-size",
+            "axe-coverage-gap"
+          ],
+          "targets": {
+            "mobile": {
+              "violations": 0,
+              "under24RawAtLeast": 3
+            },
+            "desktop": {
+              "violations": 0
+            }
+          },
+          "note": "spacing exception (20 px buttons 32 px apart), inline exception (a link in a sentence) and a 24 px button: the raw count stays above zero while axe reports no violation."
+        },
+        "/landmarks-good.html": {
+          "mustHave": [],
+          "mustNotHave": [
+            "axe-region",
+            "axe-coverage-gap"
+          ]
+        },
+        "/landmarks-bad.html": {
+          "mustHave": [
+            "axe-region"
+          ],
+          "mustNotHave": [
+            "axe-coverage-gap"
+          ],
+          "levels": {
+            "axe-region": "heuristic"
+          },
+          "basis": {
+            "axe-region": "best-practice"
+          },
+          "severity": {
+            "axe-region": "low"
+          },
+          "pagesCollapsed": {
+            "axe-region": 2
+          }
+        },
+        "/landmarks-bad-2.html": {
+          "mustHave": [],
+          "mustNotHave": [
+            "axe-region"
+          ],
+          "note": "the same badge and user block as landmarks-bad.html: one finding of scope shell lists both pages, this page reports none."
+        }
+      }
+    },
+    "responsive": {
+      "$comment": "1.4.1: the reflow preset (320 px, SC 1.4.10 with its two-dimensional-content exception) and text scale 2 (200%, SC 1.4.4 only where text follows the root font-size).",
+      "args": [
+        "--checks",
+        "responsive",
+        "--viewports",
+        "reflow,desktop",
+        "--text-scale",
+        "1,2"
+      ],
+      "pages": {
+        "/reflow.html": {
+          "mustHave": [
+            "horizontal-overflow"
+          ],
+          "mustNotHave": [
+            "text-scale-not-applied",
+            "text-clipped-at-scale"
+          ],
+          "levels": {
+            "horizontal-overflow": "confirmed"
+          },
+          "basis": {
+            "horizontal-overflow": "wcag"
+          },
+          "criteria": {
+            "horizontal-overflow": [
+              "1.4.10"
+            ]
+          },
+          "messageIncludes": {
+            "horizontal-overflow": "reflow (320px"
+          },
+          "messageExcludes": {
+            "horizontal-overflow": "desktop ("
+          }
+        },
+        "/reflow-table.html": {
+          "mustHave": [
+            "horizontal-overflow"
+          ],
+          "mustNotHave": [
+            "text-scale-not-applied"
+          ],
+          "levels": {
+            "horizontal-overflow": "heuristic"
+          },
+          "messageIncludes": {
+            "horizontal-overflow": "SC 1.4.10 excepts"
+          }
+        },
+        "/text-scale.html": {
+          "mustHave": [
+            "text-clipped-at-scale"
+          ],
+          "mustNotHave": [
+            "text-scale-not-applied",
+            "horizontal-overflow"
+          ],
+          "levels": {
+            "text-clipped-at-scale": "heuristic"
+          },
+          "messageIncludes": {
+            "text-clipped-at-scale": "text 200%"
+          }
+        },
+        "/text-scale-px.html": {
+          "mustHave": [
+            "text-scale-not-applied"
+          ],
+          "mustNotHave": [
+            "text-clipped-at-scale",
+            "horizontal-overflow"
+          ],
+          "levels": {
+            "text-scale-not-applied": "info"
+          }
+        }
+      }
+    }
+  },
+  "axeClassification": {
+    "$comment": "Verified by axe-classification.test.mjs against the pinned axe-core metadata (no browser). bestPracticeHighImpact: rules enabled by default, tagged best-practice with no wcag* tag, impact serious or critical; 1.4.0 graded them confirmed, 1.4.1 grades them heuristic/low (migrations.json, 1.4.0).",
+    "axe": "4.14.0",
+    "bestPracticeHighImpact": [
+      "accesskeys",
+      "aria-dialog-name",
+      "aria-text",
+      "aria-treeitem-name",
+      "frame-tested",
+      "label-title-only",
+      "tabindex"
+    ],
+    "wcag22RulesDisabledByDefault": [
+      "target-size"
+    ],
+    "heuristicDespiteWcagHighImpact": [
+      "target-size"
+    ]
   },
   "safety": {
     "blockedHostsExample": "https://example.com/embed must be blocked when not allowed",
