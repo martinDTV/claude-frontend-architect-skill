@@ -31,8 +31,11 @@ usage: node browser-audit.mjs <url> --playwright <dir> [options]
   --axe <dir|file>        axe-core location when it is not next to playwright (default: same dir)
   --paths </a,/b>         page paths to visit under the url (default: the url itself)
   --checks <list>         axe,keyboard,dialogs,responsive,hydration,forms,visual (default: axe,keyboard,dialogs,responsive,hydration)
-  --viewports <list>      mobile,tablet,desktop (default all three; responsive and visual checks run per viewport)
-  --text-scale <list>     font-size scales for responsive checks (default 1,1.25)
+  --viewports <list>      presets mobile 375×667, tablet 768×1024, desktop 1280×800 (default all three), reflow 320×568
+                          (the WCAG 1.4.10 width, opt-in) or WIDTHxHEIGHT tokens such as 390x844; responsive, visual
+                          and target-size checks run per viewport
+  --text-scale <list>     root font-size scales for responsive checks (default 1,1.25; 2 is the 200% of WCAG 1.4.4).
+                          Only text sized in rem/em follows; a page that does not follow is reported as not scaled
   --allow-host <hosts>    comma-separated hosts allowed besides localhost/127.0.0.1 (the target host must be allowed)
   --interact              click non-destructive buttons to discover dialogs and menus
   --allow-submit          fill and submit forms (validation, pending state, double submission, confirmation)
@@ -50,12 +53,61 @@ usage: node browser-audit.mjs <url> --playwright <dir> [options]
   --json | --md           output format
   --fail-on <level>       exit 1 on: confirmed (default) | any | none
 
-Levels: confirmed = observed in the rendered page (an axe violation of impact critical/serious, a second request on
-a double click, focus left outside an open dialog); heuristic = observed but context may justify it; info = evidence.
-Passing axe is not WCAG conformance: reading order, meaningful alternatives, timing and cognitive criteria need a human.
+Levels: confirmed = observed in the rendered page (an axe violation of a WCAG-tagged rule with impact critical/serious
+whose exceptions axe evaluates, a second request on a double click, focus left outside an open dialog); heuristic =
+observed but context may justify it (axe best-practice rules, target-size, a hover-only menu); info = evidence.
+Every axe finding carries basis (wcag | best-practice), criteria and impact. The colour-contrast rule reports its
+coverage per page (visible text elements evaluated, skipped, recovered by a second pass): zero violations with
+nothing evaluated is not evidence. Passing axe is not WCAG conformance: reading order, meaningful alternatives,
+timing and cognitive criteria need a human.
 `
 
-const VIEWPORTS = { mobile: { width: 375, height: 667 }, tablet: { width: 768, height: 1024 }, desktop: { width: 1280, height: 800 } }
+// 1.4.1: reflow is the WCAG 1.4.10 width (320 CSS px); it is a preset, not a default, because it changes what
+// `horizontal-overflow` means (two-dimensional content such as data tables and images is excepted there).
+const VIEWPORTS = { mobile: { width: 375, height: 667 }, tablet: { width: 768, height: 1024 }, desktop: { width: 1280, height: 800 }, reflow: { width: 320, height: 568 } }
+
+/** `--viewports`: preset names and WIDTHxHEIGHT tokens, in the order given; unknown tokens are returned, not guessed. */
+export function parseViewports(spec) {
+  const sizes = {}
+  const unknown = []
+  for (const token of String(spec ?? 'mobile,tablet,desktop').split(',').map((s) => s.trim()).filter(Boolean)) {
+    if (VIEWPORTS[token]) sizes[token] = VIEWPORTS[token]
+    else {
+      const m = /^(\d{3,4})x(\d{3,4})$/i.exec(token)
+      if (m) sizes[token.toLowerCase()] = { width: Number(m[1]), height: Number(m[2]) }
+      else unknown.push(token)
+    }
+  }
+  return { sizes, names: Object.keys(sizes), unknown }
+}
+
+// Rules whose violation cannot be confirmed from axe alone because the success criterion has exceptions axe does
+// not evaluate; their findings stay heuristic and say why.
+const AXE_RULE_SCOPE = {
+  'target-size': { level: 'heuristic', severity: 'medium', note: 'axe-core applies the spacing and inline exceptions of SC 2.5.8; the equivalent-control, essential and user-agent-control exceptions are not evaluated automatically' },
+}
+const IMPACT_SEVERITY = { critical: 'critical', serious: 'high', moderate: 'medium', minor: 'low' }
+
+/** `wcag143` → `1.4.3`, `wcag2411` → `2.4.11`; conformance-level tags (`wcag2aa`) are not criteria. */
+export function formatCriterion(tag) {
+  const m = /^wcag(\d)(\d)(\d{1,2})$/.exec(String(tag))
+  return m ? `${m[1]}.${m[2]}.${m[3]}` : null
+}
+
+/**
+ * Grade of an axe violation. `confirmed` needs a WCAG-tagged rule of impact critical or serious whose exceptions
+ * axe evaluates; rules tagged best-practice only are heuristic/low whatever their impact (they are not failures of
+ * a success criterion); AXE_RULE_SCOPE lowers specific rules. Impact alone never decides.
+ */
+export function classifyAxeRule({ id, impact, tags = [] }) {
+  const basis = tags.includes('experimental') ? 'experimental' : tags.some((t) => /^wcag\d/.test(t)) ? 'wcag' : 'best-practice'
+  const criteria = tags.map(formatCriterion).filter(Boolean)
+  const high = impact === 'critical' || impact === 'serious'
+  const scope = AXE_RULE_SCOPE[id] ?? null
+  const level = scope?.level ?? (basis === 'wcag' && high ? 'confirmed' : 'heuristic')
+  const severity = scope?.severity ?? (basis === 'wcag' ? (IMPACT_SEVERITY[impact] ?? 'low') : 'low')
+  return { basis, criteria, level, severity, note: scope?.note ?? null }
+}
 const DESTRUCTIVE_RE = /\b(delete|remove|destroy|pay|purchase|buy|send|submit|confirm|archive|publish|reset|revoke|logout|sign out|borrar|eliminar|quitar|pagar|comprar|enviar|confirmar|archivar|publicar|cerrar sesi[oó]n)\b/i
 const FOCUSABLE = 'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
 
@@ -155,6 +207,150 @@ window.__fa = {
   name(el) {
     return (el.getAttribute('aria-label') || (el.getAttribute('aria-labelledby') && [...el.getAttribute('aria-labelledby').split(/\\s+/)].map((id) => document.getElementById(id)?.textContent || '').join(' ')) || el.textContent || el.getAttribute('title') || '').trim().slice(0, 60)
   },
+  rectKey(el) {
+    const r = el.getBoundingClientRect()
+    return [r.top, r.left, r.width, r.height].map((n) => Math.round(n)).join(',')
+  },
+  // 1.4.1: the denominator of the colour-contrast coverage. Elements that own visible text (letters or digits in a
+  // direct text node), inside the viewport, with a real box (visually-hidden patterns of 1px or clip excluded).
+  // \`excluded\` marks what axe leaves out by design: disabled or inert content and text clipped by a non-root
+  // ancestor with overflow hidden/clip; those are counted, not reported as gaps.
+  textCandidates() {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const out = []
+    const overlaps = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom)
+    for (const el of document.querySelectorAll('body *')) {
+      if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'OPTION', 'SVG', 'TITLE'].includes(el.tagName.toUpperCase())) continue
+      let own = ''
+      for (const n of el.childNodes) if (n.nodeType === 3) own += n.nodeValue
+      if (!/[\\p{L}\\p{N}]/u.test(own)) continue
+      if (!window.__fa.visible(el)) continue
+      const r = el.getBoundingClientRect()
+      if (r.width <= 1 || r.height <= 1) continue
+      if (r.bottom <= 0 || r.right <= 0 || r.top >= vh || r.left >= vw) continue
+      const s = getComputedStyle(el)
+      if (s.opacity === '0' || s.clip !== 'auto' || s.clipPath !== 'none' || parseFloat(s.fontSize) === 0) continue
+      let excluded = null
+      if (el.closest('[aria-disabled="true"], [inert], :disabled, fieldset:disabled')) excluded = 'disabled-or-inert'
+      else {
+        for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+          const as = getComputedStyle(a)
+          if (/hidden|clip/.test(as.overflow)) {
+            const b = a.getBoundingClientRect()
+            if (b.width < 2 || b.height < 2 || !overlaps(r, b)) { excluded = 'clipped-by-ancestor'; break }
+          }
+        }
+      }
+      out.push({ el, excluded })
+    }
+    return out
+  },
+  // Which candidates the colour-contrast rule evaluated (passes, violations or incomplete, via elementRef), and
+  // why the others were not: a root (html/body) with overflow: hidden whose box does not overlap the element is the
+  // axe-core visibility gate that fixed app shells and modal scroll locks trip; anything else is \`other\`.
+  contrastCoverage(results) {
+    const evaluated = new Set()
+    for (const list of [results.passes || [], results.violations || [], results.incomplete || []]) for (const rule of list) if (rule.id === 'color-contrast') for (const n of rule.nodes) if (n.element) evaluated.add(n.element)
+    const overlaps = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom)
+    const roots = [document.documentElement, document.body].filter((e) => e && getComputedStyle(e).overflow === 'hidden').map((e) => ({ e, box: e.getBoundingClientRect() }))
+    const candidates = window.__fa.textCandidates()
+    const out = { candidates: 0, evaluated: 0, excludedByDesign: 0, skippedByRootOverflow: 0, skippedOther: 0, skippedSamples: [], rootClippers: roots.map((r) => r.e.tagName.toLowerCase()), gate: null }
+    for (const c of candidates) {
+      if (c.excluded) { out.excludedByDesign++; continue }
+      out.candidates++
+      if (evaluated.has(c.el)) { out.evaluated++; continue }
+      const r = c.el.getBoundingClientRect()
+      const fixed = getComputedStyle(c.el).position === 'fixed'
+      const byRoot = !fixed && roots.some(({ box }) => box.width < 2 || box.height < 2 || !overlaps(r, box))
+      if (byRoot) out.skippedByRootOverflow++
+      else out.skippedOther++
+      if (out.skippedSamples.length < 5) out.skippedSamples.push({ selector: window.__fa.selector(c.el), reason: byRoot ? 'root-overflow-hidden' : 'other', text: (c.el.textContent || '').trim().slice(0, 40) })
+    }
+    const bodyBox = document.body.getBoundingClientRect()
+    const htmlBox = document.documentElement.getBoundingClientRect()
+    out.gate = {
+      bodyOverflow: getComputedStyle(document.body).overflow,
+      bodyOverflowInline: { value: document.body.style.getPropertyValue('overflow'), priority: document.body.style.getPropertyPriority('overflow') },
+      htmlOverflow: getComputedStyle(document.documentElement).overflow,
+      htmlOverflowInline: { value: document.documentElement.style.getPropertyValue('overflow'), priority: document.documentElement.style.getPropertyPriority('overflow') },
+      bodyBox: [Math.round(bodyBox.width), Math.round(bodyBox.height)],
+      htmlBox: [Math.round(htmlBox.width), Math.round(htmlBox.height)],
+      viewport: [window.innerWidth, window.innerHeight],
+      scroll: [window.scrollX, window.scrollY],
+    }
+    return out
+  },
+  // Second pass for the colour-contrast rule: overflow: clip on the roots that have overflow: hidden (clip keeps
+  // the content clipped and the viewport unscrollable, introduces no scrollbar and is not the value axe treats as
+  // clipping), run the rule, compare the geometry of every candidate, restore in finally, verify the restore.
+  async recoverContrast() {
+    const roots = [document.documentElement, document.body].filter((e) => e && getComputedStyle(e).overflow === 'hidden')
+    const cands = window.__fa.textCandidates().filter((c) => !c.excluded)
+    const geomBefore = cands.map((c) => window.__fa.rectKey(c.el))
+    const scrollBefore = { x: window.scrollX, y: window.scrollY, body: [document.body.scrollLeft, document.body.scrollTop], html: [document.documentElement.scrollLeft, document.documentElement.scrollTop] }
+    const snap = roots.map((e) => ({ e, value: e.style.getPropertyValue('overflow'), priority: e.style.getPropertyPriority('overflow'), cssText: e.style.cssText, computed: getComputedStyle(e).overflow }))
+    const out = { roots: roots.map((e) => e.tagName.toLowerCase()), comparable: false, moved: 0, scrollChanged: false, restored: false, restoreProblems: [], error: null, coverage: null, violations: [], incomplete: 0 }
+    try {
+      for (const s of snap) s.e.style.setProperty('overflow', 'clip', 'important')
+      void document.body.offsetHeight
+      const r = await window.axe.run(document, { runOnly: ['color-contrast'], resultTypes: ['violations', 'incomplete', 'passes'], elementRef: true })
+      const geomDuring = cands.map((c) => window.__fa.rectKey(c.el))
+      out.moved = geomBefore.filter((g, i) => g !== geomDuring[i]).length
+      out.scrollChanged = window.scrollX !== scrollBefore.x || window.scrollY !== scrollBefore.y
+      out.comparable = out.moved === 0 && !out.scrollChanged
+      out.coverage = window.__fa.contrastCoverage(r)
+      out.incomplete = r.incomplete.reduce((n, v) => n + v.nodes.length, 0)
+      out.violations = r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, helpUrl: v.helpUrl, tags: v.tags, count: v.nodes.length, nodes: v.nodes.map((n) => ({ target: n.target.join(' '), summary: (n.failureSummary || '').split('\\n')[0].slice(0, 120) })) }))
+    } catch (e) {
+      out.error = String((e && e.message) || e).slice(0, 200)
+    } finally {
+      for (const s of snap) {
+        if (s.value) s.e.style.setProperty('overflow', s.value, s.priority)
+        else s.e.style.removeProperty('overflow')
+      }
+      window.scrollTo(scrollBefore.x, scrollBefore.y)
+      document.body.scrollLeft = scrollBefore.body[0]
+      document.body.scrollTop = scrollBefore.body[1]
+      document.documentElement.scrollLeft = scrollBefore.html[0]
+      document.documentElement.scrollTop = scrollBefore.html[1]
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    void document.body.offsetHeight
+    for (const s of snap) {
+      if (s.e.style.cssText !== s.cssText) out.restoreProblems.push(s.e.tagName.toLowerCase() + ' inline style')
+      if (getComputedStyle(s.e).overflow !== s.computed) out.restoreProblems.push(s.e.tagName.toLowerCase() + ' computed overflow')
+    }
+    if (window.scrollX !== scrollBefore.x || window.scrollY !== scrollBefore.y) out.restoreProblems.push('scroll position')
+    const geomAfter = cands.map((c) => window.__fa.rectKey(c.el))
+    if (geomAfter.some((g, i) => g !== geomBefore[i])) out.restoreProblems.push('geometry')
+    out.restored = out.restoreProblems.length === 0
+    return out
+  },
+  // Text whose box (its own or the nearest ancestor with overflow hidden/clip, scrollers excluded) is smaller than
+  // its content: what a text scale cuts off.
+  clippedText() {
+    const out = []
+    for (const c of window.__fa.textCandidates()) {
+      if (c.excluded) continue
+      let box = c.el
+      while (box && box !== document.body) {
+        const bs = getComputedStyle(box)
+        if (/hidden|clip/.test(bs.overflowX + ' ' + bs.overflowY)) break
+        box = box.parentElement
+      }
+      if (!box || box === document.body) continue
+      const clippedX = box.scrollWidth > box.clientWidth + 1
+      const clippedY = box.scrollHeight > box.clientHeight + 1
+      if (!clippedX && !clippedY) continue
+      if (window.__fa.insideScroller(box) || box.hasAttribute('data-allow-overflow')) continue
+      const sel = window.__fa.selector(box)
+      if (out.some((o) => o.box === sel)) continue
+      out.push({ selector: window.__fa.selector(c.el), box: sel, ellipsis: getComputedStyle(box).textOverflow === 'ellipsis', axis: clippedY ? 'vertical' : 'horizontal' })
+      if (out.length >= 5) break
+    }
+    return out
+  },
 }`
 
 export async function run(argv) {
@@ -184,7 +380,9 @@ export async function run(argv) {
     }
   }
   if (checks.has('axe') && !tooling.axeSource) return failNow(`axe-core not found next to playwright in ${tooling.dir}; install it there or pass --axe <dir>`)
-  const viewports = String(args.viewports ?? 'mobile,tablet,desktop').split(',').map((s) => s.trim()).filter((v) => VIEWPORTS[v])
+  const parsedViewports = parseViewports(args.viewports)
+  const viewports = parsedViewports.names
+  const viewportSizes = parsedViewports.sizes
   const textScales = String(args['text-scale'] ?? '1,1.25').split(',').map(Number).filter((n) => n > 0)
   const maxTime = Number(args['max-time'] ?? 90) * 1000
   const maxPages = Number(args['max-pages'] ?? 10)
@@ -199,8 +397,9 @@ export async function run(argv) {
   const deadline = Date.now() + maxTime
   const timeLeft = () => Math.max(0, deadline - Date.now())
 
-  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, textScales, checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir, baselineDir } }
+  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, viewportSizes, textScales, textScaleMethod: 'root font-size (rem/em-sized text only; not browser zoom, not a WCAG 1.4.4 verdict)', checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir, baselineDir } }
   const emit = (f) => addFinding(report, { verification: 'browser', ...f })
+  if (parsedViewports.unknown.length) report.notes.push(`--viewports: ignored ${parsedViewports.unknown.join(', ')} (presets: ${Object.keys(VIEWPORTS).join(', ')}; or WIDTHxHEIGHT)`)
 
   const { chromium } = tooling.playwright
   let browser
@@ -210,7 +409,7 @@ export async function run(argv) {
     return failNow(`could not launch Chromium through ${tooling.dir}: ${String(error.message).split('\n')[0]}. Run: npx playwright install chromium (in that directory)`)
   }
   report.analysis.browser = { name: browser.browserType().name(), version: browser.version(), platform: process.platform, node: process.version }
-  const context = await browser.newContext({ viewport: VIEWPORTS[viewports[0]] ?? VIEWPORTS.desktop, reducedMotion: 'reduce', locale: 'en-US' })
+  const context = await browser.newContext({ viewport: viewportSizes[viewports[0]] ?? VIEWPORTS.desktop, reducedMotion: 'reduce', locale: 'en-US' })
   context.setDefaultTimeout(Math.min(10000, timeLeft() || 10000))
   // network allowlist: nothing leaves the authorised hosts
   await context.route('**/*', (route) => {
@@ -244,7 +443,8 @@ export async function run(argv) {
     }
     visited++
     const url = new URL(path, target.origin).href
-    const pageRecord = { url, title: null, status: null, checks: {}, console: [] }
+    const pageStarted = Date.now()
+    const pageRecord = { url, title: null, status: null, checks: {}, console: [], durationMs: null }
     report.data.pages.push(pageRecord)
     // text of masked elements (--mask) is removed from every evidence string of this page; the global emit is not used below
     let maskedTexts = []
@@ -284,16 +484,20 @@ export async function run(argv) {
         pageRecord.checks.authRequired = true
         continue
       }
+      const perViewport = checks.has('responsive') || checks.has('visual') || Boolean(args.screenshots)
       if (checks.has('hydration')) await checkHydration(page, url, path, consoleMessages, pageEmit, pageRecord)
       if (checks.has('axe')) await checkAxe(page, tooling.axeSource, path, pageEmit, pageRecord)
+      // target size depends on the viewport: per viewport when the viewport loop runs anyway, otherwise once here
+      if (checks.has('axe') && !perViewport) await checkTargets(page, tooling.axeSource, path, viewports[0] ?? 'desktop', pageEmit, pageRecord)
       if (checks.has('keyboard')) await checkKeyboard(page, path, pageEmit, pageRecord)
       if (checks.has('dialogs')) await checkDialogs(page, path, Boolean(args.interact), pageEmit, pageRecord)
       if (checks.has('forms')) await checkForms(page, context, url, path, pageEmit, pageRecord)
-      if (checks.has('responsive') || checks.has('visual') || args.screenshots) {
+      if (perViewport) {
         for (const vp of viewports) {
-          await page.setViewportSize(VIEWPORTS[vp])
+          await page.setViewportSize(viewportSizes[vp])
           await page.goto(url, { waitUntil: 'load' })
           await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {})
+          if (checks.has('axe')) await checkTargets(page, tooling.axeSource, path, vp, pageEmit, pageRecord)
           if (checks.has('responsive')) for (const scale of textScales) await checkResponsive(page, path, vp, scale, pageEmit, pageRecord)
           await page.evaluate(() => { document.documentElement.style.fontSize = '' })
           if (args.screenshots || checks.has('visual')) {
@@ -307,15 +511,24 @@ export async function run(argv) {
       pageEmit({ id: 'page-check-failed', level: 'info', severity: 'info', file: path, message: `could not complete the checks: ${pageRecord.error}`, fix: 'check the URL, the server and the time budget; the page was not audited' })
     } finally {
       pageRecord.console = consoleMessages.slice(0, 50)
+      pageRecord.durationMs = Date.now() - pageStarted
       await page.close()
     }
   }
   await browser.close()
+  collapseRepeated(report, ['axe-region'])
 
   const byId = {}
   for (const f of report.findings) byId[f.id] = (byId[f.id] ?? 0) + 1
-  report.summary = { pages: visited, findings: report.findings.length, confirmed: report.findings.filter((f) => f.level === 'confirmed').length, heuristic: report.findings.filter((f) => f.level === 'heuristic').length, byId, blockedRequests: report.data.blockedRequests.length, screenshots: report.data.screenshots.length, viewports: viewports.join(','), checks: [...checks].join(','), browser: `${report.analysis.browser.name} ${report.analysis.browser.version}`, axe: tooling.axeVersion ?? 'n/a', outDir }
-  report.notes.push('Browser evidence: every finding names a page, a viewport when relevant and a selector; text is truncated and masked elements are excluded. Passing axe-core is not WCAG conformance: reading order, meaningful alternatives, timing and cognitive criteria need human review.')
+  const axeRecords = report.data.pages.map((p) => p.checks.axe).filter((a) => a && a.coverage)
+  const sum = (key) => axeRecords.reduce((n, a) => n + (a.coverage[key] ?? 0), 0)
+  const axeSummary = axeRecords.length
+    ? { pages: axeRecords.length, textElements: sum('candidates'), evaluated: sum('evaluated'), skippedByRootOverflow: sum('skippedByRootOverflow'), skippedOther: sum('skippedOther'), pagesWithCoverageGap: axeRecords.filter((a) => a.coverage.skippedByRootOverflow > 0).length, pagesWithNothingEvaluated: axeRecords.filter((a) => a.coverage.candidates === 0 || a.coverage.evaluated === 0).length, secondPassViolations: axeRecords.reduce((n, a) => n + (a.recovery?.violations ?? 0), 0), denominator: 'visible elements with their own text inside the viewport at the initial viewport; disabled, inert and ancestor-clipped text excluded' }
+    : null
+  const timed = report.data.pages.filter((p) => typeof p.durationMs === 'number')
+  report.summary = { pages: visited, findings: report.findings.length, confirmed: report.findings.filter((f) => f.level === 'confirmed').length, heuristic: report.findings.filter((f) => f.level === 'heuristic').length, byId, blockedRequests: report.data.blockedRequests.length, screenshots: report.data.screenshots.length, viewports: viewports.join(','), checks: [...checks].join(','), browser: `${report.analysis.browser.name} ${report.analysis.browser.version}`, axe: tooling.axeVersion ?? 'n/a', outDir, msPerPage: timed.length ? Math.round(timed.reduce((n, p) => n + p.durationMs, 0) / timed.length) : null, axeCoverage: axeSummary }
+  if (axeSummary) report.notes.push(`axe-core colour contrast: ${axeSummary.evaluated} of ${axeSummary.textElements} visible text elements evaluated across ${axeSummary.pages} page(s)${axeSummary.pagesWithCoverageGap ? `; ${axeSummary.pagesWithCoverageGap} page(s) had a coverage gap caused by a root overflow: hidden (axe-coverage-gap)` : ''}${axeSummary.pagesWithNothingEvaluated ? `; ${axeSummary.pagesWithNothingEvaluated} page(s) had nothing evaluated: zero violations there is not evidence` : ''}. Denominator: ${axeSummary.denominator}.`)
+  report.notes.push('Browser evidence: every finding names a page, a viewport when relevant and a selector; text is truncated and masked elements are excluded. axe findings carry basis (wcag or best-practice), criteria and impact; best-practice rules are heuristic, not WCAG failures. Passing axe-core is not WCAG conformance: reading order, meaningful alternatives, timing and cognitive criteria need human review.')
   if (report.data.blockedRequests.length) report.notes.push(`${report.data.blockedRequests.length} request(s) to hosts outside the allowlist were blocked (see data.blockedRequests).`)
   writeFileSync(join(outDir, 'browser-audit.json'), JSON.stringify(report, null, 2))
   report.notes.push(`evidence written to ${outDir}`)
@@ -356,22 +569,116 @@ async function checkHydration(page, url, path, consoleMessages, emit, record) {
   }
 }
 
+async function ensureAxe(page, axeSource) {
+  const present = await page.evaluate(() => typeof window.axe !== 'undefined' && typeof window.axe.run === 'function').catch(() => false)
+  if (!present) await page.addScriptTag({ content: axeSource })
+}
+
+/** One finding per axe rule, graded by classifyAxeRule; `pass` 2 marks results of the contrast recovery pass. */
+function emitAxeViolation(emit, path, v, { pass = 1, comparable = true, where = null } = {}) {
+  const cls = classifyAxeRule(v)
+  const wcagTags = v.tags.filter((t) => /^wcag\d+(a+)?$/.test(t))
+  const basisText = cls.basis === 'wcag' ? `WCAG ${cls.criteria.join(', ') || wcagTags.join(', ')}${cls.criteria.length && wcagTags.length ? ` (${wcagTags.join(', ')})` : ''}` : cls.basis === 'best-practice' ? 'axe best practice, not a WCAG criterion' : 'experimental rule'
+  const count = v.count ?? v.nodes.length
+  const prefix = `${where ? `${where}: ` : ''}${pass === 2 ? `second pass (root overflow neutralised${comparable ? '' : ', layout changed: not comparable'}): ` : ''}`
+  const level = pass === 2 && !comparable ? 'heuristic' : cls.level
+  emit({ id: `axe-${v.id}`, level, severity: cls.severity, file: path, message: `${prefix}${v.help} (${count} element${count === 1 ? '' : 's'}, impact ${v.impact}; ${basisText})${cls.note ? `; ${cls.note}` : ''}`, evidence: v.nodes.slice(0, 5).map((n) => n.target).join(' | '), fix: `${v.nodes[0]?.summary ?? ''} ${v.helpUrl}`.trim(), rule: v.id, basis: cls.basis, criteria: cls.criteria, impact: v.impact, pass, ...(where ? { viewport: where } : {}) })
+}
+
+function emitIncomplete(emit, path, incomplete, where = null) {
+  if (!incomplete.length) return
+  const total = incomplete.reduce((n, i) => n + i.count, 0)
+  emit({ id: 'axe-needs-review', level: 'info', severity: 'info', file: path, message: `${where ? `${where}: ` : ''}axe could not decide ${incomplete.length} rule(s) on ${total} element(s): ${incomplete.map((i) => `${i.id} (${i.count}${i.samples?.length ? `: ${i.samples.join(', ')}` : ''})`).join('; ')}`, fix: 'review these manually; they are neither passes nor violations and never count as coverage', ...(where ? { viewport: where } : {}) })
+}
+
+// 1.4.1: the axe check reports what it evaluated, not only what it found. The colour-contrast rule is the one
+// users read as "contrast is fine": its coverage (visible text elements evaluated versus skipped) is measured, the
+// axe-core visibility gate on a root overflow: hidden is diagnosed, and a second pass with the gate neutralised
+// recovers the evaluation when it demonstrably adds coverage. The page is restored in finally and the restore is
+// verified; the visual check never runs on a mutated page because this returns before the viewport loop.
 async function checkAxe(page, axeSource, path, emit, record) {
-  await page.addScriptTag({ content: axeSource })
+  await ensureAxe(page, axeSource)
+  const started = Date.now()
   const results = await page.evaluate(async () => {
-    const r = await window.axe.run(document, { resultTypes: ['violations', 'incomplete'], rules: { region: { enabled: false } } })
+    const r = await window.axe.run(document, { resultTypes: ['violations', 'incomplete', 'passes'], elementRef: true })
+    const node = (n) => ({ target: n.target.join(' '), summary: (n.failureSummary || '').split('\n')[0].slice(0, 120), html: (n.html || '').replace(/\s+/g, ' ').slice(0, 100) })
     return {
-      violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, helpUrl: v.helpUrl, tags: v.tags.filter((t) => /^wcag|best-practice/.test(t)), nodes: v.nodes.slice(0, 5).map((n) => ({ target: n.target.join(' '), summary: (n.failureSummary || '').split('\n')[0].slice(0, 120) })), count: v.nodes.length })),
-      incomplete: r.incomplete.map((v) => ({ id: v.id, count: v.nodes.length })),
+      violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, helpUrl: v.helpUrl, tags: v.tags, nodes: v.nodes.slice(0, 5).map(node), count: v.nodes.length, targets: v.id === 'color-contrast' ? v.nodes.map((n) => n.target.join(' ')) : undefined })),
+      incomplete: r.incomplete.map((v) => ({ id: v.id, count: v.nodes.length, samples: v.nodes.slice(0, 3).map((n) => n.target.join(' ')) })),
+      rulesRun: r.passes.length + r.violations.length + r.incomplete.length + (r.inapplicable ? r.inapplicable.length : 0),
+      coverage: window.__fa.contrastCoverage(r),
     }
   })
-  record.checks.axe = { violations: results.violations.length, incomplete: results.incomplete.length }
-  for (const v of results.violations) {
-    const level = v.impact === 'critical' || v.impact === 'serious' ? 'confirmed' : 'heuristic'
-    const severity = v.impact === 'critical' ? 'critical' : v.impact === 'serious' ? 'high' : v.impact === 'moderate' ? 'medium' : 'low'
-    emit({ id: `axe-${v.id}`, level, severity, file: path, message: `${v.help} (${v.count} element${v.count === 1 ? '' : 's'}, impact ${v.impact}; ${v.tags.join(', ')})`, evidence: v.nodes.map((n) => n.target).join(' | '), fix: `${v.nodes[0]?.summary ?? ''} ${v.helpUrl}`.trim() })
+  const cov = results.coverage
+  let recovery = { attempted: false, reason: cov.skippedByRootOverflow > 0 ? null : cov.candidates === 0 ? 'nothing to evaluate' : 'no visible text element was skipped because of a root overflow: hidden' }
+  if (cov.skippedByRootOverflow > 0) {
+    recovery = await page.evaluate(() => window.__fa.recoverContrast())
+    recovery.attempted = true
   }
-  if (results.incomplete.length) emit({ id: 'axe-needs-review', level: 'info', severity: 'info', file: path, message: `axe could not decide ${results.incomplete.length} rule(s) automatically: ${results.incomplete.map((i) => `${i.id} (${i.count})`).join(', ')}`, fix: 'review these manually; they are neither passes nor violations' })
+  const pass1Targets = new Set(results.violations.find((v) => v.id === 'color-contrast')?.targets ?? [])
+  const recovered = recovery.attempted && !recovery.error ? recovery.violations.map((v) => ({ ...v, nodes: v.nodes.filter((n) => !pass1Targets.has(n.target)) })).map((v) => ({ ...v, count: v.nodes.length })).filter((v) => v.count > 0) : []
+  record.checks.axe = {
+    violations: results.violations.length,
+    incomplete: results.incomplete.length,
+    rulesRun: results.rulesRun,
+    ms: Date.now() - started,
+    coverage: { rule: 'color-contrast', candidates: cov.candidates, evaluated: cov.evaluated, excludedByDesign: cov.excludedByDesign, skippedByRootOverflow: cov.skippedByRootOverflow, skippedOther: cov.skippedOther, ratio: cov.candidates ? Number((cov.evaluated / cov.candidates).toFixed(3)) : null, denominator: 'visible elements with their own text inside the viewport; disabled, inert and ancestor-clipped text excluded', skippedSamples: cov.skippedSamples, rootClippers: cov.rootClippers, gate: cov.gate },
+    recovery: recovery.attempted
+      ? { attempted: true, method: 'overflow: clip !important on the roots with overflow: hidden, restored in finally', roots: recovery.roots, comparable: recovery.comparable, moved: recovery.moved, scrollChanged: recovery.scrollChanged, restored: recovery.restored, restoreProblems: recovery.restoreProblems, error: recovery.error, evaluated: recovery.coverage?.evaluated ?? null, candidates: recovery.coverage?.candidates ?? null, violations: recovered.reduce((n, v) => n + v.count, 0), incomplete: recovery.incomplete }
+      : { attempted: false, reason: recovery.reason },
+  }
+  for (const v of results.violations) emitAxeViolation(emit, path, v)
+  emitIncomplete(emit, path, results.incomplete)
+  if (cov.candidates === 0) emit({ id: 'axe-no-evaluable-content', level: 'info', severity: 'info', file: path, message: 'no visible text element was available for the colour-contrast rule on this page (zero contrast violations here is not evidence of anything)', fix: 'audit a state of the page that shows content, or accept that contrast was not evaluated here' })
+  if (cov.skippedByRootOverflow > 0) {
+    const roots = cov.rootClippers.join(' and ')
+    const box = cov.rootClippers.includes('body') ? cov.gate.bodyBox : cov.gate.htmlBox
+    const tail = !recovery.attempted ? '' : recovery.error ? `; the second pass failed (${recovery.error})` : recovery.comparable ? `; a second pass with overflow: clip evaluated ${recovery.coverage.evaluated} of ${recovery.coverage.candidates} and found ${recovered.reduce((n, v) => n + v.count, 0)} new violation(s), reported as pass 2` : `; a second pass moved ${recovery.moved} element(s), so its results are reported as heuristic`
+    emit({ id: 'axe-coverage-gap', level: 'heuristic', severity: 'medium', file: path, message: `axe-core evaluated colour contrast on ${cov.evaluated} of ${cov.candidates} visible text elements; ${cov.skippedByRootOverflow} were skipped because ${roots} has overflow: hidden with a ${box[0]}×${box[1]} px box, which axe-core treats as a clipping ancestor (fixed app shells and modal scroll locks do this)${cov.skippedOther ? `; ${cov.skippedOther} more were skipped for reasons this tool does not diagnose` : ''}${tail}`, evidence: cov.skippedSamples.map((s) => s.selector).join(' | '), fix: 'give html and body a real height (height: 100% or min-height: 100dvh) or lock scrolling with overflow: clip instead of hidden; until then a clean axe contrast result on this page is not evidence', basis: 'coverage', pass: 1 })
+  } else if (cov.skippedOther > 0 && cov.evaluated === 0 && cov.candidates > 0) emit({ id: 'axe-coverage-gap', level: 'heuristic', severity: 'low', file: path, message: `axe-core evaluated colour contrast on none of the ${cov.candidates} visible text elements, for a reason this tool does not diagnose (sample: ${cov.skippedSamples.map((s) => s.selector).slice(0, 3).join(', ')})`, evidence: cov.skippedSamples.map((s) => s.selector).join(' | '), fix: 'treat the contrast result of this page as not evaluated and check it manually', basis: 'coverage', pass: 1 })
+  if (recovery.attempted && !recovery.error) {
+    if (!recovery.comparable) emit({ id: 'axe-recovery-not-comparable', level: 'info', severity: 'low', file: path, message: `${recovery.moved} of ${cov.candidates} text elements moved${recovery.scrollChanged ? ' and the scroll position changed' : ''} when the root overflow was neutralised for the second pass; its findings are reported as heuristic, not as equivalent to the original layout`, fix: 'fix the root overflow in the page and audit again; the second-pass findings still deserve a look', basis: 'coverage', pass: 2 })
+    if (!recovery.restored) emit({ id: 'axe-recovery-restore-failed', level: 'info', severity: 'low', file: path, message: `after the second pass the page was not restored exactly (${recovery.restoreProblems.join(', ')}); later checks on this page saw that state`, fix: 'report this with the page; the tool restores inline styles and scroll positions and expected them to match', basis: 'coverage', pass: 2 })
+    for (const v of recovered) emitAxeViolation(emit, path, v, { pass: 2, comparable: recovery.comparable })
+  }
+}
+
+// SC 2.5.8 (WCAG 2.2 AA): axe's target-size rule is off by default and depends on the viewport, so it runs per
+// viewport at text scale 1 whenever the viewport loop runs (responsive, visual, screenshots) and once at the
+// initial viewport when only axe was requested (no extra page loads: the axe-only cost stays one rule run). Its violations stay heuristic (AXE_RULE_SCOPE): axe applies the spacing and inline
+// exceptions, not the equivalent-control, essential or user-agent ones. The raw counts below apply no exception
+// and separate the 24 px minimum from the 44 px recommendation (SC 2.5.5 AAA and platform guidelines).
+async function checkTargets(page, axeSource, path, viewport, emit, record) {
+  await ensureAxe(page, axeSource)
+  const r = await page.evaluate(async () => {
+    const res = await window.axe.run(document, { runOnly: ['target-size'], rules: { 'target-size': { enabled: true } }, resultTypes: ['violations', 'incomplete'] })
+    const map = (v) => ({ id: v.id, impact: v.impact, help: v.help, helpUrl: v.helpUrl, tags: v.tags, count: v.nodes.length, nodes: v.nodes.slice(0, 5).map((n) => ({ target: n.target.join(' '), summary: ((n.any && n.any[0] && n.any[0].message) || n.failureSummary || '').split('\n')[0].slice(0, 120) })) })
+    const controls = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [role=checkbox], [role=radio], [role=switch], [role=tab], [role=menuitem]')].filter((e) => window.__fa.visible(e))
+    const side = (e) => { const b = e.getBoundingClientRect(); return Math.min(b.width, b.height) }
+    return { violations: res.violations.map(map), incomplete: res.incomplete.map((v) => ({ id: v.id, count: v.nodes.length, samples: v.nodes.slice(0, 3).map((n) => n.target.join(' ')) })), controls: controls.length, under24: controls.filter((e) => side(e) < 24).length, under44: controls.filter((e) => side(e) < 44).length }
+  })
+  record.checks[`targets:${viewport}`] = { controls: r.controls, under24Raw: r.under24, under44Raw: r.under44, violations: r.violations.reduce((n, v) => n + v.count, 0), incomplete: r.incomplete.reduce((n, v) => n + v.count, 0), note: 'under24Raw/under44Raw count bounding boxes with no exception applied (44 is the AAA/platform recommendation, not SC 2.5.8); violations are axe target-size results with the spacing and inline exceptions applied' }
+  for (const v of r.violations) emitAxeViolation(emit, path, v, { where: viewport })
+  emitIncomplete(emit, path, r.incomplete, viewport)
+}
+
+/** Findings with the same id and evidence on several pages are one finding of the shared layout (scope: shell). */
+function collapseRepeated(report, ids) {
+  const groups = new Map()
+  for (const f of report.findings) {
+    if (!ids.includes(f.id)) continue
+    const key = `${f.id}|${f.evidence ?? ''}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(f)
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const [first, ...rest] = group
+    first.pages = group.map((g) => g.file)
+    first.scope = 'shell'
+    first.message += `; identical on ${group.length} pages (${first.pages.join(', ')}): most likely the shared layout`
+    for (const r of rest) report.findings.splice(report.findings.indexOf(r), 1)
+  }
 }
 
 async function checkKeyboard(page, path, emit, record) {
@@ -592,10 +899,23 @@ async function checkForms(page, context, url, path, emit, record) {
   }
 }
 
+// Elements the reflow criterion (1.4.10) excepts when they need two dimensions: data tables, images, maps,
+// diagrams, video, games, presentations, toolbars. An overflow made only of these is a lead, not a defect.
+const REFLOW_EXCEPTION_SELECTOR = 'table, pre, img, svg, video, canvas, iframe, object, embed, [role="toolbar"], [role="grid"], [role="img"], [role="application"]'
+
 async function checkResponsive(page, path, viewport, scale, emit, record) {
-  await page.evaluate((s) => { document.documentElement.style.fontSize = s === 1 ? '' : `${s * 100}%` }, scale)
+  // apply the scale and measure whether the page's text follows it (px-sized text does not; that is not 1.4.4)
+  const scaled = await page.evaluate((s) => {
+    const els = window.__fa.textCandidates().filter((c) => !c.excluded).slice(0, 80).map((c) => c.el)
+    const before = els.map((e) => parseFloat(getComputedStyle(e).fontSize))
+    document.documentElement.style.fontSize = s === 1 ? '' : `${s * 100}%`
+    void document.body.offsetHeight
+    const after = els.map((e) => parseFloat(getComputedStyle(e).fontSize))
+    const grew = before.filter((b, i) => after[i] > b * 1.05).length
+    return { sampled: els.length, grew }
+  }, scale)
   await page.waitForTimeout(100)
-  const r = await page.evaluate(() => {
+  const r = await page.evaluate(({ s, exceptionSelector }) => {
     const vw = document.documentElement.clientWidth
     const vh = window.innerHeight
     const overflow = document.documentElement.scrollWidth > vw + 1
@@ -610,9 +930,10 @@ async function checkResponsive(page, path, viewport, scale, emit, record) {
           continue
         }
         const sel = window.__fa.selector(el)
-        if (!culprits.some((c) => sel.startsWith(c.selector))) culprits.push({ selector: sel, tag: el.tagName.toLowerCase(), overflowPx: Math.round(rect.right - vw) })
+        if (!culprits.some((c) => sel.startsWith(c.selector))) culprits.push({ selector: sel, tag: el.tagName.toLowerCase(), overflowPx: Math.round(rect.right - vw), reflowException: Boolean(el.closest(exceptionSelector)) })
       }
     }
+    const clipped = s > 1 ? window.__fa.clippedText() : window.__fa.clippedText().map((c) => c.box)
     const controls = [...document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea')].filter((e) => window.__fa.visible(e))
     const cut = controls.filter((e) => e.getBoundingClientRect().right > vw + 1 && !window.__fa.insideScroller(e)).map((e) => window.__fa.selector(e))
     const covered = []
@@ -631,11 +952,21 @@ async function checkResponsive(page, path, viewport, scale, emit, record) {
     const dialogs = [...document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"]')].filter((e) => window.__fa.visible(e) && e.getBoundingClientRect().height > vh + 1).map((e) => window.__fa.selector(e))
     const navLinks = [...document.querySelectorAll('nav a[href]')]
     const hiddenNav = navLinks.length && navLinks.every((a) => !window.__fa.visible(a)) && !document.querySelector('nav button[aria-expanded], button[aria-controls]')
-    return { vw, overflow, culprits: culprits.slice(0, 8), scrollers, cut: cut.slice(0, 8), covered: covered.slice(0, 8), dialogs, hiddenNav }
-  })
-  record.checks[`responsive:${viewport}@${scale}`] = { overflow: r.overflow, culprits: r.culprits.length, cut: r.cut.length, covered: r.covered.length, scrollers: r.scrollers.length }
+    return { vw, overflow, culprits: culprits.slice(0, 8), scrollers, cut: cut.slice(0, 8), covered: covered.slice(0, 8), dialogs, hiddenNav, clipped }
+  }, { s: scale, exceptionSelector: REFLOW_EXCEPTION_SELECTOR })
+  const textScaleApplied = scale === 1 ? null : scaled.sampled ? Number((scaled.grew / scaled.sampled).toFixed(2)) : null
+  // text clipped at scale 1 is a layout fact of the page, not an effect of the scale: subtract it
+  const clippedAtOne = scale === 1 ? r.clipped : record.checks[`responsive:${viewport}@1`]?.clippedBoxes ?? null
+  const newlyClipped = scale === 1 ? [] : r.clipped.filter((c) => !(clippedAtOne ?? []).includes(c.box))
+  record.checks[`responsive:${viewport}@${scale}`] = { overflow: r.overflow, culprits: r.culprits.length, cut: r.cut.length, covered: r.covered.length, scrollers: r.scrollers.length, textScaleApplied, textSampled: scaled.sampled, clipped: scale === 1 ? r.clipped.length : newlyClipped.length, ...(scale === 1 ? { clippedBoxes: r.clipped } : {}) }
   const where = `${viewport} (${r.vw}px${scale !== 1 ? `, text ${scale * 100}%` : ''})`
-  if (r.overflow && r.culprits.length) emit({ id: 'horizontal-overflow', level: 'confirmed', severity: 'medium', file: path, message: `${where}: the page scrolls horizontally; outside any intentional scroller: ${r.culprits.map((c) => `${c.selector} (+${c.overflowPx}px)`).join(', ')}`, evidence: `viewport ${viewport}; scale ${scale}`, fix: 'constrain widths (max-width: 100%, min-width: 0 in flex/grid children), wrap wide tables in a labelled scroll region, or re-flow the layout at this breakpoint' })
+  const reflow = r.vw <= 320
+  if (r.overflow && r.culprits.length) {
+    const onlyExceptions = reflow && r.culprits.every((c) => c.reflowException)
+    emit({ id: 'horizontal-overflow', level: onlyExceptions ? 'heuristic' : 'confirmed', severity: 'medium', file: path, message: `${where}: the page scrolls horizontally; outside any intentional scroller: ${r.culprits.map((c) => `${c.selector} (+${c.overflowPx}px)`).join(', ')}${reflow ? onlyExceptions ? '; at 320 px only two-dimensional content overflows (data tables, images, diagrams, toolbars), which SC 1.4.10 excepts when the rest of the page reflows: verify that it is such content and that it scrolls in a labelled region' : '; at 320 px this is the SC 1.4.10 reflow width' : ''}`, evidence: `viewport ${viewport}; scale ${scale}`, fix: 'constrain widths (max-width: 100%, min-width: 0 in flex/grid children), wrap wide tables in a labelled scroll region, or re-flow the layout at this breakpoint', ...(reflow ? { basis: 'wcag', criteria: ['1.4.10'] } : {}) })
+  }
+  if (scale !== 1 && textScaleApplied !== null && textScaleApplied < 0.5) emit({ id: 'text-scale-not-applied', level: 'info', severity: 'low', file: path, message: `${where}: only ${Math.round(textScaleApplied * 100)}% of ${scaled.sampled} sampled text elements grew when the root font-size was scaled (text sized in px, or a stylesheet that sets the root size itself); this scale did not exercise WCAG 1.4.4 on this page`, fix: 'size text in rem/em so user font-size settings apply, and test 200% with browser zoom (or a viewport of a quarter of the width) in addition to this check' })
+  if (scale !== 1 && newlyClipped.length) emit({ id: 'text-clipped-at-scale', level: 'heuristic', severity: 'medium', file: path, message: `${where}: text is cut off by a fixed-size box that was not clipping at scale 1: ${newlyClipped.map((c) => `${c.box} (${c.axis}${c.ellipsis ? ', ellipsis' : ''})`).join(', ')}`, evidence: newlyClipped.map((c) => c.selector).join(' | '), fix: 'let the box grow with its content (min-height instead of height, no fixed line counts) or expose the full text another way; WCAG 1.4.4 requires no loss of content or functionality at 200%' })
   if (r.cut.length) emit({ id: 'control-cut-off', level: 'confirmed', severity: 'medium', file: path, message: `${where}: control(s) extend beyond the viewport: ${r.cut.join(', ')}`, fix: 'keep interactive controls inside the viewport at every breakpoint' })
   for (const c of r.covered.slice(0, 3)) emit({ id: 'control-covered', level: 'confirmed', severity: 'medium', file: path, message: `${where}: "${c.name || c.control}" is covered by ${c.by} when scrolled into view`, evidence: c.control, fix: 'add scroll-padding/scroll-margin for fixed bars, or make the bar part of the flow at this breakpoint' })
   if (r.dialogs.length) emit({ id: 'dialog-exceeds-viewport', level: 'confirmed', severity: 'medium', file: path, message: `${where}: dialog taller than the viewport (${r.dialogs.join(', ')})`, fix: 'max-height with internal scrolling; keep the dialog actions reachable' })
@@ -659,7 +990,7 @@ async function screenshot(page, masks, outDir, path, viewport, report) {
 
 async function compareVisual(shot, path, viewport, args, report, emit, outDir) {
   const baselineDir = report.analysis.baselineDir
-  const meta = { browser: report.analysis.browser, playwright: report.analysis.playwright, viewport: VIEWPORTS[viewport], deviceScaleFactor: 1, reducedMotion: 'reduce', fonts: 'document.fonts.ready awaited', animations: 'disabled', generatedAt: new Date().toISOString() }
+  const meta = { browser: report.analysis.browser, playwright: report.analysis.playwright, viewport: report.analysis.viewportSizes?.[viewport] ?? VIEWPORTS[viewport], deviceScaleFactor: 1, reducedMotion: 'reduce', fonts: 'document.fonts.ready awaited', animations: 'disabled', generatedAt: new Date().toISOString() }
   const baseFile = join(baselineDir, `${shot.name}.png`)
   const metaFile = join(baselineDir, `${shot.name}.json`)
   const accepted = existsSync(join(baselineDir, 'accepted.json')) ? JSON.parse(readFileSync(join(baselineDir, 'accepted.json'), 'utf8')) : {}
