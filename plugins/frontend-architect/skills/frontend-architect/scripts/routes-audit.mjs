@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path'
 import { buildGraph } from './lib/graph.mjs'
 import { detectProject, excludeArg, loadConfig } from './lib/project.mjs'
 import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, isMainModule, parseArgs, usage } from './lib/report.mjs'
-import { lineOf } from './lib/source.mjs'
+import { lineOf, stripComments } from './lib/source.mjs'
 
 const HELP = `
 routes-audit — routes, guards, Server Actions and handlers.
@@ -23,6 +23,9 @@ usage: node routes-audit.mjs <project-root> [options]
 
 Findings:
   page-without-guard            Nuxt page with no page middleware and no global auth middleware (heuristic)
+  redirect-page                 Nuxt page that only redirects (definePageMeta redirect or a navigateTo-only script); info,
+                                medium when the destination has no guard either
+  unknown-middleware            a page names a middleware that does not exist in middleware/ (confirmed)
   hardcoded-role-check          literal role comparisons in UI code (heuristic)
   client-boundary-too-high      'use client' at the top of a Next.js page or layout (confirmed)
   server-action-without-auth    exported Server Action with no visible session/authorization call (heuristic, high)
@@ -47,19 +50,82 @@ function nextRoutePath(relFromApp) {
   return path === '/' ? '/' : path.replace(/\/$/, '')
 }
 
-function parsePageMeta(code) {
+/**
+ * definePageMeta({...}) read from the TypeScript AST when the parser is available (comments, nested
+ * arrays, identifiers and spreads handled), otherwise from the comment-stripped script with regexes.
+ * Returns { middleware: [names], middlewareUnknown (identifiers/spreads/functions), layout, auth, redirect, parser }.
+ */
+function parsePageMeta(info, ts) {
+  const code = stripComments(info.code)
+  if (ts && info.semantic) {
+    try {
+      const meta = parsePageMetaAst(ts, info)
+      if (meta) return meta
+    } catch {
+      /* fall back to the lexical parser */
+    }
+  }
   const block = /definePageMeta\s*\(\s*\{([\s\S]*?)\}\s*\)/.exec(code)?.[1]
   if (block === undefined) return null
-  const meta = { middleware: [], layout: null, auth: null, raw: block.trim() }
+  const meta = { middleware: [], middlewareUnknown: [], layout: null, auth: null, redirect: null, raw: block.trim(), parser: 'lexical' }
   const mw = /\bmiddleware\s*:\s*(\[[^\]]*\]|['"][^'"]+['"]|[\w$]+)/.exec(block)
   if (mw) {
     const names = [...mw[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1])
-    meta.middleware = names.length ? names : [mw[1].startsWith('[') ? 'inline' : mw[1]]
+    meta.middleware = names
+    if (!names.length) meta.middlewareUnknown = [mw[1].startsWith('[') ? 'inline' : mw[1]]
   }
   meta.layout = /\blayout\s*:\s*['"]([^'"]+)['"]/.exec(block)?.[1] ?? (/\blayout\s*:\s*false/.test(block) ? 'false' : null)
   const auth = /\b(?:auth|requiresAuth|public)\s*:\s*(true|false|\{[^}]*\})/.exec(block)
   if (auth) meta.auth = auth[0]
+  meta.redirect = /\bredirect\s*:\s*['"]([^'"]+)['"]/.exec(block)?.[1] ?? null
   return meta
+}
+
+function parsePageMetaAst(ts, info) {
+  const lang = info.semantic.sfc?.lang ?? 'ts'
+  const sf = ts.createSourceFile(`${info.rel}.${lang === 'ts' ? 'ts' : 'js'}`, info.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  let call = null
+  const find = (n) => {
+    if (call) return
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'definePageMeta') call = n
+    else ts.forEachChild(n, find)
+  }
+  find(sf)
+  if (!call) return null
+  const obj = call.arguments[0]
+  if (!obj || !ts.isObjectLiteralExpression(obj)) return { middleware: [], middlewareUnknown: ['non-literal'], layout: null, auth: null, redirect: null, raw: obj ? obj.getText(sf).slice(0, 120) : '', parser: 'ast' }
+  const meta = { middleware: [], middlewareUnknown: [], layout: null, auth: null, redirect: null, raw: obj.getText(sf).slice(0, 400), parser: 'ast' }
+  const literal = (n) => (n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) ? n.text : null)
+  for (const prop of obj.properties) {
+    const key = prop.name && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)) ? prop.name.text : null
+    if (!key) continue
+    const value = ts.isPropertyAssignment(prop) ? prop.initializer : ts.isShorthandPropertyAssignment(prop) ? prop.name : null
+    if (key === 'middleware') {
+      const items = value && ts.isArrayLiteralExpression(value) ? value.elements : value ? [value] : []
+      for (const el of items) {
+        const name = literal(el)
+        if (name) meta.middleware.push(name)
+        else if (ts.isArrowFunction(el) || ts.isFunctionExpression(el)) meta.middlewareUnknown.push('inline')
+        else meta.middlewareUnknown.push(el.getText(sf).slice(0, 40))
+      }
+    } else if (key === 'layout') meta.layout = literal(value) ?? (value && value.kind === ts.SyntaxKind.FalseKeyword ? 'false' : null)
+    else if (key === 'redirect') meta.redirect = literal(value) ?? (value ? '(dynamic)' : null)
+    else if (['auth', 'requiresAuth', 'public'].includes(key)) meta.auth = `${key}: ${value ? value.getText(sf).slice(0, 60) : ''}`
+  }
+  return meta
+}
+
+/** A page whose script does nothing but redirect (navigateTo / router.replace / router.push) and has no real template. */
+function redirectOnlyTarget(info) {
+  const code = stripComments(info.code).trim()
+  if (!code) return null
+  const statements = code.split('\n').map((l) => l.trim()).filter((l) => l && !/^definePageMeta\s*\(/.test(l) && !/^(?:import\s|const\s+router\s*=\s*useRouter\(\)|const\s+route\s*=\s*useRoute\(\))/.test(l) && !/^[})\],;]*$/.test(l))
+  if (!statements.length) return null
+  const re = /^(?:return\s+|await\s+)?(?:navigateTo|router\.(?:replace|push))\s*\(\s*(['"])([^'"]+)\1/
+  const m = re.exec(statements[0])
+  if (!m || statements.length > 1) return null
+  const templateEmpty = !info.template || !info.template.replace(/<!--[\s\S]*?-->/g, '').replace(/<\/?template[^>]*>/g, '').trim()
+  return templateEmpty ? m[2] : null
 }
 
 function functionBody(stripped, startIndex) {
@@ -98,6 +164,7 @@ export function run(argv) {
   }
   const infos = [...graph.files.values()]
   report.analysis = graph.analysis
+  const tsApi = graph.host?.ts ?? null
   const hasDirective = (info, name) => (info.semantic ? info.semantic.directives.includes(name) : new RegExp(`^\\s*['"]${name}['"]`).test(info.code))
   const sections = []
 
@@ -119,24 +186,43 @@ export function run(argv) {
     const globalAuth = globalMiddleware.some((g) => g.authLike) || addRouteGlobal
 
     const pages = []
-    for (const info of infos) {
-      if (!info.rel.startsWith(pagesDir) || !info.rel.endsWith('.vue')) continue
+    const pageInfos = infos.filter((i) => i.rel.startsWith(pagesDir) && i.rel.endsWith('.vue'))
+    const pathOf = new Map(pageInfos.map((i) => [nuxtRoutePath(i.rel.slice(pagesDir.length)), i.rel]))
+    const metaByFile = new Map()
+    for (const info of pageInfos) metaByFile.set(info.rel, parsePageMeta(info, tsApi))
+    const guardedFile = (rel) => {
+      const m = metaByFile.get(rel)
+      return Boolean(m && (m.middleware.length || m.middlewareUnknown.length || (m.auth && !/false|public\s*:\s*true/.test(m.auth))))
+    }
+    for (const info of pageInfos) {
       const fromPages = info.rel.slice(pagesDir.length)
       const path = nuxtRoutePath(fromPages)
-      const meta = parsePageMeta(info.code)
+      const meta = metaByFile.get(info.rel)
       const isPublic = config.publicRouteRes.some((r) => r.test(info.rel)) || /^\/(?:auth|login|logout|register|signup|callback|sin-acceso|suspendido|403|404)(?:\/|$)/.test(path)
       const middleware = meta?.middleware ?? []
-      const guarded = middleware.length > 0 || globalAuth || (meta?.auth && !/false|public\s*:\s*true/.test(meta.auth))
-      const status = isPublic ? 'public' : guarded ? (middleware.length ? 'guarded' : 'global') : 'unguarded'
-      pages.push({ path, file: info.rel, middleware, layout: meta?.layout ?? 'default', meta: Boolean(meta), status })
+      const unknownMw = meta?.middlewareUnknown ?? []
+      // D1 (1.4): redirect-only pages (definePageMeta redirect, or a script that only calls navigateTo) carry no guard of their own
+      const redirectTo = meta?.redirect ?? redirectOnlyTarget(info)
+      const guarded = middleware.length > 0 || unknownMw.length > 0 || globalAuth || (meta?.auth && !/false|public\s*:\s*true/.test(meta.auth))
+      let status = isPublic ? 'public' : guarded ? (middleware.length || unknownMw.length ? 'guarded' : 'global') : 'unguarded'
+      let redirectGuarded = null
+      if (status === 'unguarded' && redirectTo) {
+        status = 'redirect'
+        const targetPath = redirectTo.split('?')[0].replace(/\/$/, '') || '/'
+        const targetFile = pathOf.get(targetPath) ?? [...pathOf.entries()].find(([p]) => p.includes(':') && new RegExp(`^${p.replace(/:[^/]+/g, '[^/]+')}$`).test(targetPath))?.[1] ?? null
+        redirectGuarded = targetFile ? guardedFile(targetFile) || globalAuth : null
+      }
+      pages.push({ path, file: info.rel, middleware: [...middleware, ...unknownMw.map((u) => (u === 'inline' ? 'inline' : `(${u})`))], layout: meta?.layout ?? 'default', meta: Boolean(meta), metaParser: meta?.parser ?? null, status, redirectTo: redirectTo ?? null, redirectGuarded })
       if (status === 'unguarded') {
         addFinding(report, { id: 'page-without-guard', level: 'heuristic', severity: 'medium', file: info.rel, message: `${path}: no page middleware and no global auth middleware`, fix: "add middleware: 'auth' (or a global guard with an allowlist of public routes); authorization itself stays in the backend" })
+      } else if (status === 'redirect') {
+        addFinding(report, { id: 'redirect-page', level: 'info', severity: redirectGuarded === false ? 'medium' : 'info', file: info.rel, message: `${path} only redirects to ${redirectTo}${redirectGuarded === true ? ' (a guarded page)' : redirectGuarded === false ? ' (a page without a guard)' : ' (target not found among the pages)'}`, fix: redirectGuarded === false ? 'guard the destination, or remove the legacy page' : 'legacy entry point: delete it when the old links are gone' })
       }
     }
-    const inconsistent = [...new Set(pages.flatMap((p) => p.middleware))].filter((m) => !namedMiddleware.includes(m) && m !== 'inline')
+    const inconsistent = [...new Set(pages.flatMap((p) => p.middleware))].filter((m) => !namedMiddleware.includes(m) && m !== 'inline' && !m.startsWith('('))
     if (inconsistent.length) addFinding(report, { id: 'unknown-middleware', level: 'confirmed', severity: 'medium', message: `pages reference middleware not found in ${middlewareDir}: ${inconsistent.join(', ')}`, fix: 'check the names; Nuxt fails at runtime when a named middleware does not exist' })
 
-    report.summary = { pages: pages.length, guarded: pages.filter((p) => p.status === 'guarded').length, byGlobal: pages.filter((p) => p.status === 'global').length, public: pages.filter((p) => p.status === 'public').length, unguarded: pages.filter((p) => p.status === 'unguarded').length, globalMiddleware: globalMiddleware.map((g) => g.name).join(', ') || 'none', namedMiddleware: namedMiddleware.join(', ') || 'none', ssr: project.nuxt.ssr, routeRulesSsrFalse: project.nuxt.routeRulesSsrFalse.join(', ') || '-' }
+    report.summary = { pages: pages.length, guarded: pages.filter((p) => p.status === 'guarded').length, byGlobal: pages.filter((p) => p.status === 'global').length, public: pages.filter((p) => p.status === 'public').length, unguarded: pages.filter((p) => p.status === 'unguarded').length, redirects: pages.filter((p) => p.status === 'redirect').length, metaParser: tsApi ? 'ast' : 'lexical', globalMiddleware: globalMiddleware.map((g) => g.name).join(', ') || 'none', namedMiddleware: namedMiddleware.join(', ') || 'none', ssr: project.nuxt.ssr, routeRulesSsrFalse: project.nuxt.routeRulesSsrFalse.join(', ') || '-' }
     report.data = { pages, globalMiddleware, namedMiddleware }
     sections.push({ title: 'Pages', table: { headers: ['route', 'status', 'middleware', 'layout', 'file'], rows: pages.sort((a, b) => a.path.localeCompare(b.path)).map((p) => [p.path, p.status, p.middleware.join(',') || '-', p.layout, p.file]) } })
   }
