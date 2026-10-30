@@ -1,6 +1,7 @@
-// Operational safety (1.3): the audit scripts never execute project code, never spawn processes, never
-// touch the network and never write into the audited project (the one documented write is the explicit
-// --write-baseline of contracts-check, which targets a path the user names).
+// Operational safety (1.3, extended in 1.4): the static audit scripts never execute project code, never spawn
+// processes, never touch the network and never write into the audited project (the one documented write is the
+// explicit --write-baseline of contracts-check, which targets a path the user names). Browser mode (1.4) is the
+// explicit exception: opt-in, loads Playwright from a directory the user names, writes evidence only under --out.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { cpSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -41,6 +42,10 @@ test('static scan: no process execution, network or filesystem writes in the scr
     ['contracts-check.mjs', [/\bwriteFileSync?\s*\(/]], // --write-baseline, explicit and documented
     ['domain-deps.mjs', [/\bprocess\.env\b/]], // regex source text and messages about process.env, never a read
     ['lib/semantic/resolver.mjs', [/\bchild_process\b/]], // name inside the Node built-ins list
+    // 1.4 browser mode: the one tool that writes evidence (report, screenshots, approved baselines); the target is
+    // --out / --baseline-dir, validated against the working directory or the OS temp dir, never the audited project.
+    // It is opt-in (--playwright <dir> is mandatory) and the static tools never import it (next test).
+    ['browser-audit.mjs', [/\bwriteFileSync?\s*\(/, /\bmkdirSync?\s*\(/]],
   ])
   const hits = []
   for (const file of listScripts(scriptsDir)) {
@@ -55,11 +60,27 @@ test('static scan: no process execution, network or filesystem writes in the scr
   assert.deepEqual(hits, [])
 })
 
+test('static scan: only browser-audit knows about a browser; no static tool imports playwright, axe-core or browser-audit', () => {
+  const browserImport = [/\bfrom\s+['"][^'"]*(?:playwright|axe-core|browser-audit)[^'"]*['"]/, /\b(?:require|import)\s*\(\s*[^)]*(?:playwright|axe-core|browser-audit)/]
+  for (const file of listScripts(scriptsDir)) {
+    const rel = relative(scriptsDir, file)
+    const text = readFileSync(file, 'utf8')
+    if (rel === 'browser-audit.mjs') {
+      assert.match(text, /--playwright <dir> is required/, 'browser mode must refuse to run without the explicit tooling directory')
+      assert.match(text, /safeOutDir\(/, 'browser mode must validate its output directory')
+      continue
+    }
+    for (const re of browserImport) assert.ok(!re.test(text), `${rel} must not load browser tooling: ${re}`)
+  }
+  const png = readFileSync(join(scriptsDir, 'lib', 'png.mjs'), 'utf8')
+  assert.deepEqual([...png.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]), ['node:zlib'], 'the PNG codec depends on node:zlib only')
+})
+
 test('dynamic check: running every tool with the semantic engine leaves the audited project byte-identical', () => {
   const dir = mkdtempSync(join(tmpdir(), 'fa-ro-'))
   cpSync(join(fixtures, 'nuxt-app'), dir, { recursive: true })
   const before = snapshot(dir)
-  for (const tool of ['domain-deps.mjs', 'contracts-check.mjs', 'state-audit.mjs', 'routes-audit.mjs', 'leak-patterns.mjs', 'component-complexity.mjs']) {
+  for (const tool of ['domain-deps.mjs', 'contracts-check.mjs', 'state-audit.mjs', 'routes-audit.mjs', 'leak-patterns.mjs', 'component-complexity.mjs', 'ui-audit.mjs']) {
     const { code } = runTool(tool, [dir, ...semantic, '--fail-on', 'none'])
     assert.equal(code, 0, tool)
   }

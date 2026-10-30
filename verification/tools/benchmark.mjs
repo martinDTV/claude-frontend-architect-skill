@@ -6,6 +6,7 @@
 //   node benchmark.mjs                                   fixtures with ground truth
 //   node benchmark.mjs --baseline /path/to/1.2.0/scripts  adds rows for that scripts tree (same fixtures)
 //   node benchmark.mjs --real <project-root> [--config file] [--typescript dir] [--vue-compiler dir]
+import { spawnSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -35,6 +36,27 @@ function measure(eng, root, engine, extra = {}) {
   const ms = Math.round(performance.now() - t0)
   const heapMb = Math.round(((process.memoryUsage().heapUsed - heapBefore) / 1024 / 1024) * 10) / 10
   return { graph, ms, heapMb, engineUsed: graph.analysis?.engine ?? engine }
+}
+
+/** Runs a tool in a child process; returns its JSON report, wall time and the child's peak RSS (MB). */
+function runToolMeasured(tool, argv) {
+  const started = performance.now()
+  const wrapper = `const { run } = await import(${JSON.stringify(pathToFileURL(join(scriptsDir, tool)).href)});
+const chunks = []; const write = process.stdout.write.bind(process.stdout); process.stdout.write = (c) => { chunks.push(String(c)); return true };
+await run(process.argv.slice(1)); process.stdout.write = write;
+process.stderr.write('\\n__rss__' + process.resourceUsage().maxRSS); write(chunks.join(''))`
+  const res = spawnSync(process.execPath, ['--input-type=module', '-e', wrapper, '--', ...argv], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  const ms = Math.round(performance.now() - started)
+  const rssKb = Number((/__rss__(\d+)/.exec(res.stderr ?? '') ?? [])[1] ?? 0)
+  // Node reports maxRSS in kilobytes on every platform
+  const rssMb = Math.round(rssKb / 1024)
+  let report = null
+  try {
+    report = JSON.parse(res.stdout)
+  } catch {
+    /* reported as error */
+  }
+  return { report, ms, rssMb, stderr: res.stderr }
 }
 
 const key = (e) => `${e.from} -> ${e.to} [${e.kind ?? 'runtime'}]`
@@ -158,5 +180,43 @@ if (real) {
     for (const k of d.fp ?? []) console.log(`- false positive: ${k}`)
     for (const k of d.symbols ?? []) console.log(`- symbol: ${k}`)
   }
+  // 1.4: rule-level precision of the static UI audit and the SSR rules against their hand-written truths,
+  // per engine. The lexical rows are expected to be worse (no element tree, no AST context) and are kept so the
+  // degradation is measured, not assumed. Each tool runs in a child process; RSS is the child's peak.
+  console.log('\n# Rule-level precision on the fixtures with finding truths (1.4)\n')
+  console.log('| fixture | tool | engine | expected | reported | TP | FP | FN | precision | recall | F1 | time ms | peak RSS MB |')
+  console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+  const ruleCases = [
+    { name: 'ui-app', tool: 'ui-audit.mjs', root: join(fixtures, 'ui-app'), truth: 'expected-findings.json', pick: (t) => t.findings, filter: () => true, key: (f) => `${f.file}:${f.line} ${f.id} [${f.verification}]` },
+    { name: 'ssr-app', tool: 'state-audit.mjs', root: join(fixtures, 'ssr-app'), truth: 'expected-ssr.json', pick: (t) => t.findings, filter: (f) => f.id === 'browser-api-in-setup' || f.id === 'nondeterministic-render', key: (f) => `${f.file}:${f.line} ${f.id} ${f.level}` },
+  ]
+  const ruleDetails = []
+  for (const c of ruleCases) {
+    const truth = c.pick(JSON.parse(readFileSync(join(c.root, c.truth), 'utf8')))
+    for (const engine of ['lexical', 'semantic']) {
+      const r = runToolMeasured(c.tool, [c.root, '--engine', engine, ...(engine === 'semantic' ? ['--typescript', vueProject, '--vue-compiler', vueProject] : []), '--json', '--fail-on', 'none'])
+      if (!r.report) {
+        console.log(`| ${c.name} | ${c.tool} | ${engine} | ${truth.length} | error | | | | | | | ${r.ms} | |`)
+        continue
+      }
+      const got = uniq(r.report.findings.filter(c.filter), c.key)
+      const want = new Set(truth.map(c.key))
+      const tp = got.filter((k) => want.has(k)).length
+      const fp = got.filter((k) => !want.has(k))
+      const fn = [...want].filter((k) => !got.includes(k))
+      const precision = got.length ? tp / got.length : 1
+      const recall = want.size ? tp / want.size : 1
+      const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0
+      console.log(`| ${c.name} | ${c.tool} | ${engine} | ${want.size} | ${got.length} | ${tp} | ${fp.length} | ${fn.length} | ${pct(precision)} | ${pct(recall)} | ${pct(f1)} | ${r.ms} | ${r.rssMb} |`)
+      if (fp.length || fn.length) ruleDetails.push({ name: c.name, engine, fp, fn })
+    }
+  }
+  for (const d of ruleDetails) {
+    console.log(`\n${d.name} / ${d.engine}:`)
+    for (const k of d.fn) console.log(`- false negative: ${k}`)
+    for (const k of d.fp) console.log(`- false positive: ${k}`)
+  }
+  console.log('\nRule-level truths: ui-app/expected-findings.json (finding, line and verification level) and ssr-app/expected-ssr.json (finding, line and level). The lexical engine has no element tree, so findings that need parents degrade to review and the SSR rules stay silent by design; those rows measure the degradation.')
+
   console.log('\nGround truth files: expected-edges.json in each fixture (unique from/to/kind pairs) and expected-symbols.json where symbol origins are asserted. Fixtures ship no node_modules; the semantic engine used the verification vue project\'s typescript and vue/compiler-sfc through overrides, as the tests do. Fixtures without a truth file (nuxt-app, next-app) report counts only. Times and heap are local measurements, not guarantees.')
 }

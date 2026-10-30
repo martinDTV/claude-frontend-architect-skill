@@ -25,6 +25,10 @@ jobs:
         run: cd verification/vue && npm install --no-audit --no-fund
       - name: Test the audit scripts against the fixture apps
         run: node --test verification/tools/*.test.mjs
+      - name: Install the browser verification tooling (Playwright and axe-core pinned in verification/browser) and Chromium
+        run: cd verification/browser && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: Test browser mode against the local fixture (FA_REQUIRE_BROWSER=1 fails instead of skipping when Chromium is missing)
+        run: cd verification/browser && FA_REQUIRE_BROWSER=1 node --test browser-audit.test.mjs
       - name: Benchmark the lexical and semantic engines on the fixtures with ground truth
         run: node --expose-gc verification/tools/benchmark.mjs
       - name: Tools must run through a symbolic link (main-guard regression check)
@@ -54,7 +58,8 @@ jobs:
           cd verification
           for p in vue react next creative; do (cd $p && npm install --no-audit --no-fund); done
           (cd nuxt && pnpm install)
+          (cd browser && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium)
       - name: Install nginx
         run: sudo apt-get update && sudo apt-get install -y nginx
       - name: Run all verifications
-        run: ./verification/run-all.sh
+        run: FA_REQUIRE_BROWSER=1 ./verification/run-all.sh
