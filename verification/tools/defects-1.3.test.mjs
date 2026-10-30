@@ -206,8 +206,8 @@ test('D4: the vue-templates fixture matches its ground truth under the semantic 
 
 test('D4: per-file component uses carry their classification (positive and negative cases)', () => {
   const { report } = runTool('domain-deps.mjs', [vueTemplates, ...semantic, '--fail-on', 'none'])
-  // the semantic engine resolved <component is="CrmBadge"> and the literal inside the ternary to the same file
-  const dyn = report.data.edges.filter((e) => e.from === 'app/components/ui/Dynamic.vue' && e.to === 'app/components/crm/CrmBadge.vue')
+  // the semantic engine resolved <component is="SalesBadge"> and the literal inside the ternary to the same file
+  const dyn = report.data.edges.filter((e) => e.from === 'app/components/ui/Dynamic.vue' && e.to === 'app/components/sales/SalesBadge.vue')
   assert.ok(dyn.length >= 1)
   assert.equal(dyn[0].via, 'component')
   // a lowercase word inside :is ('span', 'card') never becomes a component name

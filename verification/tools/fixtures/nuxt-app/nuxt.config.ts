@@ -2,7 +2,7 @@
 export default defineNuxtConfig({
   modules: ['@pinia/nuxt'],
   components: [{ path: '~/components/shell', pathPrefix: false }, '~/components'],
-  imports: { dirs: ['composables/catalogos'] },
+  imports: { dirs: ['composables/catalog'] },
   runtimeConfig: { public: { apiBase: '/api/v1' } },
   compatibilityDate: '2026-10-01',
 })

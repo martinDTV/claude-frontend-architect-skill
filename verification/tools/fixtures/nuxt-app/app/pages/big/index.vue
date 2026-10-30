@@ -2,9 +2,9 @@
 definePageMeta({ middleware: 'auth' })
 import axios from 'axios'
 const { $api } = useNuxtApp()
-const { listOportunidades } = useCrm()
-const { listPlanos } = usePlanos()
-const { personas } = usePersonas()
+const { listLeads } = useSales()
+const { listDocuments } = useDocuments()
+const { people } = usePeople()
 const auth = useAuthStore()
 const modal0 = ref(false)
 const modal1 = ref(false)

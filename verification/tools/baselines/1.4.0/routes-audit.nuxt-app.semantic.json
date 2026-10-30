@@ -17,7 +17,7 @@
   "unguarded"
  ],
  "findings": [
-  "page-without-guard|app/pages/planos/index.vue||heuristic|medium",
+  "page-without-guard|app/pages/documents/index.vue||heuristic|medium",
   "redirect-page|app/pages/legacy/index.vue||info|info",
   "redirect-page|app/pages/legacy/report.vue||info|info"
  ]

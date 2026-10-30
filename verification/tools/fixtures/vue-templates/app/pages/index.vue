@@ -1,6 +1,6 @@
 <script setup lang="ts">
-const crm = useCrm()
-const n = crm.items.length
+const sales = useSales()
+const n = sales.items.length
 // the only use of `contar` is inside a template literal expression
 const summary = `Hay ${contar(n, 'tarea', 'tareas')} pendientes`
 </script>

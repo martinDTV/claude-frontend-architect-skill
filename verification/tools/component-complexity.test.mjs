@@ -15,7 +15,7 @@ test('nuxt: measures the generated god page and ranks it first', () => {
   assert.equal(first.modals, 12)
   assert.equal(first.watchers, 8)
   assert.ok(first.httpCalls >= 9, `http calls counted: ${first.httpCalls}`)
-  assert.deepEqual(first.composables, ['useCrm', 'usePersonas', 'usePlanos'])
+  assert.deepEqual(first.composables, ['useDocuments', 'usePeople', 'useSales'])
   assert.deepEqual(first.stores, ['useAuthStore'])
   assert.ok(first.flags.includes('data-access') && first.flags.includes('form') && first.flags.includes('table') && first.flags.includes('modals'))
   assert.ok(first.page)
@@ -33,7 +33,7 @@ test('nuxt: small components produce no findings and template-only components co
   const loading = report.data.components.find((c) => c.file === 'app/components/ui/StateLoading.vue')
   assert.ok(loading)
   assert.equal(loading.scriptLines, 0)
-  const modal = report.data.components.find((c) => c.file === 'app/components/crm/CrmOportunidadModal.vue')
+  const modal = report.data.components.find((c) => c.file === 'app/components/sales/SalesLeadModal.vue')
   assert.ok(modal.flags.includes('realtime'), 'setInterval marks realtime')
 })
 

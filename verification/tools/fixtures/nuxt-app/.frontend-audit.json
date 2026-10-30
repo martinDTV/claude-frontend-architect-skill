@@ -1,27 +1,27 @@
 {
   "domains": {
-    "crm": [
-      "app/composables/useCrm.ts",
-      "app/composables/useSettingComercial.ts",
-      "app/types/crm.ts",
-      "app/components/crm/**",
-      "app/pages/crm/**",
-      "server/api/crm/**",
-      "app/stores/crm.ts"
+    "sales": [
+      "app/composables/useSales.ts",
+      "app/composables/useFeatureFlags.ts",
+      "app/types/sales.ts",
+      "app/components/sales/**",
+      "app/pages/sales/**",
+      "server/api/sales/**",
+      "app/stores/sales.ts"
     ],
-    "planos": [
-      "app/composables/usePlanos.ts",
-      "app/components/planos/**",
-      "app/pages/planos/**"
+    "documents": [
+      "app/composables/useDocuments.ts",
+      "app/components/documents/**",
+      "app/pages/documents/**"
     ],
-    "rrhh": [
-      "app/composables/usePersonas.ts"
+    "people": [
+      "app/composables/usePeople.ts"
     ],
     "pre": [
-      "app/composables/catalogos/**"
+      "app/composables/catalog/**"
     ],
-    "obra": [
-      "app/pages/obra/**"
+    "projects": [
+      "app/pages/projects/**"
     ],
     "big": [
       "app/pages/big/**"

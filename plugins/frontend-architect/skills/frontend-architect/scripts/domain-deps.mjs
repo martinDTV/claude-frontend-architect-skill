@@ -4,7 +4,7 @@
 // components used in templates. Read-only.
 //
 // Usage: domain-deps.mjs <project-root> [--config .frontend-audit.json] [--json|--md]
-//        [--top 10] [--edges crm:obra] [--no-auto-imports] [--fail-on confirmed|any|none]
+//        [--top 10] [--edges sales:projects] [--no-auto-imports] [--fail-on confirmed|any|none]
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { buildGraph, moduleRootOf } from './lib/graph.mjs'

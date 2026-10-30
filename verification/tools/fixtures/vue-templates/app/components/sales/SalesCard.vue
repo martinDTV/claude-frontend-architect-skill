@@ -4,8 +4,8 @@ const open = ref(false)
 </script>
 <template>
   <article>
-    <crm-badge status="kebab" />
-    <LazyCrmBadge status="lazy" />
+    <sales-badge status="kebab" />
+    <LazySalesBadge status="lazy" />
     <Transition name="fade"><p v-if="open">details</p></Transition>
   </article>
 </template>

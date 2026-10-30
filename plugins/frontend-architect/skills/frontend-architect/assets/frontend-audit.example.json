@@ -1,27 +1,27 @@
 {
-  "_comment": "Copy to the project root as .frontend-audit.json (or pass --config). Globs are relative to the project root; first matching domain wins. Start from `node scripts/domain-deps.mjs . --suggest-config` and group folders into real business domains: pages, components and the composables that serve them belong together.",
+  "_comment": "Copy to the project root as .frontend-audit.json (or pass --config). Globs are relative to the project root; first matching domain wins. Start from `node scripts/domain-deps.mjs . --suggest-config` and group folders into the business capabilities your users name (the names below are placeholders for a generic back office): pages, components and the composables that serve them belong together.",
   "domains": {
-    "crm": [
-      "app/components/crm/**",
-      "app/pages/crm/**",
-      "app/pages/oportunidades/**",
-      "app/composables/useCrm.ts",
-      "app/composables/useComercial.ts",
-      "app/types/crm.ts",
-      "server/api/crm/**"
+    "sales": [
+      "app/components/sales/**",
+      "app/pages/sales/**",
+      "app/pages/leads/**",
+      "app/composables/useSales.ts",
+      "app/composables/useFeatureFlags.ts",
+      "app/types/sales.ts",
+      "server/api/sales/**"
     ],
-    "obra": [
-      "app/pages/proyectos/**",
-      "app/pages/generadores/**",
-      "app/components/programa/**",
-      "app/composables/useGeneradores.ts",
-      "app/composables/useProgramaObra.ts"
+    "projects": [
+      "app/pages/projects/**",
+      "app/pages/schedule/**",
+      "app/components/schedule/**",
+      "app/composables/useSchedule.ts",
+      "app/composables/useProjectPlan.ts"
     ],
-    "rrhh": [
-      "app/pages/organigrama/**",
-      "app/components/organigrama/**",
-      "app/composables/usePersonas.ts",
-      "app/composables/useOrganigrama.ts"
+    "people": [
+      "app/pages/teams/**",
+      "app/components/teams/**",
+      "app/composables/usePeople.ts",
+      "app/composables/useTeams.ts"
     ]
   },
   "_comment_shell": "App chrome: layouts, middleware, plugins, the home page, the project hub. Shell may depend on coreDomains without a finding.",
@@ -39,7 +39,7 @@
     "app/utils/**",
     "app/composables/useApi.ts",
     "app/composables/useFormatters.ts",
-    "app/composables/useEstadoLista.ts"
+    "app/composables/useListState.ts"
   ],
   "_comment_coreDomains": "Domains that the shell legitimately depends on (session, identity, tenant). Not reported as shell-depends-on-domain.",
   "coreDomains": [
@@ -55,8 +55,8 @@
   "_comment_publicRoutes": "Pages that need no guard (login, callbacks, public status pages).",
   "publicRoutes": [
     "app/pages/auth/**",
-    "app/pages/suspendido.vue",
-    "app/pages/sin-acceso.vue"
+    "app/pages/suspended.vue",
+    "app/pages/no-access.vue"
   ],
   "_comment_authPatterns": "Extra function names that count as an authorization check in Next.js Server Actions and Route Handlers.",
   "authPatterns": [
@@ -74,23 +74,23 @@
   "dependencies": {
     "allowed": [
       [
-        "obra",
-        "crm"
+        "projects",
+        "sales"
       ],
       [
-        "rrhh",
-        "crm"
+        "people",
+        "sales"
       ],
       [
-        "crm",
-        "rrhh"
+        "sales",
+        "people"
       ]
     ],
     "exceptions": [
       {
-        "from": "crm",
-        "to": "obra",
-        "reason": "the project client lives in crm until it moves to obra",
+        "from": "sales",
+        "to": "projects",
+        "reason": "the project client lives in sales until it moves to projects",
         "since": "2026-10-27",
         "until": "PR 4"
       }

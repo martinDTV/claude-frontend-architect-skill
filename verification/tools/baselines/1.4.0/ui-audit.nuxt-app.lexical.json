@@ -16,7 +16,7 @@
  ],
  "findings": [
   "click-handler-on-non-interactive|app/components/shell/AppHeader.vue|5|confirmed|medium",
-  "form-control-without-label|app/components/planos/PlanosPersonaSelect.vue|7|heuristic|medium",
+  "form-control-without-label|app/components/documents/DocumentsOwnerSelect.vue|7|heuristic|medium",
   "form-control-without-label|app/pages/big/index.vue|100|heuristic|medium",
   "form-control-without-label|app/pages/big/index.vue|101|heuristic|medium",
   "form-control-without-label|app/pages/big/index.vue|102|heuristic|medium",

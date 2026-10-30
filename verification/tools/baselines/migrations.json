@@ -1,5 +1,10 @@
 {
   "$comment": "Findings present in a frozen baseline that a later version is allowed to drop. Each entry names the baseline version, a regex over `id|file|line|level|severity` and the reason. Anything removed without an entry fails baseline-findings.test.mjs.",
-  "1.3.0": [],
+  "1.3.0": [
+    {
+      "match": "^page-without-guard\\|app/pages/legacy/(index|report)\\.vue\\|",
+      "reason": "D1 (1.4.0): redirect-only pages are classified status: redirect and reported as redirect-page (info). The 1.3.0 scripts reported them as unguarded; these fixture pages were added in 1.4.0 and the 1.3.0 baselines were regenerated with the released 1.3.0 scripts on the renamed fixtures, so the 1.3 misreport is frozen here and released on purpose."
+    }
+  ],
   "1.4.0": []
 }

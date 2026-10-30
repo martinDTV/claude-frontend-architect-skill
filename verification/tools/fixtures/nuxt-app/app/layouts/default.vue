@@ -1,14 +1,14 @@
 <script setup lang="ts">
-// Shell layout that reaches into a business domain (shell -> crm) through auto-imports.
-const { veModulo } = useSettingComercial()
+// Shell layout that reaches into a business domain (shell -> sales) through auto-imports.
+const { canSee } = useFeatureFlags()
 const auth = useAuthStore()
 const ui = useUiStore()
-const items = computed(() => (veModulo('crm') ? ['crm'] : []))
+const items = computed(() => (canSee('sales') ? ['sales'] : []))
 </script>
 <template>
   <div>
     <AppHeader :user="auth.user" />
-    <CrmBadge v-if="items.length" estado="activo" />
+    <SalesBadge v-if="items.length" status="activo" />
     <UiStateLoading v-if="ui.loading" />
     <slot />
   </div>

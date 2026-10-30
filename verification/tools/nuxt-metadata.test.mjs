@@ -11,7 +11,7 @@ const fixture = join(fixtures, 'nuxt-app')
  * Copies the Nuxt fixture to a temp dir and writes `.nuxt/types/imports.d.ts` and
  * `.nuxt/components.d.ts` in the exact shape Nuxt 4 generates (observed in real apps):
  * project composables/stores, a layer composable, package-provided symbols (VueUse, Nuxt UI),
- * one stale entry per file, and `usePlanos` deliberately omitted (lexical-only → inferred).
+ * one stale entry per file, and `useDocuments` deliberately omitted (lexical-only → inferred).
  */
 function withMetadata({ old = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'fa-nuxt-meta-'))
@@ -24,22 +24,22 @@ export {}
 declare global {
   const $fetch: typeof import('../fetch').$fetch
   const defineStore: typeof import('${pnpmPinia}').defineStore
-  const mensajeDeError: typeof import('../../app/utils/errores').mensajeDeError
+  const mensajeDeError: typeof import('../../app/utils/errors').mensajeDeError
   const setToken: typeof import('../../app/composables/useApi').setToken
   const useApi: typeof import('../../app/composables/useApi').useApi
   const useAuthStore: typeof import('../../app/stores/auth').useAuthStore
   const useBaseFormat: typeof import('../../layers/base/app/composables/useBaseFormat').useBaseFormat
-  const useCatalogoWbs: typeof import('../../app/composables/catalogos/useCatalogoWbs').useCatalogoWbs
-  const useCrm: typeof import('../../app/composables/useCrm').useCrm
-  const useCrmStore: typeof import('../../app/stores/crm').useCrmStore
+  const useCatalogTree: typeof import('../../app/composables/catalog/useCatalogTree').useCatalogTree
+  const useSales: typeof import('../../app/composables/useSales').useSales
+  const useSalesStore: typeof import('../../app/stores/sales').useSalesStore
   const useLocalStorage: typeof import('${pnpmVueuse}').useLocalStorage
-  const usePersonas: typeof import('../../app/composables/usePersonas').usePersonas
-  const useSettingComercial: typeof import('../../app/composables/useSettingComercial').useSettingComercial
+  const usePeople: typeof import('../../app/composables/usePeople').usePeople
+  const useFeatureFlags: typeof import('../../app/composables/useFeatureFlags').useFeatureFlags
   const useStaleThing: typeof import('../../app/composables/useStaleThing').useStaleThing
   const useUiStore: typeof import('../../app/stores/ui').useUiStore
 }
 // @ts-ignore
-export type { Oportunidad } from '../../app/types/crm'
+export type { Lead } from '../../app/types/sales'
 declare module 'vue' {
   interface GlobalComponents {}
   interface ComponentCustomProperties {
@@ -51,15 +51,15 @@ declare module 'vue' {
   const comps = [
     ['AppHeader', '../app/components/shell/AppHeader.vue'],
     ['BaseTag', '../layers/base/app/components/base/BaseTag.vue'],
-    ['CrmBadge', '../app/components/crm/CrmBadge.vue'],
-    ['CrmOportunidadModal', '../app/components/crm/CrmOportunidadModal.vue'],
-    ['CrmQuickAdd', '../app/components/crm/CrmQuickAdd.vue'],
-    ['CrmSync', '../app/components/crm/CrmSync.vue'],
-    ['CrmToolbar', '../app/components/crm/CrmToolbar.vue'],
+    ['SalesBadge', '../app/components/sales/SalesBadge.vue'],
+    ['SalesLeadModal', '../app/components/sales/SalesLeadModal.vue'],
+    ['SalesQuickAdd', '../app/components/sales/SalesQuickAdd.vue'],
+    ['SalesSync', '../app/components/sales/SalesSync.vue'],
+    ['SalesToolbar', '../app/components/sales/SalesToolbar.vue'],
     ['DensityToggle', '../app/components/ui/DensityToggle.vue'],
     ['Ghost', '../app/components/ui/Ghost.vue'],
     ['Leaky', '../app/components/ui/Leaky.vue'],
-    ['PlanosPersonaSelect', '../app/components/planos/PlanosPersonaSelect.vue'],
+    ['DocumentsOwnerSelect', '../app/components/documents/DocumentsOwnerSelect.vue'],
     ['UiStateLoading', '../app/components/ui/StateLoading.vue'],
     ['UButton', nuxtUi],
     ['UModal', nuxtUi.replace('Button.vue', 'Modal.vue')],
@@ -92,19 +92,19 @@ test('with .nuxt metadata: catalog source, verified vs inferred edges, package a
   assert.ok(report.summary.edgesByConfidence.verified > 0 && report.summary.edgesByConfidence.inferred > 0)
 
   // listed in the metadata → verified
-  assert.equal(edge(report, 'app/pages/index.vue', 'app/composables/useCrm.ts', 'auto-import').confidence, 'verified')
+  assert.equal(edge(report, 'app/pages/index.vue', 'app/composables/useSales.ts', 'auto-import').confidence, 'verified')
   assert.equal(edge(report, 'app/middleware/auth.ts', 'app/stores/auth.ts', 'auto-import').confidence, 'verified')
-  assert.equal(edge(report, 'app/layouts/default.vue', 'app/components/crm/CrmBadge.vue', 'component').confidence, 'verified')
+  assert.equal(edge(report, 'app/layouts/default.vue', 'app/components/sales/SalesBadge.vue', 'component').confidence, 'verified')
   assert.equal(edge(report, 'app/layouts/default.vue', 'app/components/shell/AppHeader.vue', 'component').confidence, 'verified')
   // path-prefixed name from components/ui/StateLoading.vue
   assert.equal(edge(report, 'app/layouts/default.vue', 'app/components/ui/StateLoading.vue', 'component').confidence, 'verified')
   // layer composable and component through the metadata paths
-  assert.equal(edge(report, 'app/pages/crm/index.vue', 'layers/base/app/composables/useBaseFormat.ts', 'auto-import').confidence, 'verified')
-  assert.equal(edge(report, 'app/pages/crm/index.vue', 'layers/base/app/components/base/BaseTag.vue', 'component').confidence, 'verified')
+  assert.equal(edge(report, 'app/pages/sales/index.vue', 'layers/base/app/composables/useBaseFormat.ts', 'auto-import').confidence, 'verified')
+  assert.equal(edge(report, 'app/pages/sales/index.vue', 'layers/base/app/components/base/BaseTag.vue', 'component').confidence, 'verified')
   // omitted from the metadata, found only by the lexical scan → inferred
-  assert.equal(edge(report, 'app/pages/planos/index.vue', 'app/composables/usePlanos.ts', 'auto-import').confidence, 'inferred')
+  assert.equal(edge(report, 'app/pages/documents/index.vue', 'app/composables/useDocuments.ts', 'auto-import').confidence, 'inferred')
   // explicit imports are always verified
-  assert.equal(edge(report, 'app/pages/obra/[id].vue', 'app/types/crm.ts', 'import').confidence, 'verified')
+  assert.equal(edge(report, 'app/pages/projects/[id].vue', 'app/types/sales.ts', 'import').confidence, 'verified')
 
   // package-provided symbols are counted, never edges; the truly unresolved tag is unknown
   const pkg = report.data.packageUses.map((p) => p.name)
@@ -114,7 +114,7 @@ test('with .nuxt metadata: catalog source, verified vs inferred edges, package a
   assert.ok(report.summary.packageSymbolsUsed >= 2)
   const unknown = report.data.unknown.map((u) => u.name)
   assert.deepEqual(unknown, ['MissingWidget'])
-  assert.deepEqual(report.data.unknown[0].files, ['app/components/crm/CrmToolbar.vue'])
+  assert.deepEqual(report.data.unknown[0].files, ['app/components/sales/SalesToolbar.vue'])
   assert.ok(!report.data.edges.some((e) => /MissingWidget|UButton|useLocalStorage/.test(e.name)))
 
   // stale metadata entries are dropped and reported
@@ -130,12 +130,12 @@ test('with .nuxt metadata: boundary findings through verified auto-imports are c
   const { code, report } = runTool('domain-deps.mjs', [root])
   assert.equal(code, 1)
   const shell = byId(report, 'shell-depends-on-domain')
-  const viaSetting = shell.filter((f) => f.message.includes('useSettingComercial'))
+  const viaSetting = shell.filter((f) => f.message.includes('useFeatureFlags'))
   assert.ok(viaSetting.length >= 2)
   assert.ok(viaSetting.every((f) => f.level === 'confirmed'), 'verified by Nuxt metadata → confirmed')
   assert.ok(viaSetting.every((f) => f.message.includes('verified')))
-  const planos = report.data.edges.filter((e) => e.to === 'app/composables/usePlanos.ts' && e.via === 'auto-import')
-  assert.ok(planos.length && planos.every((e) => e.confidence === 'inferred'))
+  const documents = report.data.edges.filter((e) => e.to === 'app/composables/useDocuments.ts' && e.via === 'auto-import')
+  assert.ok(documents.length && documents.every((e) => e.confidence === 'inferred'))
 })
 
 test('with .nuxt metadata older than the sources: a refresh note is emitted and edges stay usable', () => {
@@ -143,7 +143,7 @@ test('with .nuxt metadata older than the sources: a refresh note is emitted and 
   const { report } = runTool('domain-deps.mjs', [root, '--fail-on', 'none'])
   assert.equal(report.summary.metadata, 'stale')
   assert.ok(report.notes.some((n) => /nuxt prepare/.test(n)))
-  assert.equal(edge(report, 'app/pages/index.vue', 'app/composables/useCrm.ts', 'auto-import').confidence, 'verified')
+  assert.equal(edge(report, 'app/pages/index.vue', 'app/composables/useSales.ts', 'auto-import').confidence, 'verified')
 })
 
 test('without .nuxt metadata: everything auto-imported is inferred, layers are still scanned, packages become unknown', () => {
@@ -152,8 +152,8 @@ test('without .nuxt metadata: everything auto-imported is inferred, layers are s
   assert.equal(report.summary.metadata, 'absent')
   assert.equal(report.summary.edgesByConfidence.verified, report.summary.edgesByKind.import, 'only explicit imports are verified')
   assert.ok(report.data.edges.filter((e) => e.via !== 'import').every((e) => e.confidence === 'inferred'))
-  assert.equal(edge(report, 'app/pages/crm/index.vue', 'layers/base/app/composables/useBaseFormat.ts', 'auto-import').confidence, 'inferred')
-  assert.equal(edge(report, 'app/pages/crm/index.vue', 'layers/base/app/components/base/BaseTag.vue', 'component').confidence, 'inferred')
+  assert.equal(edge(report, 'app/pages/sales/index.vue', 'layers/base/app/composables/useBaseFormat.ts', 'auto-import').confidence, 'inferred')
+  assert.equal(edge(report, 'app/pages/sales/index.vue', 'layers/base/app/components/base/BaseTag.vue', 'component').confidence, 'inferred')
   const unknown = report.data.unknown.map((u) => u.name).sort()
   assert.deepEqual(unknown, ['MissingWidget', 'UButton', 'UModal', 'useLocalStorage'])
   assert.equal(report.summary.packageSymbolsUsed, 0)
@@ -163,12 +163,12 @@ test('without .nuxt metadata: everything auto-imported is inferred, layers are s
 
 test('contracts-check: an implicit dependency verified by metadata is confirmed, lexical stays heuristic', () => {
   const lexical = runTool('contracts-check.mjs', [fixture, '--modules-dir', 'app/components', '--fail-on', 'none']).report
-  const lexicalBadge = byId(lexical, 'implicit-cross-module-dependency').find((f) => f.file === 'app/layouts/default.vue' && f.message.includes('CrmBadge'))
+  const lexicalBadge = byId(lexical, 'implicit-cross-module-dependency').find((f) => f.file === 'app/layouts/default.vue' && f.message.includes('SalesBadge'))
   assert.equal(lexicalBadge.level, 'heuristic')
   assert.match(lexicalBadge.message, /inferred lexically/)
   const root = withMetadata()
   const verified = runTool('contracts-check.mjs', [root, '--modules-dir', 'app/components', '--fail-on', 'none']).report
-  const verifiedBadge = byId(verified, 'implicit-cross-module-dependency').find((f) => f.file === 'app/layouts/default.vue' && f.message.includes('CrmBadge'))
+  const verifiedBadge = byId(verified, 'implicit-cross-module-dependency').find((f) => f.file === 'app/layouts/default.vue' && f.message.includes('SalesBadge'))
   assert.equal(verifiedBadge.level, 'confirmed')
   assert.match(verifiedBadge.message, /generated metadata/)
 })

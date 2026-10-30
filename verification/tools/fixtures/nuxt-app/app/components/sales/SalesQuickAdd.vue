@@ -4,7 +4,7 @@ const uiStore = useUiStore()
 const { apiFetch } = useApi()
 async function guardar() {
   uiStore.loading = true
-  await apiFetch('/crm/leads')
+  await apiFetch('/sales/leads')
   uiStore.loading = false
 }
 </script>

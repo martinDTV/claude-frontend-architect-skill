@@ -12,6 +12,10 @@ import { detectProject, excludeArg, loadConfig } from './lib/project.mjs'
 import { ENGINE_HELP, addFinding, createReport, engineOptionsFrom, fail, finish, isMainModule, parseArgs, usage } from './lib/report.mjs'
 import { lineOf, stripComments } from './lib/source.mjs'
 
+// Pages treated as public without a guard when the config names none: generic auth and error routes only.
+// Project-specific public pages belong in `publicRoutes` of .frontend-audit.json.
+const DEFAULT_PUBLIC_ROUTE_RE = /^\/(?:auth|login|logout|register|signup|signin|sign-in|sign-up|callback|forgot-password|reset-password|verify-email|forbidden|no-access|unauthorized|suspended|maintenance|error|403|404|500)(?:\/|$)/
+
 const HELP = `
 routes-audit — routes, guards, Server Actions and handlers.
 
@@ -198,7 +202,7 @@ export function run(argv) {
       const fromPages = info.rel.slice(pagesDir.length)
       const path = nuxtRoutePath(fromPages)
       const meta = metaByFile.get(info.rel)
-      const isPublic = config.publicRouteRes.some((r) => r.test(info.rel)) || /^\/(?:auth|login|logout|register|signup|callback|sin-acceso|suspendido|403|404)(?:\/|$)/.test(path)
+      const isPublic = config.publicRouteRes.some((r) => r.test(info.rel)) || DEFAULT_PUBLIC_ROUTE_RE.test(path)
       const middleware = meta?.middleware ?? []
       const unknownMw = meta?.middlewareUnknown ?? []
       // D1 (1.4): redirect-only pages (definePageMeta redirect, or a script that only calls navigateTo) carry no guard of their own

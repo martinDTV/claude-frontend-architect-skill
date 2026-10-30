@@ -9,7 +9,7 @@ const next = join(fixtures, 'next-app')
 test('nuxt: listener, interval and gsap tween without cleanup in one component', () => {
   const { code, report } = runTool('leak-patterns.mjs', [nuxt])
   assert.equal(code, 0, 'heuristics only')
-  const modal = report.findings.filter((f) => f.file === 'app/components/crm/CrmOportunidadModal.vue')
+  const modal = report.findings.filter((f) => f.file === 'app/components/sales/SalesLeadModal.vue')
   assert.deepEqual(modal.map((f) => f.id).sort(), ['leak-event-listener', 'leak-gsap', 'leak-interval'])
   assert.ok(modal.every((f) => f.level === 'heuristic'))
   assert.ok(modal.every((f) => f.message.includes('no unmount/dispose hook at all')))

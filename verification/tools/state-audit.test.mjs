@@ -25,11 +25,11 @@ test('nuxt: tokens in localStorage and a module-level client with mutable auth a
 test('nuxt: module-level containers and let bindings are heuristic; stores are inventoried', () => {
   const { report } = runTool('state-audit.mjs', [nuxt, '--fail-on', 'none'])
   const mod = byId(report, 'module-level-mutable-state')
-  assert.ok(mod.some((f) => f.file === 'app/composables/useCrm.ts' && f.message.includes('"cache"')))
-  assert.ok(mod.some((f) => f.file === 'app/composables/catalogos/useCatalogoWbs.ts' && f.message.includes('"enVuelo"')))
+  assert.ok(mod.some((f) => f.file === 'app/composables/useSales.ts' && f.message.includes('"cache"')))
+  assert.ok(mod.some((f) => f.file === 'app/composables/catalog/useCatalogTree.ts' && f.message.includes('"enVuelo"')))
   assert.ok(mod.every((f) => f.level === 'heuristic'))
   const stores = report.data.stores
-  assert.deepEqual(stores.map((s) => s.id).sort(), ['auth', 'crm', 'ui'])
+  assert.deepEqual(stores.map((s) => s.id).sort(), ['auth', 'sales', 'ui'])
   const auth = stores.find((s) => s.id === 'auth')
   assert.equal(auth.persist, 'all')
   assert.ok(auth.consumers >= 4, `auth store consumers via auto-import: ${auth.consumers}`)
@@ -37,7 +37,7 @@ test('nuxt: module-level containers and let bindings are heuristic; stores are i
   assert.equal(persisted.length, 1)
   assert.equal(persisted[0].severity, 'high', 'holds tokens')
   assert.equal(byId(report, 'logout-without-cache-clear').length, 0, 'logout calls clearNuxtState')
-  assert.deepEqual(report.data.stateKeys.map((k) => k.key).sort(), ['catalogo-wbs', 'comercial-permisos', 'personas:padron'])
+  assert.deepEqual(report.data.stateKeys.map((k) => k.key).sort(), ['catalog-tree', 'flags-permissions', 'people:directory'])
   assert.equal(byId(report, 'raw-state-key-shared').length, 0, 'each key lives in one composable')
 })
 
@@ -59,12 +59,12 @@ test('nuxt: server data copied from a query into a store is reported once, with 
   const copies = byId(report, 'server-data-copied-to-store')
   assert.equal(copies.length, 1)
   const [copy] = copies
-  assert.equal(copy.file, 'app/components/crm/CrmSync.vue')
+  assert.equal(copy.file, 'app/components/sales/SalesSync.vue')
   assert.equal(copy.level, 'heuristic')
-  assert.match(copy.evidence, /fetch at line \d+; write at line \d+: if \(data\) crmStore\.oportunidades = data/)
+  assert.match(copy.evidence, /fetch at line \d+; write at line \d+: if \(data\) salesStore\.leads = data/)
   assert.equal(copy.line, 8, 'line is absolute in the SFC')
   // a literal flag written around a fetch, and a store write without any fetch, are not copies
-  assert.ok(!report.findings.some((f) => f.file === 'app/components/crm/CrmQuickAdd.vue' && f.id === 'server-data-copied-to-store'))
+  assert.ok(!report.findings.some((f) => f.file === 'app/components/sales/SalesQuickAdd.vue' && f.id === 'server-data-copied-to-store'))
   assert.ok(!report.findings.some((f) => f.file === 'app/components/ui/DensityToggle.vue' && f.id === 'server-data-copied-to-store'))
   // the store definition itself (which may hold arrays) is covered by server-data-in-store, not by this rule
   assert.ok(!copies.some((f) => f.file.startsWith('app/stores/')))

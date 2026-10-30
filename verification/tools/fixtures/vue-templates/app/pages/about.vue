@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-const current = shallowRef('CrmCard')
+const current = shallowRef('SalesCard')
 </script>
 <template>
   <main>
     <component :is="current" />
-    <component is="CrmCard" />
+    <component is="SalesCard" />
   </main>
 </template>

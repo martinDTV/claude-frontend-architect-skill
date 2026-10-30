@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Creates a small Nuxt 4 app with known defects for the audit eval. No installs, no network.
 set -euo pipefail
-mkdir -p app/layouts app/middleware app/pages/crm app/pages/planos app/components/crm app/components/ui app/composables app/stores app/features/orders app/types
+mkdir -p app/layouts app/middleware app/pages/sales app/pages/documents app/components/sales app/components/ui app/composables app/stores app/features/orders app/types
 cat > package.json <<'EOF'
 { "name": "eval-nuxt-app", "private": true, "dependencies": { "nuxt": "^4.6.0", "@pinia/nuxt": "^1.0.0", "pinia": "^4.1.0", "axios": "^1.21.0" } }
 EOF
@@ -13,10 +13,10 @@ cat > app/app.vue <<'EOF'
 EOF
 cat > app/layouts/default.vue <<'EOF'
 <script setup lang="ts">
-const { veModulo } = useSettingComercial()
+const { canSee } = useFeatureFlags()
 const auth = useAuthStore()
 </script>
-<template><div><CrmBadge v-if="veModulo('crm')" estado="x" /><slot /></div></template>
+<template><div><SalesBadge v-if="canSee('sales')" status="x" /><slot /></div></template>
 EOF
 cat > app/middleware/auth.ts <<'EOF'
 export default defineNuxtRouteMiddleware(() => {
@@ -28,37 +28,37 @@ EOF
 cat > app/pages/index.vue <<'EOF'
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
-const { listOportunidades } = useCrm()
-const { data } = await useAsyncData('home', () => listOportunidades())
+const { listLeads } = useSales()
+const { data } = await useAsyncData('home', () => listLeads())
 </script>
 <template><p>{{ data?.length }}</p></template>
 EOF
-cat > app/pages/crm/index.vue <<'EOF'
+cat > app/pages/sales/index.vue <<'EOF'
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 const open = ref(false)
 </script>
-<template><CrmOportunidadModal v-model:open="open" /></template>
+<template><SalesLeadModal v-model:open="open" /></template>
 EOF
-cat > app/pages/planos/index.vue <<'EOF'
+cat > app/pages/documents/index.vue <<'EOF'
 <script setup lang="ts">
-const { listPlanos } = usePlanos()
+const { listDocuments } = useDocuments()
 </script>
 <template><ul><li v-for="p in []" :key="p">{{ p }}</li></ul></template>
 EOF
-cat > app/components/crm/CrmBadge.vue <<'EOF'
+cat > app/components/sales/SalesBadge.vue <<'EOF'
 <script setup lang="ts">
-defineProps<{ estado: string }>()
+defineProps<{ status: string }>()
 </script>
-<template><span>{{ estado }}</span></template>
+<template><span>{{ status }}</span></template>
 EOF
-cat > app/components/crm/CrmOportunidadModal.vue <<'EOF'
+cat > app/components/sales/SalesLeadModal.vue <<'EOF'
 <script setup lang="ts">
 const open = defineModel<boolean>('open')
-const { listOportunidades } = useCrm()
+const { listLeads } = useSales()
 onMounted(() => {
   window.addEventListener('keydown', () => { open.value = false })
-  setInterval(() => listOportunidades(), 5000)
+  setInterval(() => listLeads(), 5000)
 })
 </script>
 <template><div v-if="open"><slot /></div></template>
@@ -76,21 +76,21 @@ const api = axios.create({ baseURL: '/api/v1' })
 export function setToken(token: string) { api.defaults.headers.common.Authorization = `Bearer ${token}` }
 export function useApi() { return { api, apiFetch: <T>(url: string) => api.get<T>(url).then((r) => r.data) } }
 EOF
-cat > app/composables/useCrm.ts <<'EOF'
-import type { Oportunidad } from '~/types/crm'
-export function useCrm() {
+cat > app/composables/useSales.ts <<'EOF'
+import type { Lead } from '~/types/sales'
+export function useSales() {
   const { apiFetch } = useApi()
-  return { listOportunidades: () => apiFetch<Oportunidad[]>('/crm/oportunidades') }
+  return { listLeads: () => apiFetch<Lead[]>('/sales/leads') }
 }
 EOF
-cat > app/composables/useSettingComercial.ts <<'EOF'
-export function useSettingComercial() {
-  const permisos = useState<string[]>('comercial-permisos', () => [])
-  return { veModulo: (m: string) => permisos.value.includes(m) }
+cat > app/composables/useFeatureFlags.ts <<'EOF'
+export function useFeatureFlags() {
+  const permissions = useState<string[]>('flags-permissions', () => [])
+  return { canSee: (m: string) => permissions.value.includes(m) }
 }
 EOF
-cat > app/composables/usePlanos.ts <<'EOF'
-export function usePlanos() { const { apiFetch } = useApi(); return { listPlanos: () => apiFetch<string[]>('/obra/planos') } }
+cat > app/composables/useDocuments.ts <<'EOF'
+export function useDocuments() { const { apiFetch } = useApi(); return { listDocuments: () => apiFetch<string[]>('/projects/documents') } }
 EOF
 cat > app/stores/auth.ts <<'EOF'
 import { defineStore } from 'pinia'
@@ -117,7 +117,7 @@ EOF
 cat > app/features/orders/internal.ts <<'EOF'
 export function computeTotal(lines: number[]) { return lines.reduce((a, b) => a + b, 0) }
 EOF
-cat > app/types/crm.ts <<'EOF'
-export interface Oportunidad { id: string; nombre: string }
+cat > app/types/sales.ts <<'EOF'
+export interface Lead { id: string; name: string }
 EOF
 echo "scaffolded eval-nuxt-app"

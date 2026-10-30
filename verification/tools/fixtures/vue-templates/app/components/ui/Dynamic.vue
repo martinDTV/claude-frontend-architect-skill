@@ -10,8 +10,8 @@ const props = defineProps<{ mode: 'card' | 'row' }>()
     <transition name="fade"><p v-if="open">x</p></transition>
     <keep-alive><component :is="current" /></keep-alive>
     <Teleport to="body"><slot /></Teleport>
-    <component :is="props.mode === 'card' ? 'CrmBadge' : 'span'" status="literal" />
-    <component is="CrmBadge" status="static" />
+    <component :is="props.mode === 'card' ? 'SalesBadge' : 'span'" status="literal" />
+    <component is="SalesBadge" status="static" />
     <LocalWidget />
     <local-widget />
     <TotallyMissing />

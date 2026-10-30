@@ -34,7 +34,7 @@
  "findings": [
   "shared-imports-domain|app/components/ui/Dynamic.vue|13|heuristic|high",
   "unclassified-files|||info|info",
-  "unresolved-import|app/components/crm/CrmCard.vue|2|info|low",
+  "unresolved-import|app/components/sales/SalesCard.vue|2|info|low",
   "unresolved-import|app/components/ui/Dynamic.vue|2|info|low",
   "unresolved-import|app/composables/useChannelSafe.ts|1|info|low",
   "unresolved-import|app/pages/about.vue|2|info|low"

@@ -342,7 +342,7 @@ function pascal(parts) {
 
 /**
  * Nuxt's component name rule: directory segments prefix the file name, and a prefix that the
- * file name already starts with is not repeated (`components/crm/CrmBadge.vue` → `CrmBadge`).
+ * file name already starts with is not repeated (`components/sales/SalesBadge.vue` → `SalesBadge`).
  */
 export function nuxtComponentName(dirSegments, fileName, { prefix = '', pathPrefix = true } = {}) {
   let prefixParts = pathPrefix ? [...dirSegments] : []
