@@ -82,10 +82,10 @@ Encapsulation: a control inside a custom component that declares a label-like pr
 
 - **Nothing runs unless you hand it a browser.** `--playwright <dir>` is mandatory: a directory whose `node_modules` provides `playwright` (and `axe-core`, or `--axe`). The plugin installs nothing and bundles no browser; `verification/browser/package.json` pins the versions the fixture was validated with.
 - **Only hosts you allow.** `localhost` and `127.0.0.1` by default; anything else needs `--allow-host`. Every other request the page makes is blocked at the network layer and listed in `data.blockedRequests`. Production is never a default and never a recommendation.
-- **No automatic login.** A login wall is reported as `auth-required` and the page is skipped; the tool never receives credentials.
+- **No automatic login, no credential forms.** A login wall is reported as `auth-required` and the page is skipped; the tool never receives credentials, and a form that contains a password field is never submitted even under `--allow-submit` (`form-skipped-credentials`: no sign-in attempts, no lockouts, no accounts created).
 - **No form submission without `--allow-submit`** (the `forms` check refuses to run without it). `--interact` clicks `type="button"` controls to discover dialogs and menus, never those whose name matches delete, remove, destroy, pay, purchase, buy, send, submit, confirm, archive, publish, reset, revoke, logout or their Spanish equivalents. Values typed into forms are marked (`Audit value`) and never appear in the report.
 - **Budgets.** `--max-time` (90 s) and `--max-pages` (10); when the budget runs out the remaining pages are listed as not visited.
-- **Evidence only where you say.** `--out` must be under the working directory or the OS temp dir (default: a new temp directory); the report `browser-audit.json` and, only with `--screenshots`, masked PNGs go there. Elements matching `--mask` (default `input[type=password],[data-sensitive],[data-fa-mask]`) are blacked out in screenshots and their text is dropped from every evidence string.
+- **Evidence only where you say.** `--out` and `--baseline-dir` must be under the working directory, the OS temp dir or `/tmp` (symlinks resolved, path segments compared, so a sibling directory sharing the prefix is rejected; default `--out` is a new temp directory); the report `browser-audit.json` and, only with `--screenshots`, masked PNGs go there; the baseline directory is created only when a baseline is actually written. Elements matching `--mask` (default `input[type=password],[data-sensitive],[data-fa-mask]`) are blacked out in screenshots, and their text, value, label, title and placeholder are replaced by `[masked]` in every message, evidence string, page title and console line of the report (best effort: names truncated by the tool are matched on their first 60 characters).
 
 | Check | Findings | Level |
 |---|---|---|
@@ -100,6 +100,10 @@ Encapsulation: a control inside a custom component that declares a label-like pr
 Visual baselines are one PNG plus one JSON per page and viewport (browser name, version and platform, Node and Playwright versions, viewport, device scale factor, reduced-motion and animation settings, generation time). They are written only with `--write-baseline` (when none exists) or `--approve <page@viewport,…>`; a run never updates an approved baseline on its own; without a baseline the screenshot is saved as a candidate under `--out` and reported as `visual-baseline-missing`. Animations are disabled, fonts awaited, `prefers-reduced-motion: reduce` emulated and `--freeze-time` fixes `Date`; when the baseline's browser name, major version, platform or viewport differs from the run, the status is `environment-mismatch` and no regression verdict is given. Differences above `--visual-threshold` (ratio of differing pixels, default 0.001) are `visual-regression` with bounding boxes; below it, `visual-difference-accepted`. The PNG codec is in `lib/png.mjs` (zero dependencies).
 
 Passing axe-core and these checks is not WCAG conformance. Reading order, the meaning of alternatives, timing, cognitive load, error prevention and most of the "understandable" criteria need a person; `references/ui-verification.md` lists them. The fixture that proves each finding fires, and does not fire on the correct page, is `verification/browser/fixture/` (served locally by `server.mjs`); `verification/browser/browser-audit.test.mjs` runs it in CI with Chromium.
+
+## Public routes (routes-audit)
+
+A page needs no guard when `publicRoutes` in the config matches it, or when its route starts with one of the generic names the tool treats as public by default: `auth`, `login`, `logout`, `register`, `signup`, `signin`, `sign-in`, `sign-up`, `callback`, `forgot-password`, `reset-password`, `verify-email`, `forbidden`, `no-access`, `unauthorized`, `suspended`, `maintenance`, `error`, `403`, `404`, `500`. Anything specific to a product (a public status page, a legal page, a kiosk route) goes in `publicRoutes`; the default list carries no project names.
 
 ## Dependency confidence (domain-deps, contracts-check, state-audit)
 
@@ -126,8 +130,8 @@ Optional, at the project root (or `--config path`). Without it, folders are clas
 ```json
 {
   "domains": {
-    "crm": ["app/components/crm/**", "app/pages/crm/**", "app/composables/useCrm.ts", "app/types/crm.ts"],
-    "obra": ["app/pages/proyectos/**", "app/composables/useGeneradores.ts"]
+    "sales": ["app/components/sales/**", "app/pages/sales/**", "app/composables/useSales.ts", "app/types/sales.ts"],
+    "projects": ["app/pages/projects/**", "app/composables/useSchedule.ts"]
   },
   "shell": ["app/layouts/**", "app/middleware/**", "app/plugins/**", "app/pages/index.vue"],
   "shared": ["app/components/ui/**", "app/utils/**", "app/composables/useApi.ts"],
@@ -138,8 +142,8 @@ Optional, at the project root (or `--config path`). Without it, folders are clas
   "excludeTests": true,
   "exclude": ["infra/**", "vueform.config.ts"],
   "dependencies": {
-    "allowed": [["obra", "crm"], ["rrhh", "crm"]],
-    "exceptions": [{ "from": "crm", "to": "obra", "reason": "project client lives in crm until PR 4", "since": "2026-10-27", "until": "PR 4" }]
+    "allowed": [["projects", "sales"], ["people", "sales"]],
+    "exceptions": [{ "from": "sales", "to": "projects", "reason": "project client lives in sales until PR 4", "since": "2026-10-27", "until": "PR 4" }]
   },
   "budgets": { "entryJsKb": 250, "entryCssKb": 60, "maxChunkKb": 300, "totalJsKb": null }
 }

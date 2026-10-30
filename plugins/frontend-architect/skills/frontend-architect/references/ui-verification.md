@@ -32,10 +32,10 @@ Typical false positives and the rule that avoids them: a decorative `<img alt=""
 
 Propose it when the question is behavioural (focus, keyboard, double submit, overflow, hydration, visual drift) and a local or staging URL exists. Never run it on your own initiative; the authorisation checklist is the user's answer to:
 
-1. **Which URL**: a local dev server or a staging host they name (`--allow-host` for anything that is not localhost). Production is never a default; if they insist, they say so and accept that the tool never logs in and that `--allow-submit` is off.
+1. **Which URL**: a local dev server or a staging host they name (`--allow-host` for anything that is not localhost). Production is never a default; if they insist, they say so and accept that the tool never logs in, never submits a form that contains a password field, and that `--allow-submit` is off.
 2. **Which browser installation**: a directory with `playwright` and `axe-core` in its `node_modules` (`--playwright <dir>`). The plugin installs nothing. `verification/browser/package.json` in the repository pins the versions the fixture was validated with.
 3. **Which interactions**: `--interact` (clicks non-destructive buttons to discover dialogs and menus; names matching delete, remove, pay, send, submit, confirm, archive, publish, reset, revoke, logout and their Spanish equivalents are never clicked), `--allow-submit` (fills and submits forms with marked audit values; only where test submissions are acceptable).
-4. **Where evidence goes**: `--out` under the working directory or `/tmp`; `--screenshots` only if they accept image evidence; `--mask` for anything sensitive beyond the defaults (`input[type=password]`, `[data-sensitive]`, `[data-fa-mask]`). Masked text never enters the report. Do not paste screenshots of real customer data into a chat or a ticket.
+4. **Where evidence goes**: `--out` (and `--baseline-dir`) under the working directory or `/tmp`; `--screenshots` only if they accept image evidence; `--mask` for anything sensitive beyond the defaults (`input[type=password]`, `[data-sensitive]`, `[data-fa-mask]`). Masked text is replaced by `[masked]` in the report; accessible names of other controls can still carry user content, so mask them when the page shows personal data. Do not paste screenshots of real customer data into a chat or a ticket.
 5. **Budget**: `--max-time` (90 s) and `--max-pages` (10); a budget that runs out is noted, never hidden.
 
 ```bash

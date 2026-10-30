@@ -21,7 +21,7 @@ verification/                             compiles and tests the documented code
 ├── extract.mjs, vue/ react/ next/ nuxt/ creative/   @verify extraction and real compilers
 ├── ssr-test/                             SSR cross-request leak test
 ├── depcruise/                            boundary rules fixture
-├── tools/                                node:test suites (98), seven fixture apps (nuxt, next, ts-paths, vue-templates, monorepo, ui-app, ssr-app; five with ground truths), 1.2.0/1.3.0 JSON contract snapshots, frozen 1.3.0 finding baselines and the benchmark (edges, symbols, rule-level precision)
+├── tools/                                node:test suites (99), seven fixture apps (nuxt, next, ts-paths, vue-templates, monorepo, ui-app, ssr-app; five with ground truths), 1.2.0/1.3.0 JSON contract snapshots, frozen 1.3.0 finding baselines and the benchmark (edges, symbols, rule-level precision)
 ├── browser/                              browser-mode suite: pinned Playwright + axe-core (package.json), static HTML fixture with a counting server, expected findings per page
 └── plugin-check.mjs                      manifests, references, scripts and evals consistency
 docs/                                     research, this document, validation report
