@@ -336,7 +336,12 @@ export interface ChapterNavigator {
   readonly chapters: readonly Chapter[]
   readonly index: number
   readonly progress: number
-  /** scroll or a timeline reports a progress; the chapter follows */
+  /** the chapter a goTo/next/previous/key asked for, until the reported progress reaches it */
+  readonly travellingTo: number | null
+  /**
+   * scroll or a timeline reports a progress; the chapter follows. While travelling to a requested chapter the
+   * intermediate chapters the scroll passes through are not announced (no aria-current flicker on the way)
+   */
   reportProgress(progress: number): ChapterChange | null
   /** a request to go somewhere; returns the progress to travel to */
   goTo(index: number, source?: ChapterChange['source']): number
@@ -356,6 +361,7 @@ export function createChapterNavigator(chapters: Chapter[], initial = 0): Chapte
   const listeners = new Set<(change: ChapterChange) => void>()
   let index = Math.min(sorted.length - 1, Math.max(0, initial))
   let progress = sorted[index]?.start ?? 0
+  let travellingTo: number | null = null
   const emit = (previous: number, source: ChapterChange['source']) => {
     const chapter = sorted[index]
     if (!chapter) return null
@@ -373,6 +379,7 @@ export function createChapterNavigator(chapters: Chapter[], initial = 0): Chapte
     const previous = index
     index = clamped
     progress = sorted[clamped]?.start ?? 0
+    travellingTo = clamped
     if (previous !== clamped) emit(previous, source)
     return progress
   }
@@ -384,9 +391,17 @@ export function createChapterNavigator(chapters: Chapter[], initial = 0): Chapte
     get progress() {
       return progress
     },
+    get travellingTo() {
+      return travellingTo
+    },
     reportProgress(p) {
       progress = Math.min(1, Math.max(0, p))
       const i = indexFor(progress)
+      if (travellingTo !== null) {
+        // on the way to a requested chapter: hold the announced chapter until the scroll arrives
+        if (i === travellingTo) travellingTo = null
+        return null
+      }
       if (i === index) return null
       const previous = index
       index = i
@@ -645,6 +660,21 @@ describe('chapter navigator', () => {
     expect(nav.fromHash('#inside')).toBe(1)
     expect(nav.fromHash('#nope')).toBeNull()
     expect(log).toEqual(['0>1:scroll', '1>2:scroll', '2>1:key', '1>0:key', '0>2:key', '2>1:hash'])
+  })
+
+  it('does not announce the chapters the scroll passes through on the way to a requested one', () => {
+    const nav = createChapterNavigator(chapters)
+    const log: string[] = []
+    nav.subscribe((c) => log.push(`${c.previous}>${c.index}:${c.source}`))
+    expect(nav.goTo(2)).toBe(0.65)
+    expect(nav.travellingTo).toBe(2)
+    // a smooth scroll reports intermediate progress values: chapter 2 is crossed, nothing is announced
+    for (const p of [0.1, 0.3, 0.4, 0.5, 0.6]) expect(nav.reportProgress(p)).toBeNull()
+    expect(nav.index).toBe(2)
+    expect(nav.reportProgress(0.7)).toBeNull() // arrived: travelling ends
+    expect(nav.travellingTo).toBeNull()
+    expect(nav.reportProgress(0.4)?.index).toBe(1) // ordinary scrolling announces again
+    expect(log).toEqual(['0>2:button', '2>1:scroll'])
   })
 })
 

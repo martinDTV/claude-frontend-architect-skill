@@ -14,12 +14,17 @@ export interface ScrollBinding {
   /** scrolls the container so the experience lands on `progress` (animated by the scrub, or a cut under reduced motion) */
   seekTo(progress: number): void
   readonly progress: number
+  /** stops the scrub from seeking (explore mode); resume re-enables it without jumping */
+  pause(): void
+  resume(): void
+  readonly paused: boolean
   dispose(): void
 }
 
 export function bindScrollExperience(container: HTMLElement, experience: ScrollBound, options: { reducedMotion: boolean }): ScrollBinding {
   gsap.registerPlugin(ScrollTrigger)
   let progress = 0
+  let paused = false
   const trigger = options.reducedMotion
     ? null
     : ScrollTrigger.create({
@@ -28,6 +33,7 @@ export function bindScrollExperience(container: HTMLElement, experience: ScrollB
         end: 'bottom bottom',
         scrub: 0.4,
         onUpdate: (self) => {
+          if (paused) return
           progress = self.progress
           experience.seek(progress)
         },
@@ -59,6 +65,20 @@ export function bindScrollExperience(container: HTMLElement, experience: ScrollB
     seekTo,
     get progress() {
       return progress
+    },
+    pause() {
+      paused = true
+    },
+    resume() {
+      paused = false
+      // take the current scroll position without animating through what was skipped
+      if (trigger) {
+        progress = trigger.progress
+        experience.seek(progress)
+      }
+    },
+    get paused() {
+      return paused
     },
     dispose() {
       container.removeEventListener('keydown', onKey)

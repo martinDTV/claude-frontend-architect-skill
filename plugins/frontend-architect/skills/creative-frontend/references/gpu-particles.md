@@ -738,6 +738,21 @@ describe('density controller', () => {
     expect(c.set(4).name).toBe('floor')
     expect(c.sample(40)).toBeNull() // already at the floor, cooldown anyway
   })
+
+  it('does not oscillate: noisy frames around the budget leave the tier alone, a sustained overrun steps once and settles', () => {
+    const c = createDensityController({ budgetMs: 16.7, downAfter: 20, upAfter: 180, cooldown: 30, smoothing: 0.1, initial: 1 })
+    let seed = 7
+    const noise = () => { seed = (seed * 48271) % 2147483647; return seed / 2147483647 }
+    let changes = 0
+    for (let i = 0; i < 3000; i++) if (c.sample(16.7 * (0.65 + 0.7 * noise()))) changes++ // ±35% around the budget
+    expect(changes).toBe(0)
+    expect(c.tier.name).toBe('high')
+    for (let i = 0; i < 400; i++) if (c.sample(16.7 * (1.4 + 0.3 * noise()))) changes++ // 1.4–1.7× over, noisy
+    expect(c.history.map((h) => DEFAULT_TIERS[h.index]!.name)).toEqual(['high', 'medium', 'low', 'floor'].slice(0, c.history.length))
+    const after = c.history.length
+    for (let i = 0; i < 400; i++) c.sample(16.7 * (0.9 + 0.25 * noise())) // back inside the dead band: nothing moves either way
+    expect(c.history.length).toBe(after)
+  })
 })
 
 describe('kernels', () => {

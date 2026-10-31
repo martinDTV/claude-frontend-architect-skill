@@ -164,13 +164,14 @@ export function createProductExperience(options: ProductExperienceOptions): Prod
   const state = { focus: 8.5, keyIntensity: 2.2 }
   const cues = createCueSheet()
   const captions = ['establishing', 'cap', 'low', 'reverse']
-  sequence.segments.forEach((segment, i) => {
-    if (segment.name.endsWith(':hold')) return
-    const start = sequence.startOf(i)
-    const end = start + segment.weight / sequence.segments.reduce((s, x) => s + x.weight, 0)
-    const target = segment.to.target
-    const distance = Math.hypot(segment.to.position.x - target.x, segment.to.position.y - target.y, segment.to.position.z - target.z)
-    cues.add({ name: `focus:${segment.name}`, start, end: 1.01, enter: () => { state.focus = distance; post.focus(distance) } })
+  // focus follows the shot: one cue per shot over its segment and hold, so seeking backwards restores the earlier focus
+  const distanceOf = (shot: Shot) => Math.hypot(shot.position.x - shot.target.x, shot.position.y - shot.target.y, shot.position.z - shot.target.z)
+  captions.forEach((id, i) => {
+    const start = i === 0 ? 0 : sequence.startOf(sequence.segments.findIndex((s) => s.name === id))
+    const next = captions[i + 1]
+    const end = next ? sequence.startOf(sequence.segments.findIndex((s) => s.name === next)) : 1.01
+    const distance = distanceOf(shots[i]!)
+    cues.add({ name: `focus:${id}`, start, end, enter: () => { state.focus = distance; post.focus(distance) } })
   })
   captions.forEach((id, i) => {
     const start = i === 0 ? 0 : sequence.startOf(sequence.segments.findIndex((s) => s.name === id))
@@ -228,7 +229,8 @@ export function createProductExperience(options: ProductExperienceOptions): Prod
     configurator,
     post,
     seek(progress) {
-      if (bridge?.exploring) bridge.resume()
+      // while the user explores, the scroll scrub is paused by the page; a seek that still arrives is ignored
+      if (bridge?.exploring) return diagnostics()
       sequence.seek(progress)
       cues.seek(progress)
       return diagnostics()

@@ -680,6 +680,7 @@ export function createPostPipeline(runtime: SceneRuntime, options: PostOptions =
 
   let quality = options.quality ?? POST_QUALITIES.balanced
   const apply = (width: number, height: number) => {
+    if (!width || !height) return // before the first layout: nothing to size yet
     const ratio = renderer.getPixelRatio() * quality.resolutionScale
     composer.setPixelRatio(ratio)
     composer.setSize(width, height) // UnrealBloomPass sizes its mips from this (half the frame, then halving); resolutionScale is the bloom knob too
@@ -736,7 +737,7 @@ The same looks for `WebGPURenderer`, written as node graphs. The graph compiles 
 // @verify creative:shaders/tsl/materials.ts nuxt:lib/lab/shaders/tsl/materials.ts next:lib/lab/shaders/tsl/materials.ts
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
-import { Discard, Fn, color, float, mix, mx_noise_float, normalView, positionLocal, positionViewDirection, smoothstep, time, uniform, vec3 } from 'three/tsl'
+import { Discard, Fn, color, float, mx_noise_float, normalView, positionLocal, positionViewDirection, smoothstep, time, uniform, vec3 } from 'three/tsl'
 
 /** Noise dissolve as a node material: discard below the threshold, emissive edge above it. */
 export function createDissolveNodeMaterial(options: { color?: THREE.ColorRepresentation; edgeColor?: THREE.ColorRepresentation; edgeWidth?: number; scale?: number } = {}) {
@@ -780,12 +781,6 @@ export function createIridescentNodeMaterial(options: { baseColor?: THREE.ColorR
   const rim = cosTheta.oneMinus().pow(3)
   material.emissiveNode = film.mul(uStrength).mul(rim.mul(0.65).add(0.35))
   return { material, uniforms: { uThickness, uStrength } }
-}
-
-/** Mix helper kept for pages that blend two node colours by a uniform (chapter tints). */
-export function tintNode(a: THREE.ColorRepresentation, b: THREE.ColorRepresentation) {
-  const uMix = uniform(0)
-  return { node: mix(color(new THREE.Color(a)), color(new THREE.Color(b)), uMix), uMix }
 }
 ```
 

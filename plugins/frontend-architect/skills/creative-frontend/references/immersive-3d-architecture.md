@@ -213,7 +213,7 @@ Every geometry, material, texture, render target and renderer has exactly one of
 | Ownership | Who disposes | Examples |
 |---|---|---|
 | `own` | this runtime, on `dispose()` | geometry built for this scene, its materials, its render targets, the renderer |
-| `shared` | the pool, when the last holder releases it | an environment map used by two scenes, a noise texture reused across routes |
+| `shared` | the pool, when the last holder releases it; never a direct `dispose()` by one holder | an environment map used by two scenes, a noise texture reused across routes, a model from the asset cache |
 | `framework` | React Three Fiber or TresJS, when the element unmounts | `<boxGeometry>`, `<meshStandardMaterial>`, anything created declaratively |
 | `external` | whoever passed it in | a texture received as a prop, a loaded GLTF kept by an asset cache |
 | `unknown` | nobody, until someone decides | the honest state of a resource found in a graph the runtime did not build |
@@ -323,7 +323,9 @@ export function createResourceRegistry(): ResourceRegistry {
 /** Reference-counted sharing: the resource is created once and disposed when the last holder releases it. */
 export interface SharedPool {
   retain<T extends Disposable>(key: string, create: () => T): T
+  /** one holder fewer; disposes and forgets the resource when the last one releases. A handle kept after that is stale. */
   release(key: string): boolean
+  has(key: string): boolean
   holders(key: string): number
   readonly size: number
 }
@@ -350,6 +352,7 @@ export function createSharedPool(): SharedPool {
       entry.resource.dispose()
       return true
     },
+    has: (key) => pool.has(key),
     holders: (key) => pool.get(key)?.holders ?? 0,
     get size() {
       return pool.size
@@ -507,9 +510,13 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
   let render: (frame: Frame) => void = () => renderer.render(scene, camera)
   let frames = 0
   let lastDelta = 0
+  // renderer.info counts per renderer.render() call by default; a post pipeline renders several times per frame, so
+  // the runtime resets the counters once per frame and stats() reports the whole frame (calls, triangles)
+  renderer.info.autoReset = false
   loop.add(
     'render',
     (frame) => {
+      renderer.info.reset()
       render(frame)
       frames++
       lastDelta = frame.delta
@@ -836,6 +843,13 @@ describe('resource registry', () => {
     expect(log).toEqual(['env'])
     expect(pool.size).toBe(0)
     expect(pool.release('env')).toBe(false)
+    // a retain after the last release creates a fresh resource: the old handle is stale by contract, never reused
+    const c = pool.retain('env', make)
+    expect(c).not.toBe(a)
+    expect(created).toBe(2)
+    expect(pool.has('env')).toBe(true)
+    pool.release('env')
+    expect(pool.has('env')).toBe(false)
   })
 })
 

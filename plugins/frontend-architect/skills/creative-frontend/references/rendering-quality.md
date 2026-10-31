@@ -14,27 +14,47 @@ Light, colour, materials, shadows, reflections and quality tiers for scenes that
 
 ## 1. Light first: environments without assets
 
-Physically based materials are lit by their environment; without one, metal is black and glass is nothing. An HDR environment map (`.hdr`/`.exr` through `RGBELoader`/`EXRLoader` and `PMREMGenerator`) is the usual answer and is a large asset. Two environments that need no file: Three.js's `RoomEnvironment` (a lit room: soft key, fill and rim, the studio look) and a procedural sky-gradient-plus-sun rendered into a PMREM, whose sun can exceed 1.0 (the PMREM is half-float, so highlights stay high-dynamic-range). Both are `shared` resources in a page with several scenes.
+Physically based materials are lit by their environment; without one, metal is black and glass is nothing. An HDR environment map (`.hdr`/`.exr` through `RGBELoader`/`EXRLoader` and `PMREMGenerator`) is the usual answer and is a large asset. Two environments that need no file: Three.js's `RoomEnvironment` (a lit room: soft key, fill and rim, the studio look) and a procedural sky-gradient-plus-sun rendered into a PMREM, whose sun can exceed 1.0 (the PMREM is half-float, so highlights stay high-dynamic-range). Both are owned by the runtime that made them unless a pool is passed, in which case they are `shared` and the pool disposes them with the last holder (a page with several scenes or routes that reuse the same sky).
 
 ```ts
 // @verify creative:rendering/environment.ts nuxt:lib/lab/rendering/environment.ts next:lib/lab/rendering/environment.ts
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-import type { ResourceRegistry } from '../engine/resource-registry'
+import type { ResourceRegistry, SharedPool } from '../engine/resource-registry'
 
 export interface EnvironmentHandle {
   texture: THREE.Texture
+  /** releases this holder: disposes an own environment, or returns a pooled one to the pool */
   dispose(): void
 }
 
+/**
+ * Ownership of an environment: by default the runtime owns it (registered `own`, disposed with the registry or by the
+ * handle). With a pool and a key it is `shared`: created once, retained per holder, disposed by the pool when the last
+ * holder releases it; the registry keeps it out of the runtime's disposal.
+ */
+function adopt(registry: ResourceRegistry, target: THREE.WebGLRenderTarget, label: string, pool?: { pool: SharedPool; key: string }): EnvironmentHandle {
+  if (pool) {
+    registry.shared(target.texture, label)
+    return { texture: target.texture, dispose: () => void pool.pool.release(pool.key) }
+  }
+  registry.own(target, label)
+  return { texture: target.texture, dispose: () => { registry.forget(target); target.dispose() } }
+}
+
 /** The studio: Three.js's RoomEnvironment pre-filtered for PBR. */
-export function createStudioEnvironment(renderer: THREE.WebGLRenderer, registry: ResourceRegistry): EnvironmentHandle {
-  const pmrem = new THREE.PMREMGenerator(renderer)
-  const room = new RoomEnvironment()
-  const target = pmrem.fromScene(room, 0.04)
-  pmrem.dispose()
-  const texture = registry.shared(target.texture, 'studio-environment')
-  return { texture, dispose: () => target.dispose() }
+export function createStudioEnvironment(renderer: THREE.WebGLRenderer, registry: ResourceRegistry, shared?: { pool: SharedPool; key?: string }): EnvironmentHandle {
+  const make = () => {
+    const pmrem = new THREE.PMREMGenerator(renderer)
+    const room = new RoomEnvironment()
+    const target = pmrem.fromScene(room, 0.04)
+    pmrem.dispose()
+    room.dispose() // the room's own geometries and materials were uploaded for the pre-filter render: free them now
+    return target
+  }
+  const key = shared?.key ?? 'studio-environment'
+  const target = shared ? shared.pool.retain(key, make) : make()
+  return adopt(registry, target, 'studio-environment', shared ? { pool: shared.pool, key } : undefined)
 }
 
 export interface GradientEnvironmentOptions {
@@ -46,7 +66,13 @@ export interface GradientEnvironmentOptions {
 }
 
 /** A procedural sky: vertical gradient with a bright sun disc, pre-filtered. Colours above 1 are kept (half-float PMREM). */
-export function createGradientEnvironment(renderer: THREE.WebGLRenderer, registry: ResourceRegistry, options: GradientEnvironmentOptions = {}): EnvironmentHandle {
+export function createGradientEnvironment(renderer: THREE.WebGLRenderer, registry: ResourceRegistry, options: GradientEnvironmentOptions = {}, shared?: { pool: SharedPool; key: string }): EnvironmentHandle {
+  const key = shared?.key ?? 'gradient-environment'
+  const target = shared ? shared.pool.retain(key, () => renderGradient(renderer, options)) : renderGradient(renderer, options)
+  return adopt(registry, target, 'gradient-environment', shared ? { pool: shared.pool, key } : undefined)
+}
+
+function renderGradient(renderer: THREE.WebGLRenderer, options: GradientEnvironmentOptions): THREE.WebGLRenderTarget {
   const sun = options.sun ?? { direction: new THREE.Vector3(0.4, 0.8, 0.3) }
   const uniforms = {
     uTop: { value: new THREE.Color(options.top ?? '#3a4a6a') },
@@ -89,8 +115,7 @@ export function createGradientEnvironment(renderer: THREE.WebGLRenderer, registr
   pmrem.dispose()
   geometry.dispose()
   material.dispose()
-  const texture = registry.shared(target.texture, 'gradient-environment')
-  return { texture, dispose: () => target.dispose() }
+  return target
 }
 
 export interface ApplyEnvironmentOptions {
