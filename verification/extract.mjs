@@ -64,7 +64,7 @@ for (const [project, target] of [['nuxt', join('app', 'lib', 'ui')], ['next', jo
   const atlas = loadContract(join(here, 'design', 'contracts', 'atlas-logistics.json'))
   const nuxtCss = join(here, 'nuxt', 'app', 'assets', 'css')
   mkdirSync(nuxtCss, { recursive: true })
-  writeFileSync(join(nuxtCss, 'tokens.css'), emitTailwind(atlas))
+  writeFileSync(join(nuxtCss, 'tokens.css'), emitTailwind(atlas, { nuxtUiNeutralAlias: 'contract-neutral' }))
   writeFileSync(join(nuxtCss, 'nuxt-ui-map.css'), emitNuxtUi(atlas))
   const nextCss = join(here, 'next', 'src', 'app')
   mkdirSync(nextCss, { recursive: true })

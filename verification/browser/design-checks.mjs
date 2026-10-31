@@ -28,9 +28,10 @@ const isDark = (page) => page.evaluate(() => document.documentElement.classList.
 
 export async function runDesignChecks(chromium, { url, label, contractPath, evidence, playwrightDir }) {
   mkdirSync(evidence, { recursive: true })
-  const { validateContract } = await import(join(scripts, 'design-contract.mjs'))
+  const { buildRamps, validateContract } = await import(join(scripts, 'design-contract.mjs'))
   const contract = JSON.parse(readFileSync(contractPath, 'utf8'))
   const expected = validateContract(contract, contractPath).data.roles
+  const ramps = buildRamps(contract)
   const browser = await chromium.launch({ headless: true })
   const results = []
   const report = { label, contract: contract.name, light: null, dark: null, pairs: null, focus: null, reducedMotion: null, legibility: null, audit: null }
@@ -50,10 +51,20 @@ export async function runDesignChecks(chromium, { url, label, contractPath, evid
     const mismatchesLight = Object.entries(expected.light).filter(([role, hex]) => light[role] !== hex)
     expect(mismatchesLight.length === 0, `light roles differ from the contract: ${mismatchesLight.map(([r, h]) => `${r} ${light[r]} vs ${h}`).join(', ')}`)
     report.light = light
+    // every ramp step exists on the root at runtime: the theme is static, because Nuxt UI's generated aliases, shadcn's
+    // aliases and this page read the ramps through var() and Tailwind v4 would otherwise drop the steps no class uses
+    const rampVars = Object.entries(ramps).flatMap(([name, steps]) => Object.keys(steps).map((s) => `--color-${name}-${s}`))
+    const missingRamp = await page.evaluate((vars) => { const cs = getComputedStyle(document.documentElement); return vars.filter((v) => !cs.getPropertyValue(v).trim()) }, rampVars)
+    expect(missingRamp.length === 0, `ramp variables missing on the root at runtime (${missingRamp.length} of ${rampVars.length}): ${missingRamp.slice(0, 6).join(', ')}`)
+    if (label === 'nuxt') {
+      // Nuxt UI's semantic colours resolve to the contract's ramps: error to danger, neutral to the contract's tinted neutral (not Tailwind's grey)
+      const ui = await page.evaluate(() => { const cs = getComputedStyle(document.documentElement); return { error: cs.getPropertyValue('--ui-color-error-500').trim().toLowerCase(), neutral: cs.getPropertyValue('--ui-color-neutral-500').trim().toLowerCase(), primary: cs.getPropertyValue('--ui-color-primary-500').trim().toLowerCase() } })
+      expect(ui.error === ramps.danger['500'].toLowerCase() && ui.neutral === ramps.neutral['500'].toLowerCase() && ui.primary === ramps.accent['500'].toLowerCase(), `Nuxt UI's error, neutral and primary aliases resolve to the contract's ramps (${JSON.stringify(ui)} vs ${ramps.danger['500']}, ${ramps.neutral['500']}, ${ramps.accent['500']})`)
+    }
     const pairsLight = await readPairs(page)
     expect(pairsLight.length >= 8 && pairsLight.every((p) => p.pass), `every pair the page computes passes in light (${pairsLight.filter((p) => !p.pass).map((p) => p.text).join(' | ')})`)
     await page.screenshot({ path: join(evidence, `${label}-design-light.png`), fullPage: true })
-    ok(`${label}: light theme applies the contract's ${Object.keys(light).length} roles exactly; ${pairsLight.length} pairs pass`)
+    ok(`${label}: light theme applies the contract's ${Object.keys(light).length} roles exactly; all ${rampVars.length} ramp steps resolve at runtime${label === 'nuxt' ? "; Nuxt UI's aliases resolve to the contract's ramps" : ''}; ${pairsLight.length} pairs pass`)
     // 2. dark: the toggle switches the class and the roles; the choice survives a reload
     await page.click('[data-theme-toggle]')
     await page.waitForFunction(() => document.documentElement.classList.contains('dark'), null, { timeout: 5000 })
