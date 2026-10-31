@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Controls Tab cannot reach</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css">
+<style>.nav-links a { display: none }</style></head>
+<body>
+<header>
+  <!-- the navigation is hidden and nothing announces how to open it -->
+  <button type="button" id="hamburger" aria-label="Menu">☰</button>
+  <nav aria-label="Primary" class="nav-links"><a href="/">Home</a><a href="/form-good.html">Forms</a></nav>
+</header>
+<main id="main">
+  <h1>Controls Tab cannot reach</h1>
+  <p>A real control with tabindex="-1" outside any composite widget, and a second one a script keeps skipping.</p>
+  <button type="button" tabindex="-1" id="save">Save</button>
+  <button type="button" id="skipped">Discard</button>
+  <a href="/">Back home</a>
+</main>
+<script>
+  // a script that jumps over a control when focus reaches it (the kind of defect the rule exists for)
+  document.getElementById('skipped').addEventListener('focus', () => document.querySelector('a[href="/"]').focus())
+</script>
+</body>
+</html>

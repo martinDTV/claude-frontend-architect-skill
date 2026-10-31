@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>A hydration mismatch, as a framework reports it</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<main id="main"><h1>Hydration mismatch</h1><p>The page replays the two messages Vue and React print when the server and the client disagree.</p><p><a href="/">Back home</a></p></main>
+<script>
+  console.error('[Vue warn]: Hydration text mismatch in <p>: - rendered on server: "9 variants" - expected on client: "6 variants"')
+  console.error('Hydration failed because the server rendered HTML didn\'t match the client.')
+</script>
+</body>
+</html>

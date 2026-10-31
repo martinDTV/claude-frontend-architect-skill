@@ -490,6 +490,60 @@
           }
         }
       }
+    },
+    "keyboard": {
+      "$comment": "1.5.0: composite widgets (roving tabindex radiogroup and toolbar, native radios of one name, a library select hidden from assistive technology behind a combobox button) are reached once per group by design and are not reported; a drawer toggle that says aria-haspopup is a disclosure for a hidden navigation. The bad page keeps the rule honest: a real control with tabindex=-1 outside any composite and a control a script skips are reported, and a hidden navigation behind a button that announces nothing is reported.",
+      "args": [
+        "--checks",
+        "keyboard,responsive",
+        "--viewports",
+        "mobile"
+      ],
+      "pages": {
+        "/composite-good.html": {
+          "mustHave": [],
+          "mustNotHave": [
+            "keyboard-unreachable",
+            "navigation-unreachable"
+          ]
+        },
+        "/composite-bad.html": {
+          "mustHave": [
+            "keyboard-unreachable",
+            "navigation-unreachable"
+          ],
+          "levels": {
+            "keyboard-unreachable": "heuristic",
+            "navigation-unreachable": "heuristic"
+          }
+        }
+      }
+    },
+    "hydration": {
+      "$comment": "1.5.0: hydration-mismatch is confirmed only for what a framework prints about hydration (Vue and React messages); an application's own 'schema mismatch' or 'version mismatch' lines are not. control-covered ignores a control's own label and indicator (a custom checkbox).",
+      "args": [
+        "--checks",
+        "hydration,responsive",
+        "--viewports",
+        "mobile"
+      ],
+      "pages": {
+        "/console-noise.html": {
+          "mustHave": [],
+          "mustNotHave": [
+            "hydration-mismatch",
+            "control-covered"
+          ]
+        },
+        "/hydration-bad.html": {
+          "mustHave": [
+            "hydration-mismatch"
+          ],
+          "levels": {
+            "hydration-mismatch": "confirmed"
+          }
+        }
+      }
     }
   },
   "axeClassification": {

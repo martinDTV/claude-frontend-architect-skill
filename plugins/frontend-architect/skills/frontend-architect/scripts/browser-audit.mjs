@@ -575,7 +575,11 @@ function failNow(message) {
 
 // ---------------------------------------------------------------- checks
 async function checkHydration(page, url, path, consoleMessages, emit, record) {
-  const hydrationMessages = consoleMessages.filter((m) => /hydrat|mismatch/i.test(m.text))
+  // Vue: "Hydration <kind> mismatch", "Hydration completed but contains mismatches", "Hydration node mismatch";
+  // React: "Hydration failed", "hydrated but some attributes ... didn't match", minified errors #418/#423/#425.
+  // Only errors and warnings count: an app's own "schema mismatch" log is not a hydration problem.
+  const HYDRATION_RE = /\bhydrat(?:ion|ed|ing)\b.*\b(?:mismatch|didn['’]t match|did not match|failed|error)|\bhydration completed but contains mismatches\b|minified react error #(?:418|423|425)\b/i
+  const hydrationMessages = consoleMessages.filter((m) => (m.type === 'error' || m.type === 'warning' || !m.type) && HYDRATION_RE.test(m.text))
   record.checks.hydration = { warnings: hydrationMessages.length }
   for (const m of hydrationMessages.slice(0, 3)) emit({ id: 'hydration-mismatch', level: 'confirmed', severity: 'high', file: path, message: `the framework reported a hydration problem: ${m.text.slice(0, 160)}`, fix: 'render the same markup on the server and the client: no Date.now/Math.random/browser APIs during render, valid HTML nesting, identical data on both sides' })
   // server HTML vs hydrated DOM: text that only exists on one side
@@ -747,10 +751,25 @@ async function checkKeyboard(page, path, emit, record) {
   }
   const unreachable = await page.evaluate((reachedIdx) => {
     const set = new Set(reachedIdx)
-    return [...document.querySelectorAll('[data-fa-focusable]')].filter((e) => !set.has(e.getAttribute('data-fa-focusable'))).slice(0, 10).map((e) => ({ selector: window.__fa.selector(e), name: window.__fa.name(e), tag: e.tagName.toLowerCase() }))
+    const all = [...document.querySelectorAll('[data-fa-focusable]')]
+    const COMPOSITE = '[role="radiogroup"], [role="group"], [role="menu"], [role="menubar"], [role="listbox"], [role="tablist"], [role="toolbar"], [role="grid"], [role="treegrid"], [role="tree"]'
+    // Tab lands once per group: a composite container with a roving tabindex (its tabindex="-1" members are reached
+    // with the arrow keys from the member Tab landed on) or native radios sharing a name. A group counts as reached
+    // when any of its members was.
+    const compositeKey = (e) => { const c = e.closest(COMPOSITE); return c ? `composite:${window.__fa.selector(c)}` : null }
+    const radioKey = (e) => (e.matches('input[type="radio"][name]') ? `radio:${e.getAttribute('name')}` : null)
+    const reachedGroups = new Set(all.filter((e) => set.has(e.getAttribute('data-fa-focusable'))).flatMap((e) => [compositeKey(e), radioKey(e)].filter(Boolean)))
+    const reachedByGroup = (e) => (radioKey(e) && reachedGroups.has(radioKey(e))) || (e.getAttribute('tabindex') === '-1' && compositeKey(e) && reachedGroups.has(compositeKey(e)))
+    const hiddenFromAt = (e) => e.closest('[aria-hidden="true"], [inert]') !== null || (() => { const r = e.getBoundingClientRect(); return r.width <= 1 && r.height <= 1 })()
+    return all
+      .filter((e) => !set.has(e.getAttribute('data-fa-focusable')))
+      .filter((e) => !hiddenFromAt(e))
+      .filter((e) => !reachedByGroup(e))
+      .slice(0, 10)
+      .map((e) => ({ selector: window.__fa.selector(e), name: window.__fa.name(e), tag: e.tagName.toLowerCase() }))
   }, [...reached])
   record.checks.keyboard = { focusable: total, reached: reached.size, unreachable: unreachable.length }
-  if (unreachable.length && total <= 80) emit({ id: 'keyboard-unreachable', level: 'heuristic', severity: 'medium', file: path, message: `${unreachable.length} visible focusable element(s) were not reached by Tab in document order (e.g. ${unreachable.slice(0, 3).map((u) => `${u.tag} "${u.name || u.selector}"`).join(', ')})`, evidence: unreachable.map((u) => u.selector).join(' | '), fix: 'check for focus traps, tabindex="-1" on real controls or scripts that move focus; keyboard users must reach every control' })
+  if (unreachable.length && total <= 80) emit({ id: 'keyboard-unreachable', level: 'heuristic', severity: 'medium', file: path, message: `${unreachable.length} visible focusable element(s) were not reached by Tab in document order (e.g. ${unreachable.slice(0, 3).map((u) => `${u.tag} "${u.name || u.selector}"`).join(', ')})`, evidence: unreachable.map((u) => u.selector).join(' | '), fix: 'check for focus traps, tabindex="-1" on real controls or scripts that move focus; keyboard users must reach every control (members of a roving-tabindex composite, radios of one group and controls hidden from assistive technology are not counted)' })
   // hover-only disclosure: elements revealed by :hover and not reachable otherwise
   const hoverOnly = await page.evaluate(() => {
     const out = []
@@ -993,13 +1012,17 @@ async function checkResponsive(page, path, viewport, scale, emit, record) {
       const top = document.elementFromPoint(cx, cy)
       if (top && top !== e && !e.contains(top) && !top.contains(e)) {
         const pos = getComputedStyle(top).position
-        if (pos === 'fixed' || pos === 'sticky' || pos === 'absolute') covered.push({ control: window.__fa.selector(e), name: window.__fa.name(e), by: window.__fa.selector(top) })
+        // the control's own label or its indicator (a custom checkbox, radio or switch) is the control's face, not a cover
+        const ownLabel = (e.labels && [...e.labels].some((l) => l === top || l.contains(top))) || (top.closest('label') && top.closest('label') === e.closest('label'))
+        if ((pos === 'fixed' || pos === 'sticky' || pos === 'absolute') && !ownLabel) covered.push({ control: window.__fa.selector(e), name: window.__fa.name(e), by: window.__fa.selector(top) })
       }
     }
     window.scrollTo(0, 0)
     const dialogs = [...document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"]')].filter((e) => window.__fa.visible(e) && e.getBoundingClientRect().height > vh + 1).map((e) => window.__fa.selector(e))
     const navLinks = [...document.querySelectorAll('nav a[href]')]
-    const hiddenNav = navLinks.length && navLinks.every((a) => !window.__fa.visible(a)) && !document.querySelector('nav button[aria-expanded], button[aria-controls]')
+    // a disclosure for the navigation: a button that announces its state (aria-expanded), names what it controls
+    // (aria-controls) or says it opens a menu or dialog (aria-haspopup, how a drawer toggle presents itself)
+    const hiddenNav = navLinks.length && navLinks.every((a) => !window.__fa.visible(a)) && !document.querySelector('nav button[aria-expanded], button[aria-controls], button[aria-haspopup], [role="button"][aria-expanded], [role="button"][aria-haspopup]')
     return { vw, overflow, culprits: culprits.slice(0, 8), scrollers, cut: cut.slice(0, 8), covered: covered.slice(0, 8), dialogs, hiddenNav, clipped }
   }, { s: scale, exceptionSelector: REFLOW_EXCEPTION_SELECTOR })
   const textScaleApplied = scale === 1 ? null : scaled.sampled ? Number((scaled.grew / scaled.sampled).toFixed(2)) : null
@@ -1018,7 +1041,7 @@ async function checkResponsive(page, path, viewport, scale, emit, record) {
   if (r.cut.length) emit({ id: 'control-cut-off', level: 'confirmed', severity: 'medium', file: path, message: `${where}: control(s) extend beyond the viewport: ${r.cut.join(', ')}`, fix: 'keep interactive controls inside the viewport at every breakpoint' })
   for (const c of r.covered.slice(0, 3)) emit({ id: 'control-covered', level: 'confirmed', severity: 'medium', file: path, message: `${where}: "${c.name || c.control}" is covered by ${c.by} when scrolled into view`, evidence: c.control, fix: 'add scroll-padding/scroll-margin for fixed bars, or make the bar part of the flow at this breakpoint' })
   if (r.dialogs.length) emit({ id: 'dialog-exceeds-viewport', level: 'confirmed', severity: 'medium', file: path, message: `${where}: dialog taller than the viewport (${r.dialogs.join(', ')})`, fix: 'max-height with internal scrolling; keep the dialog actions reachable' })
-  if (r.hiddenNav) emit({ id: 'navigation-unreachable', level: 'heuristic', severity: 'medium', file: path, message: `${where}: every nav link is hidden and no disclosure button (aria-expanded/aria-controls) was found`, fix: 'expose a menu button that toggles the navigation and announces its state' })
+  if (r.hiddenNav) emit({ id: 'navigation-unreachable', level: 'heuristic', severity: 'medium', file: path, message: `${where}: every nav link is hidden and no disclosure button (aria-expanded, aria-controls or aria-haspopup) was found`, fix: 'expose a menu button that toggles the navigation and announces its state' })
 }
 
 async function screenshot(page, masks, outDir, path, viewport, report) {

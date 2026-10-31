@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Composite widgets, reachable by design</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css">
+<style>
+  .nav-links a { display: none } /* the navigation lives behind the drawer toggle on this page */
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style></head>
+<body>
+<header>
+  <button type="button" id="drawer" aria-haspopup="dialog" aria-label="Open navigation">☰</button>
+  <nav aria-label="Primary" class="nav-links"><a href="/">Home</a><a href="/form-good.html">Forms</a></nav>
+</header>
+<main id="main">
+  <h1>Composite widgets</h1>
+  <p>Every control here is operable by keyboard; Tab lands once per group and the arrow keys move inside it, which is how composite widgets are specified.</p>
+  <!-- a roving-tabindex radiogroup: one tab stop, the others carry tabindex="-1" -->
+  <div role="radiogroup" aria-label="Density">
+    <button type="button" role="radio" aria-checked="true" tabindex="0" id="compact">Compact</button>
+    <button type="button" role="radio" aria-checked="false" tabindex="-1" id="comfortable">Comfortable</button>
+    <button type="button" role="radio" aria-checked="false" tabindex="-1" id="spacious">Spacious</button>
+  </div>
+  <!-- native radios of one name: one tab stop -->
+  <fieldset><legend>Theme</legend>
+    <label><input type="radio" name="theme" value="light" checked> Light</label>
+    <label><input type="radio" name="theme" value="dark"> Dark</label>
+  </fieldset>
+  <!-- a library select: the visible trigger is a button, the native select behind it is for forms only -->
+  <label for="lane-trigger">Lane</label>
+  <button type="button" id="lane-trigger" role="combobox" aria-expanded="false" aria-haspopup="listbox">All lanes</button>
+  <select aria-hidden="true" tabindex="-1" class="sr"><option>All lanes</option><option>BIL-MAD</option></select>
+  <!-- a toolbar with a roving tabindex -->
+  <div role="toolbar" aria-label="Formatting">
+    <button type="button" tabindex="0">Bold</button>
+    <button type="button" tabindex="-1">Italic</button>
+    <button type="button" tabindex="-1">Underline</button>
+  </div>
+  <a href="/">Back home</a>
+</main>
+<script>
+  // arrow keys move inside the composites (what a library does); Tab leaves them
+  for (const sel of ['[role=radiogroup]', '[role=toolbar]']) {
+    const root = document.querySelector(sel)
+    const items = [...root.querySelectorAll('button')]
+    root.addEventListener('keydown', (e) => {
+      if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
+      const i = items.indexOf(document.activeElement)
+      const next = items[(i + (['ArrowRight', 'ArrowDown'].includes(e.key) ? 1 : items.length - 1)) % items.length]
+      items.forEach((b) => b.setAttribute('tabindex', b === next ? '0' : '-1'))
+      next.focus(); e.preventDefault()
+    })
+  }
+</script>
+</body>
+</html>
