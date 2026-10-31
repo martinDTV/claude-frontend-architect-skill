@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Legibility fixture: text over a dynamic stage</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; font-size: 16px; }
+  /* the stage holds a real canvas (a bright half and a dark half) so the overlays' ancestors carry no background */
+  .stage { position: relative; width: 1200px; height: 600px; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .overlay { position: absolute; padding: 0.75rem 1rem; border-radius: 6px; color: #f2efe6; max-width: 15rem; margin: 0; }
+  /* column A over the bright half */
+  [data-case="opaque-pass"] { left: 24px; top: 24px; background: #15161c; }              /* exact from CSS */
+  [data-case="scrim-pass"] { left: 24px; top: 120px; background: rgba(8, 8, 12, 0.9); } /* the bound alone guarantees 4.5:1 */
+  [data-case="scrim-fail"] { left: 24px; top: 216px; background: rgba(8, 8, 12, 0.5); } /* fails the bound and the capture over white */
+  [data-case="large-pass"] { left: 24px; top: 312px; font-size: 24px; background: rgba(8, 8, 12, 0.5); } /* large text: 3:1 is enough */
+  [data-case="normal-on-50"] { left: 24px; top: 420px; background: rgba(8, 8, 12, 0.5); } /* normal text on the same scrim: 4.5:1 required */
+  [data-case="gradient-fail"] { left: 24px; top: 510px; background: linear-gradient(90deg, rgba(8, 8, 12, 0.92), rgba(8, 8, 12, 0.4)); } /* the weakest stop decides */
+  /* column B, still over the bright half */
+  [data-case="bold-large"] { left: 330px; top: 24px; font-size: 19px; font-weight: 700; background: rgba(8, 8, 12, 0.5); } /* 14 pt bold is large */
+  [data-case="dark-on-light"] { left: 330px; top: 120px; color: #1c1c22; background: #f4f1ea; }
+  [data-case="fading"] { left: 330px; top: 216px; background: rgba(8, 8, 12, 0.9); opacity: 0.35; } /* transitional: recorded, not graded */
+  .hud { position: absolute; left: 330px; top: 312px; padding: 0.5rem 0.75rem; border-radius: 6px; background: rgba(8, 8, 12, 0.9); color: #f2efe6; margin: 0; }
+  .hud button { min-height: 32px; }
+  .hud button:focus-visible { outline: 3px solid #ffd27a; outline-offset: 2px; }
+  [data-case="no-focus"] { position: absolute; left: 330px; top: 420px; outline: none; }
+  /* 13. a focusable stage that fills its box: double inset ring, no outline; the host of the ring carries data-focus-ring */
+  [data-case="stage-ring"] { position: absolute; left: 760px; top: 320px; width: 300px; height: 160px; outline: none; }
+  [data-case="stage-ring"]:focus-visible::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 3px #ffd27a, inset 0 0 0 10px rgba(8, 8, 12, 0.9); }
+  [data-case="no-focus"]:focus, [data-case="no-focus"]:focus-visible { outline: none; }
+  /* over the dark half */
+  [data-case="scrim-dark-estimate"] { left: 760px; top: 216px; background: rgba(8, 8, 12, 0.5); } /* only the capture can say: passes there */
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<main>
+  <h1 class="sr-only">Legibility fixture</h1>
+  <p data-case="flow-text">Text in the page's flow sits on the painted root: exact from CSS.</p>
+  <div class="stage">
+    <canvas id="stage" width="1200" height="600" aria-hidden="true"></canvas>
+    <p class="overlay" data-case="opaque-pass">Opaque card, exact contrast from CSS.</p>
+    <p class="overlay" data-case="scrim-pass">Scrim at ninety percent: guaranteed over any canvas.</p>
+    <p class="overlay" data-case="scrim-fail">Scrim at fifty percent over white: fails.</p>
+    <p class="overlay" data-case="large-pass">Large text at 24 px needs three to one.</p>
+    <p class="overlay" data-case="normal-on-50">Normal text on the same scrim needs four point five.</p>
+    <p class="overlay" data-case="gradient-fail">A gradient scrim is only as good as its weakest stop.</p>
+    <p class="overlay" data-case="bold-large">Bold nineteen pixel text counts as large.</p>
+    <p class="overlay" data-case="dark-on-light">Dark text on a light card.</p>
+    <p class="overlay" data-case="fading">A caption in the middle of its fade.</p>
+    <form class="hud" aria-label="Controls">
+      <label>Finish <select data-case="select"><option>oxblood</option></select></label>
+      <button type="button" data-case="hud-button">Explore</button>
+    </form>
+    <button type="button" data-case="no-focus">No ring</button>
+    <div data-case="stage-ring" data-focus-ring tabindex="0" role="group" aria-label="Stage with a double ring"></div>
+    <p class="overlay" data-case="scrim-dark-estimate">Scrim at fifty percent over black: only the capture says.</p>
+  </div>
+</main>
+<script>
+  // the canvas stands in for WebGL output: bright on the left, dark on the right
+  const ctx = document.getElementById('stage').getContext('2d')
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 600, 600)
+  ctx.fillStyle = '#06070a'; ctx.fillRect(600, 0, 600, 600)
+</script>
+</body>
+</html>
