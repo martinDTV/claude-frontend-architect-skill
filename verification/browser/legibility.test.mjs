@@ -32,6 +32,15 @@ test('colours: rgb, rgba, hex and keywords parse; gradients and shadows expose t
   const stops = parseGradientStops('linear-gradient(90deg, rgba(8, 8, 12, 0.92), rgba(8, 8, 12, 0.4))')
   assert.deepEqual(stops.map((s) => s.a), [0.92, 0.4])
   assert.deepEqual(parseGradientStops('none'), [])
+  // computed oklab/oklch colours (Tailwind v4, Nuxt UI, shadcn) convert to sRGB; white and black round-trip
+  const white = parseColor('oklab(1 0 0)')
+  assert.ok(Math.round(white.r) === 255 && Math.round(white.g) === 255 && Math.round(white.b) === 255)
+  const faint = parseColor('oklab(0.475525 -0.0238236 -0.0978664 / 0.25)')
+  assert.equal(faint.a, 0.25)
+  assert.ok(faint.b > faint.r, 'a blue-ish oklab colour converts to a blue-ish sRGB colour')
+  const viaLch = parseColor('oklch(0.6 0.15 250)')
+  assert.ok(viaLch && viaLch.b > viaLch.r)
+  assert.deepEqual(parseColor('color(srgb 1 0 0 / 0.5)'), { r: 255, g: 0, b: 0, a: 0.5 })
 })
 
 test('WCAG thresholds: 21:1 for white on black; large text at 24 px or 18.66 px bold needs 3:1, everything else 4.5:1', () => {

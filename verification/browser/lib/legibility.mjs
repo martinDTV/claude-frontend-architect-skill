@@ -39,7 +39,30 @@ export function parseColor(css) {
     const n = (i) => parseInt(h.slice(i, i + 2), 16)
     return { r: n(0), g: n(2), b: n(4), a: h.length === 8 ? n(6) / 255 : 1 }
   }
+  // computed styles come back in oklab()/oklch() when the stylesheet authored them that way (Tailwind v4 palettes,
+  // Nuxt UI and shadcn variables): convert to sRGB so the ring and text maths stay in one space
+  m = s.match(/^okl(ab|ch)\(\s*([\d.]+%?)\s+(-?[\d.]+)\s+(-?[\d.]+)(?:deg)?\s*(?:\/\s*([\d.]+%?))?\s*\)$/)
+  if (m) {
+    const L = m[2].endsWith('%') ? Number(m[2].slice(0, -1)) / 100 : Number(m[2])
+    const alpha = m[5] === undefined ? 1 : m[5].endsWith('%') ? Number(m[5].slice(0, -1)) / 100 : Number(m[5])
+    let a = Number(m[3]), b = Number(m[4])
+    if (m[1] === 'ch') { const C = a, h = (b * Math.PI) / 180; a = C * Math.cos(h); b = C * Math.sin(h) }
+    const rgb = oklabToSrgb(L, a, b)
+    return { ...rgb, a: clamp01(alpha) }
+  }
+  m = s.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+))?\s*\)$/)
+  if (m) return { r: Number(m[1]) * 255, g: Number(m[2]) * 255, b: Number(m[3]) * 255, a: m[4] === undefined ? 1 : clamp01(Number(m[4])) }
   return null
+}
+
+/** OKLab → sRGB 0–255 (clamped), Björn Ottosson's matrices. */
+function oklabToSrgb(L, a, b) {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+  const lin = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s]
+  const gamma = (v) => { const c = v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055; return Math.min(255, Math.max(0, c * 255)) }
+  return { r: gamma(lin[0]), g: gamma(lin[1]), b: gamma(lin[2]) }
 }
 
 /** Colour stops of a CSS gradient image (`linear-gradient(90deg, rgba(...), rgba(...))`); [] when it is not a gradient. */

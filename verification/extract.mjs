@@ -51,6 +51,32 @@ for (const file of markdownFiles(pluginRoot)) {
     }
   }
 }
+// 1.5 increment 5: the enterprise domain the reference applications share (data, table state, forms, fake api) is
+// framework-agnostic TypeScript compiled by the Nuxt and Next apps and unit-tested by the Vue project
+for (const [project, target] of [['nuxt', join('app', 'lib', 'ui')], ['next', join('src', 'lib', 'ui')], ['vue', join('src', 'lib', 'ui')]]) {
+  // the unit tests run in the Vue project only (the apps have no Vitest)
+  cpSync(join(here, 'shared-ui'), join(here, project, target), { recursive: true, filter: (src) => project === 'vue' || !/\.test\.[cm]?[jt]sx?$/.test(src) })
+}
+// 1.5 increment 5: the design contracts become the apps' tokens. The Tailwind v4 theme of the enterprise contract is
+// written where each app's stylesheet imports it; the Nuxt UI mapping next to it. Generated, never edited.
+{
+  const { emitTailwind, emitNuxtUi, loadContract } = await import(join(pluginRoot, 'frontend-architect', 'scripts', 'design-contract.mjs'))
+  const atlas = loadContract(join(here, 'design', 'contracts', 'atlas-logistics.json'))
+  const nuxtCss = join(here, 'nuxt', 'app', 'assets', 'css')
+  mkdirSync(nuxtCss, { recursive: true })
+  writeFileSync(join(nuxtCss, 'tokens.css'), emitTailwind(atlas))
+  writeFileSync(join(nuxtCss, 'nuxt-ui-map.css'), emitNuxtUi(atlas))
+  const nextCss = join(here, 'next', 'src', 'app')
+  mkdirSync(nextCss, { recursive: true })
+  // shadcn owns --accent, --border and friends in the Next app: the contract's roles take the dc- prefix there
+  writeFileSync(join(nextCss, 'tokens.css'), emitTailwind(atlas, { rolePrefix: 'dc-' }))
+  // the contract itself, for the design pages that render the roles and scales
+  mkdirSync(join(here, 'nuxt', 'app', 'design'), { recursive: true })
+  mkdirSync(join(here, 'next', 'src', 'design'), { recursive: true })
+  writeFileSync(join(here, 'nuxt', 'app', 'design', 'contract.json'), JSON.stringify(atlas, null, 2))
+  writeFileSync(join(here, 'next', 'src', 'design', 'contract.json'), JSON.stringify(atlas, null, 2))
+  count += 5
+}
 // Harness-only files (layouts, pages, entry points) that are not documentation live in
 // <project>/harness and are copied on top, so builds can run end to end.
 for (const project of Object.keys(srcRoots)) {

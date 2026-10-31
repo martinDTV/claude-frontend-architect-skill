@@ -139,7 +139,7 @@ import { collectTextRecords, cropPixels, evaluateFocusIndicator, evaluateText, h
  * Transitional records (an ancestor mid-fade) are kept apart. The hidden-text capture goes to a temp file: the evidence
  * folder keeps the frames a person looks at.
  */
-async function measureLegibility(page, state) {
+export async function measureLegibility(page, state) {
   const records = await page.evaluate(collectTextRecords, 'main')
   await page.evaluate(hideTextIn, { selectors: ['main'], on: true })
   const shot = join(tmpdir(), `fa-legibility-${process.pid}-${Date.now()}.png`)
@@ -157,7 +157,7 @@ const describeText = (r) => `${r.selector.split(' > ').slice(-2).join(' > ')} "$
  * Grades one measured state: every non-transitional text meets its ratio by CSS or by the bound (a capture alone is
  * reported, never accepted as proof for the lab pages), and no interactive control is caught mid-fade.
  */
-function gradeLegibility(measured, where) {
+export function gradeLegibility(measured, where) {
   const graded = measured.results.filter((r) => !r.transitional)
   const failing = graded.filter((r) => !r.passes || r.method === 'estimate')
   expect(failing.length === 0, `${where}: text below its WCAG ratio or proven only by a capture: ${failing.slice(0, 4).map(describeText).join(' | ')}`)
@@ -173,11 +173,13 @@ function gradeLegibility(measured, where) {
  * Focus indicators (SC 1.4.11 for author rings; a user-agent ring is exempt): Tab through the document until every
  * focusable inside <main> has been visited once (or 40 presses), grade the ring of each.
  */
-async function measureFocus(page, limit = 40) {
+export async function measureFocus(page, limit = 40) {
   const visited = []
   const seen = new Set()
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press('Tab')
+    // libraries transition outline-color: grade the settled ring, not the first frame of the transition
+    await page.waitForTimeout(260)
     const focused = await page.evaluate(() => {
       const el = document.activeElement
       if (!el || el === document.body) return null
