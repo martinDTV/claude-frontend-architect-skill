@@ -101,8 +101,10 @@ checks.particles = async function particles({ page, url, label, evidence, consol
   expect(gpuLarge.jsMs < cpuLarge.jsMs * 0.25, `GPGPU JavaScript time stays small at 65k (${gpuLarge.jsMs.toFixed(2)} ms vs CPU ${cpuLarge.jsMs.toFixed(2)} ms)`)
   expect(instLarge.jsMs < cpuLarge.jsMs * 0.25, `instanced JavaScript time stays small at 65k (${instLarge.jsMs.toFixed(2)} ms)`)
   expect(gpuLarge.jsMs < gpuSmall.jsMs * 4 + 1, `GPGPU JavaScript time does not scale with the count (${gpuSmall.jsMs.toFixed(2)} → ${gpuLarge.jsMs.toFixed(2)} ms)`)
-  for (const r of rows) expect(r.drawCalls <= 2, `${r.mode}@${r.count} draws in one call (${r.drawCalls})`)
-  ok(`comparison: CPU ${cpuSmall.jsMs.toFixed(2)}→${cpuLarge.jsMs.toFixed(2)} ms JS/frame from 4k to 65k; GPGPU ${gpuSmall.jsMs.toFixed(2)}→${gpuLarge.jsMs.toFixed(2)}; instanced ${by('instanced', 4096).jsMs.toFixed(2)}→${instLarge.jsMs.toFixed(2)}; one draw call each (software renderer: ${d.renderer.slice(0, 40)})`)
+  // whole-frame counts (the runtime resets renderer.info once per frame): the GPGPU system is two compute passes plus
+  // one draw, the instanced field and the CPU baseline one draw each
+  for (const r of rows) expect(r.drawCalls <= (r.mode === 'gpgpu' ? 3 : 1), `${r.mode}@${r.count} draws in ${r.mode === 'gpgpu' ? 'one call plus two compute passes' : 'one call'} (${r.drawCalls})`)
+  ok(`comparison: CPU ${cpuSmall.jsMs.toFixed(2)}→${cpuLarge.jsMs.toFixed(2)} ms JS/frame from 4k to 65k; GPGPU ${gpuSmall.jsMs.toFixed(2)}→${gpuLarge.jsMs.toFixed(2)}; instanced ${by('instanced', 4096).jsMs.toFixed(2)}→${instLarge.jsMs.toFixed(2)}; one draw call each plus two compute passes for GPGPU (software renderer: ${d.renderer.slice(0, 40)})`)
   const a = d.adaptive
   expect(a.tiers.length >= 1 && a.finalTier, `controller ran on real frame times (tiers ${a.tiers.join('→')}, average ${a.average.toFixed(1)} ms)`)
   const tier = { ultra: 1, high: 0.6, medium: 0.35, low: 0.15, floor: 0.05 }[a.finalTier]
@@ -125,6 +127,38 @@ checks.particles = async function particles({ page, url, label, evidence, consol
   return { renderer: d.renderer, gpgpu: d.gpgpu, bench: d.bench, adaptive: d.adaptive, contextLoss: d.contextLoss }
 }
 
+import { decodePng } from '../../plugins/frontend-architect/skills/frontend-architect/scripts/lib/png.mjs'
+import { readFileSync } from 'node:fs'
+
+/**
+ * Legibility of the DOM caption over the canvas, measured on the evidence screenshot: the caption's text luminance
+ * against the mean luminance of its background box, as a WCAG-style contrast ratio of the two means. A measurement for
+ * the rubric's legibility criterion, not a verdict: the human review reads the frame.
+ */
+function captionContrast(pngPath, box) {
+  const image = decodePng(readFileSync(pngPath))
+  const { width, pixels } = image
+  const luminance = (r, g, b) => {
+    const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+  }
+  const samples = []
+  for (let y = Math.max(0, box.y); y < Math.min(image.height, box.y + box.height); y += 2) {
+    for (let x = Math.max(0, box.x); x < Math.min(width, box.x + box.width); x += 2) {
+      const i = (y * width + x) * 4
+      samples.push(luminance(pixels[i], pixels[i + 1], pixels[i + 2]))
+    }
+  }
+  if (samples.length < 10) return null
+  samples.sort((a, b) => a - b)
+  const dark = samples.slice(0, Math.floor(samples.length * 0.2))
+  const bright = samples.slice(Math.floor(samples.length * 0.8))
+  const mean = (arr) => arr.reduce((s, v) => s + v, 0) / Math.max(1, arr.length)
+  const lo = mean(dark)
+  const hi = mean(bright)
+  return { ratio: Number(((hi + 0.05) / (lo + 0.05)).toFixed(2)), background: Number(mean(samples).toFixed(3)) }
+}
+
 const api = (page, call) => page.evaluate((c) => {
   const lab = window.__lab
   const fn = lab.api[c.name]
@@ -135,20 +169,42 @@ const closeTo = (p, q, tolerance) => Math.abs(p.x - q.x) <= tolerance && Math.ab
 const fmt = (p) => `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`
 const snapshot = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__lab.diagnostics())))
 
+/** Captions cross-fade over 0.4 s: evidence shows the settled frame, not a frame of the fade. */
+const settledCaption = (page) => page.waitForFunction(() => {
+  const el = document.querySelector('[data-caption][data-active="true"], .caption, [data-caption]')
+  return !el || getComputedStyle(el).opacity === '1'
+}, null, { timeout: 2000 }).catch(() => {})
+
 /** Shared tail: scroll binding, screenshots, disposal, re-entry and reduced motion for an experience page. */
-async function experienceTail({ page, browser, url, label, path, evidence, consoleProblems, ok, name, reducedCheck, allowedTextures = 1 }) {
+async function experienceTail({ page, browser, url, label, path, evidence, consoleProblems, ok, name, reducedCheck, allowedTextures = 1, metricsSink = {} }) {
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight * 0.5))
   await page.waitForTimeout(900)
   const scrolled = await api(page, { name: 'scrollProgress', args: [] })
   expect(scrolled > 0.2 && scrolled < 0.8, `scroll drives the progress through the scrub (${scrolled.toFixed(2)} at half the page)`)
   ok(`${name}: scroll scrubs the progress (${scrolled.toFixed(2)} at mid-page)`)
+  const legibility = []
   for (const p of [0, 0.5, 1]) {
     await api(page, { name: 'seek', args: [p] })
     // a simulation gets three seconds of fixed steps so the evidence shows a settled state, not the first frame after the seek
     await page.evaluate(() => (window.__lab.api.advance ? window.__lab.api.advance(3) : null))
     await page.waitForTimeout(250)
-    await page.screenshot({ path: join(evidence, `${label}-${name}-${p}.png`) })
+    await settledCaption(page)
+    const shot = join(evidence, `${label}-${name}-${p}.png`)
+    await page.screenshot({ path: shot })
+    // the visible caption's box, for the legibility measurement (text over the canvas is the first thing that goes wrong)
+    const box = await page.evaluate(() => {
+      const el = document.querySelector('[data-caption][data-active="true"], .caption, [data-caption]')
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }
+    })
+    const contrast = box && box.width > 0 && box.height > 0 ? captionContrast(shot, box) : null
+    legibility.push({ progress: p, box, contrast })
   }
+  // text over the canvas must separate from its background in every frame (3:1 is the floor for large text)
+  for (const l of legibility) if (l.contrast) expect(l.contrast.ratio >= 3, `caption legible at progress ${l.progress} (contrast ${l.contrast.ratio}:1 over a background of ${l.contrast.background})`)
+  ok(`${name}: caption contrast ${legibility.map((l) => `${l.progress}: ${l.contrast ? l.contrast.ratio + ':1' : 'n/a'}`).join(', ')} (measured on the evidence screenshots)`)
+  metricsSink.legibility = legibility
   // the same sweep before both samples: geometries upload lazily the first time a space or a transition renders
   const sweep = async () => {
     for (const p of [0, 0.34, 0.5, 0.68, 1]) {
@@ -210,7 +266,9 @@ checks.product = async function product(ctx) {
   expect(at1.cues.includes('caption:reverse') && !at1.cues.includes('caption:establishing'), `reverse caption active at 1 (${at1.cues.join(',')})`)
   const back = await api(page, { name: 'seek', args: [0] })
   expect(closeTo(back.camera, shots[0].position, 1e-6), 'seeking back to 0 reproduces the first shot exactly')
-  ctx.ok('product: camera lands on the four documented shots; captions, focus and key light follow the cues')
+  const establishingDistance = Math.hypot(shots[0].position.x - 0, shots[0].position.y - 1.4, shots[0].position.z - 0)
+  expect(near(back.focus, establishingDistance, 1e-3) && back.cues.includes('focus:establishing') && !back.cues.includes('focus:reverse'), `seeking back restores the establishing focus (${back.focus.toFixed(3)} vs ${establishingDistance.toFixed(3)}; cues ${back.cues.join(',')})`)
+  ctx.ok('product: camera lands on the four documented shots; captions, focus and key light follow the cues in both directions')
   const captionsActive = await page.evaluate(() => [...document.querySelectorAll('[data-caption][data-active="true"]')].map((e) => e.getAttribute('data-caption')))
   expect(captionsActive.length === 1 && captionsActive[0] === 'establishing', `one DOM caption active at 0 (${captionsActive.join(',')})`)
   await page.selectOption('select[data-option="color"]', 'rose')
@@ -226,15 +284,25 @@ checks.product = async function product(ctx) {
   ctx.ok('product: configurator changes colour (tweened) and finish from the DOM and the api')
   const explore = await api(page, { name: 'explore', args: [] })
   expect(explore.exploring === true && explore.owners['camera.position'] === 'orbit-controls', `explore mode: orbit controls own the camera (${JSON.stringify(explore.owners)})`)
-  const resumed = await api(page, { name: 'seek', args: [0.2] })
-  expect(resumed.exploring === false && resumed.owners['camera.position'] === 'camera-rig', `seeking resumes the rig (${JSON.stringify(resumed.owners)})`)
-  ctx.ok('product: explore mode hands the camera to the controls and a seek hands it back')
+  expect((await api(page, { name: 'scrubPaused', args: [] })) === true, 'explore mode pauses the scroll scrub')
+  const progressBefore = explore.progress
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight * 0.6))
+  await page.waitForTimeout(700)
+  const whileExploring = await snapshot(page)
+  expect(whileExploring.exploring === true && whileExploring.progress === progressBefore, `scrolling while exploring does not move the sequence (progress ${whileExploring.progress} vs ${progressBefore})`)
+  const resumed = await api(page, { name: 'resume', args: [] })
+  expect(resumed.exploring === false && resumed.owners['camera.position'] === 'camera-rig', `resume hands the camera back to the rig (${JSON.stringify(resumed.owners)})`)
+  expect((await api(page, { name: 'scrubPaused', args: [] })) === false, 'resume re-enables the scrub')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(500)
+  ctx.ok('product: explore mode hands the camera to the controls and pauses the scrub; resume hands both back')
   expect(diag.stats.info.calls <= 40, `draw calls within budget (${diag.stats.info.calls})`)
   expect(d.tier.pinned === 'medium', `tier pinned for the lab (${d.tier.pinned}, heuristic would pick ${d.tier.detected})`)
   // allowed after dispose: the renderer's placeholder sampler and the transmission render target three keeps in its
   // render state (renderer.dispose() drops the state without disposing it; the context release frees the GPU memory)
-  await experienceTail({ ...ctx, path: '/lab/product', name: 'product', allowedTextures: 2 })
-  return { shots, tier: d.tier, drawCalls: diag.stats.info.calls, stats: diag.stats.info }
+  const sink = {}
+  await experienceTail({ ...ctx, path: '/lab/product', name: 'product', allowedTextures: 2, metricsSink: sink })
+  return { shots, tier: d.tier, drawCalls: diag.stats.info.calls, stats: diag.stats.info, legibility: sink.legibility }
 }
 
 checks.field = async function field(ctx) {
@@ -273,10 +341,11 @@ checks.field = async function field(ctx) {
   await page.dispatchEvent('input[data-density]', 'input')
   const half = await snapshot(page)
   expect(half.drawn === Math.round(half.count * 0.5), `the range control sets density 0.5 (${half.drawn})`)
-  expect(half.drawCalls <= 2, `one draw call for the field (${half.drawCalls})`)
-  ctx.ok(`field: density control and api set the drawn count; ${half.drawCalls} draw call(s)`)
-  await experienceTail({ ...ctx, path: '/lab/field', name: 'field' })
-  return { count: diag.count, side: diag.side, settle: { a: onA.mean, b: onB.mean }, pointer: { before: before.near, after: afterPush.near } }
+  expect(half.drawCalls <= 3, `one draw call plus two compute passes for the field (${half.drawCalls})`)
+  ctx.ok(`field: density control and api set the drawn count; ${half.drawCalls} call(s) per frame incl. the two compute passes`)
+  const sink = {}
+  await experienceTail({ ...ctx, path: '/lab/field', name: 'field', metricsSink: sink })
+  return { count: diag.count, side: diag.side, settle: { a: onA.mean, b: onB.mean }, pointer: { before: before.near, after: afterPush.near }, legibility: sink.legibility }
 }
 
 checks.story = async function story(ctx) {
@@ -312,9 +381,12 @@ checks.story = async function story(ctx) {
   const domState = () => page.evaluate(() => ({ hash: location.hash, current: document.querySelector('button[data-chapter][aria-current="step"]')?.getAttribute('data-chapter'), live: document.querySelector('[data-live]')?.textContent, progress: window.__lab.api.scrollProgress() }))
   let dom = await domState()
   expect(dom.current === 'arrival' && dom.hash === '#arrival', `Home moves to chapter 1 in the DOM (current ${dom.current}, hash ${dom.hash})`)
+  await page.evaluate(() => { window.__chapterChanges = []; window.__lab.subscribeChanges?.((c) => window.__chapterChanges.push(`${c.previous}>${c.index}:${c.source}`)) })
   await page.click('button[data-chapter="artefact"]')
   await page.waitForTimeout(1500)
   dom = await domState()
+  const changes = await page.evaluate(() => window.__chapterChanges)
+  expect(changes.length === 1 && /:button$/.test(changes[0]), `one chapter change for the whole travel, no flicker through the hall (${changes.join(' ')})`)
   expect(dom.current === 'artefact' && dom.hash === '#artefact' && /Chapter 3 of 3/.test(dom.live ?? ''), `the chapter button travels to the artefact (current ${dom.current}, hash ${dom.hash}, live "${dom.live}")`)
   expect(dom.progress > 0.6, `the scroll followed the button (progress ${dom.progress.toFixed(2)})`)
   ctx.ok('story: keys and buttons change the chapter; aria-current, the live region and the hash follow')
@@ -325,18 +397,265 @@ checks.story = async function story(ctx) {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.waitForTimeout(400)
   ctx.ok('story: portrait viewport raises the fov scale')
-  await experienceTail({ ...ctx, path: '/lab/story', name: 'story', reducedCheck: async (rp) => {
+  const sink = {}
+  await experienceTail({ ...ctx, path: '/lab/story', name: 'story', metricsSink: sink, reducedCheck: async (rp) => {
     await rp.click('button[data-chapter="artefact"]')
     await rp.waitForTimeout(300)
     const after = await snapshot(rp)
     expect(after.chapter.index === 2 && after.progress === 0.68, `reduced motion: the chapter button cuts straight to the artefact (chapter ${after.chapter.index}, progress ${after.progress})`)
   } })
-  return { chapters: d.chapters, transitions: t }
+  return { chapters: d.chapters, transitions: t, legibility: sink.legibility }
 }
 
-export async function runLabChecks(chromium, { url, label, pages, evidence }) {
+checks.assets = async function assets({ page, url, label, evidence, consoleProblems, ok }) {
+  const manifest = await (await fetch(`${url}/models/manifest.json`)).json()
+  const d = await openLab(page, url, '/lab/assets')
+  expect(d.errors.length === 0, `console.error during the lab: ${d.errors.slice(0, 3).join(' | ')}`)
+  expect(d.capabilities.draco && d.capabilities.ktx2 && d.capabilities.meshopt, `decoders attached (${JSON.stringify(d.capabilities)})`)
+  const by = Object.fromEntries(d.variants.map((v) => [v.name, v]))
+  for (const name of ['plain', 'draco', 'meshopt', 'ktx2', 'untextured']) {
+    const v = by[name]
+    expect(v && v.error === null, `${name} loads (${v?.error})`)
+    expect(v.stats.meshes === 6 && v.stats.triangles === 1090 && v.stats.geometries === 6, `${name}: six parts, 1090 triangles (${JSON.stringify(v.stats)})`)
+    expect(v.stats.textures === (name === 'untextured' ? 0 : 1), `${name}: texture count ${v.stats.textures}`)
+    const file = v.url.split('/').pop()
+    expect(v.bytes === manifest.files[file].bytes, `${name}: bytes match the manifest (${v.bytes} vs ${manifest.files[file].bytes})`)
+    // textures: the base colour map, plus the morph-target texture three uploads for the grille's morph attribute
+    expect(v.memoryDelta.geometries === 6 && v.memoryDelta.textures === (name === 'untextured' ? 1 : 2), `${name}: GPU memory delta after the first frame (${JSON.stringify(v.memoryDelta)}; expected 6 geometries and ${name === 'untextured' ? 1 : 2} textures incl. the morph-target texture)`)
+    expect(v.afterRelease.geometries === 0 && v.afterRelease.textures === 0, `${name}: memory back after release (${JSON.stringify(v.afterRelease)})`)
+    expect(v.fetchMs >= 0 && v.parseMs >= 0 && v.compileMs >= 0 && v.firstFrameMs >= 0, `${name}: stage timings recorded`)
+  }
+  expect(by.draco.bytes < by.plain.bytes * 0.4 && by.meshopt.bytes < by.plain.bytes * 0.8, `compressed variants are smaller (draco ${by.draco.bytes}, meshopt ${by.meshopt.bytes}, plain ${by.plain.bytes})`)
+  ok(`assets: five variants load through their decoders; transfer/decode/upload/first-frame per variant: ${d.variants.map((v) => `${v.name} ${v.bytes}B fetch ${v.fetchMs.toFixed(0)} (network ${v.networkMs == null ? '?' : v.networkMs.toFixed(0)}) parse ${v.parseMs.toFixed(0)} compile ${v.compileMs.toFixed(0)} frame ${v.firstFrameMs.toFixed(0)} ms`).join('; ')}`)
+  expect(d.failures.truncated === 'parse' && d.failures.missing === 'network' && d.failures['draco-no-decoder'] === 'decoder-missing' && d.failures['ktx2-no-decoder'] === 'decoder-missing' && d.failures['meshopt-no-decoder'] === 'decoder-missing', `failure kinds (${JSON.stringify(d.failures)})`)
+  ok('assets: truncated → parse, 404 → network, Draco/KTX2/meshopt without decoders → decoder-missing')
+  expect(d.sharing.sameAsset && d.sharing.geometriesWithTwo === 6 && d.sharing.geometriesWithOne === 6 && d.sharing.afterBoth === 0, `two handles share one master: ${JSON.stringify(d.sharing)}`)
+  expect(d.late.rejected === 'aborted' && d.late.hasAfter === false && d.late.evicted.some((e) => e.startsWith('discarded')), `an aborted load rejects and its late result is discarded (${JSON.stringify(d.late)})`)
+  ok('assets: sharing keeps one set of GPU resources; an abort leaves nothing behind')
+  expect(d.clip.name === 'reveal' && d.clip.duration === 2 && near(d.clip.capYAtHalf - d.clip.capYAtStart, 0.5, 1e-3) && near(d.clip.grilleInfluenceAtHalf, 1, 1e-3) && d.clip.knobTurned, `the GLTF clip scrubs on an instance (${JSON.stringify(d.clip)})`)
+  ok('assets: the file\'s animation clip drives the cap, the knob and the grille morph on an instance')
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: join(evidence, `${label}-assets.png`) })
+  const after = await leave(page, url, 'Second')
+  expect(after.disposed === true, 'lab disposed on route change')
+  expect(after.afterDispose.geometries === after.baseline.geometries && after.afterDispose.textures <= after.baseline.textures, `memory back to the renderer's baseline after dispose (${JSON.stringify(after.afterDispose)} vs baseline ${JSON.stringify(after.baseline)})`)
+  ok('lifecycle: cache and runtime dispose to the baseline')
+  // the lab asks for /models/nope.glb on purpose (the network error kind): that one 404 and its console line are expected
+  const unexpected = consoleProblems.filter((p) => !/nope\.glb/.test(p) && !/status of 404/.test(p))
+  const notFound = consoleProblems.filter((p) => /status of 404/.test(p))
+  expect(unexpected.length === 0 && notFound.length <= 1, `console problems beyond the intentional 404: ${unexpected.concat(notFound.slice(1)).join(' | ')}`)
+  return { variants: d.variants, failures: d.failures, sharing: d.sharing, late: d.late, clip: d.clip, manifest: manifest.files }
+}
+
+/** The declarative atelier (React Three Fiber on Next, TresJS on Nuxt): same assertions, the framework's own event path. */
+async function declarativeAtelier(ctx, path, name) {
+  const { page, browser, url, label, evidence, consoleProblems, ok } = ctx
+  await page.goto(`${url}${path}`, { waitUntil: 'load' })
+  await page.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true, null, { timeout: 120000 })
+  await page.waitForTimeout(500)
+  let d = await snapshot(page)
+  expect(d.loaded && d.parts.length === 6, `model loaded through the cache with the Draco decoder (${d.parts.join(',')})`)
+  expect(d.info && d.info.geometries >= 6, `geometries uploaded (${d.info?.geometries})`)
+  const assembled = d.positions
+  // hover and click through the framework's own event path: the pointer goes to the projected cap
+  const capAt = await api(page, { name: 'screenPositionOf', args: ['cap'] })
+  expect(capAt && capAt.x > 0 && capAt.y > 0, `the cap projects on screen (${JSON.stringify(capAt)})`)
+  await page.mouse.move(capAt.x, capAt.y)
+  await page.waitForTimeout(250)
+  await page.mouse.move(capAt.x + 1, capAt.y + 1)
+  await page.waitForTimeout(250)
+  d = await snapshot(page)
+  expect(d.hovered === 'cap', `pointer over the cap hovers it through ${name} events (hovered ${d.hovered})`)
+  await page.mouse.click(capAt.x + 1, capAt.y + 1)
+  await page.waitForTimeout(300)
+  d = await snapshot(page)
+  const selectedLabel = await page.textContent('[data-selected]')
+  expect(d.selected === 'cap' && /Top plate/.test(selectedLabel ?? ''), `a click selects the cap and the DOM label follows (${d.selected}, "${selectedLabel}")`)
+  await page.mouse.move(5, 5)
+  await page.waitForTimeout(250)
+  ok(`${name}: hover and selection through the framework's pointer events; DOM label follows`)
+  // exploded view: the DOM button drives it; parts move by the offsets and come back exactly
+  await page.click('button[data-explode]')
+  await page.waitForTimeout(1600)
+  d = await snapshot(page)
+  expect(d.exploded === true && d.explodeProgress === 1, `exploded (progress ${d.explodeProgress})`)
+  expect(near(d.positions.cap.y - assembled.cap.y, 0.65, 1e-3) && near(d.positions.grille.z - assembled.grille.z, 0.6, 1e-3) && near(d.positions.base.y - assembled.base.y, -0.38, 1e-3) && near(d.positions.body.y - assembled.body.y, 0, 1e-6), `parts moved by the documented offsets (cap +${(d.positions.cap.y - assembled.cap.y).toFixed(3)}, grille +${(d.positions.grille.z - assembled.grille.z).toFixed(3)}, base ${(d.positions.base.y - assembled.base.y).toFixed(3)})`)
+  await page.click('button[data-explode]')
+  await page.waitForTimeout(1600)
+  d = await snapshot(page)
+  for (const part of Object.keys(assembled)) expect(closeTo(d.positions[part], assembled[part], 1e-3), `${part} back to its assembled position`)
+  expect(d.explodeProgress === 0, `timeline reversed to 0 (${d.explodeProgress})`)
+  ok(`${name}: exploded view through GSAP moves the parts by their offsets and reassembles exactly`)
+  expect(d.frames > 10, `frame loop running (${d.frames})`)
+  await page.screenshot({ path: join(evidence, `${label}-${name}.png`) })
+  await api(page, { name: 'explode', args: [true] })
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: join(evidence, `${label}-${name}-exploded.png`) })
+  // lifecycle: route change disposes, re-entry recreates with equal counts
+  const lifecycleBefore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__labLifecycle)))
+  const firstInfo = d.info
+  const after = await leave(page, url, 'Second')
+  expect(after.disposed === true && after.lifecycle.mounts === after.lifecycle.disposes, `route change disposes (mounts ${after.lifecycle.mounts}, disposes ${after.lifecycle.disposes})`)
+  await page.goBack({ waitUntil: 'load' })
+  await page.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true && window.__lab.disposed === false, null, { timeout: 120000 })
+  await page.waitForTimeout(600)
+  const second = await snapshot(page)
+  const lifecycleAfter = await page.evaluate(() => JSON.parse(JSON.stringify(window.__labLifecycle)))
+  expect(lifecycleAfter.mounts > lifecycleBefore.mounts && second.loaded && second.parts.length === 6, 're-entry recreates the experience')
+  expect(second.info.geometries === firstInfo.geometries && Math.abs(second.info.textures - firstInfo.textures) <= 1, `re-entry has equal resource counts (${second.info.geometries}g/${second.info.textures}t vs ${firstInfo.geometries}g/${firstInfo.textures}t)`)
+  ok(`${name}: route change disposes and re-entry recreates with equal counts (${second.info.geometries} geometries, ${second.info.textures} textures)`)
+  await leave(page, url, 'Second')
+  expect(consoleProblems.length === 0, `console problems: ${consoleProblems.join(' | ')}`)
+  // reduced motion: the exploded view is a cut and the turntable stands still
+  const reduced = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' })
+  const rp = await reduced.newPage()
+  await rp.goto(`${url}${path}`, { waitUntil: 'load' })
+  await rp.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true, null, { timeout: 120000 })
+  await rp.waitForTimeout(400)
+  const r0 = await snapshot(rp)
+  expect(r0.reducedMotion === true, 'reduced motion branch taken')
+  await rp.click('button[data-explode]')
+  await rp.waitForTimeout(150)
+  const r1 = await snapshot(rp)
+  expect(r1.explodeProgress === 1, `reduced motion: the exploded view is a cut (progress ${r1.explodeProgress} after 150 ms)`)
+  ok(`${name}: reduced motion cuts to the exploded view instead of animating`)
+  await reduced.close()
+  return { assembled, exploded: d.positions, info: firstInfo }
+}
+checks.r3f = (ctx) => declarativeAtelier(ctx, '/lab/atelier-r3f', 'r3f')
+checks.tres = (ctx) => declarativeAtelier(ctx, '/lab/atelier-tres', 'tres')
+
+/**
+ * Hardware measurements (1.5 increment 4): meant for a browser with a real GPU (`--channel chromium` launches the full
+ * Chromium, which on this machine renders through ANGLE Metal and exposes WebGPU). Records the adapter, the TSL lab on
+ * the real WebGPU backend when available, the particle comparison and the frame rate of the three experiences; asserts
+ * only what must hold (no errors; WebGPU used when the browser has it). On SwiftShader it still runs and says so.
+ */
+checks.gpu = async function gpu({ page, url, label, evidence, consoleProblems, ok }) {
+  const report = { renderer: null, webgpu: null, tsl: null, particles: null, experiences: {} }
+  await page.goto(`${url}/lab/shaders?backend=webgpu`, { waitUntil: 'load' })
+  report.webgpu = await page.evaluate(async () => {
+    if (!('gpu' in navigator)) return { available: false }
+    try {
+      const adapter = await navigator.gpu.requestAdapter()
+      if (!adapter) return { available: true, adapter: null }
+      return { available: true, adapter: { vendor: adapter.info?.vendor ?? null, architecture: adapter.info?.architecture ?? null, device: adapter.info?.device ?? null, description: adapter.info?.description ?? null, features: adapter.features.size, maxTextureDimension2D: adapter.limits.maxTextureDimension2D }, preferredFormat: navigator.gpu.getPreferredCanvasFormat() }
+    } catch (error) { return { available: true, error: String(error.message).slice(0, 120) } }
+  })
+  await page.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true, null, { timeout: 240000 })
+  const shaders = await readLab(page)
+  report.renderer = shaders.renderer
+  report.tsl = { backend: shaders.tsl.backend, error: shaders.tsl.error, materials: shaders.tsl.materials, programs: shaders.programs }
+  const software = /swiftshader|llvmpipe|software/i.test(shaders.renderer)
+  expect(shaders.errors.length === 0, `console.error in the shader lab: ${shaders.errors.slice(0, 3).join(' | ')}`)
+  if (report.webgpu.available && report.webgpu.adapter) {
+    expect(shaders.tsl.backend === 'webgpu' && shaders.tsl.error === null, `WebGPU is available (${JSON.stringify(report.webgpu.adapter)}) so the node materials must run on the real backend (${shaders.tsl.backend}, ${shaders.tsl.error})`)
+    expect(shaders.tsl.materials.length === 3 && shaders.tsl.materials.every((m) => m.coverage > 0.2), `three TSL materials render on WebGPU (${JSON.stringify(shaders.tsl.materials)})`)
+    ok(`gpu: ${shaders.renderer.slice(0, 60)} | WebGPU ${report.webgpu.adapter.vendor}/${report.webgpu.adapter.architecture}: TSL materials compiled and rendered on the real backend`)
+  } else {
+    ok(`gpu: ${shaders.renderer.slice(0, 60)} | no WebGPU adapter in this browser; TSL ran on the ${shaders.tsl.backend} backend`)
+  }
+  await leave(page, url, 'Second')
+  // particle comparison on this GPU
+  await page.goto(`${url}/lab/particles`, { waitUntil: 'load' })
+  await page.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true, null, { timeout: 240000 })
+  const particles = await readLab(page)
+  report.particles = { renderer: particles.renderer, bench: particles.bench, adaptive: particles.adaptive, contextLoss: particles.contextLoss }
+  ok(`gpu: particles ${particles.bench.map((r) => `${r.mode}@${r.count}: js ${r.jsMs.toFixed(2)} ms, frame p50 ${r.frameMs.p50.toFixed(1)} ms`).join('; ')}`)
+  await leave(page, url, 'Second')
+  // experiences: frames per second over three seconds at mid progress, draw calls and triangles
+  for (const [name, path] of [['product', '/lab/product'], ['field', '/lab/field'], ['story', '/lab/story']]) {
+    await page.goto(`${url}${path}`, { waitUntil: 'load' })
+    await page.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true, null, { timeout: 240000 })
+    await api(page, { name: 'seek', args: [0.5] })
+    await page.waitForTimeout(600)
+    const a = await snapshot(page)
+    await page.waitForTimeout(3000)
+    const b = await snapshot(page)
+    const frames = b.stats.frames - a.stats.frames
+    const msPerFrame = 3000 / Math.max(1, frames)
+    report.experiences[name] = { framesIn3s: frames, msPerFrame: Number(msPerFrame.toFixed(2)), fps: Number((1000 / msPerFrame).toFixed(1)), calls: b.stats.info.calls, triangles: b.stats.info.triangles, pixelRatio: b.stats.pixelRatio, size: b.stats.size, tier: b.tier ?? null }
+    await leave(page, url, 'Second')
+  }
+  ok(`gpu: experiences ${Object.entries(report.experiences).map(([n, r]) => `${n} ${r.fps} fps (${r.msPerFrame} ms, ${r.calls} calls, ${r.triangles} tris at ${r.size.width}×${r.size.height}@${r.pixelRatio})`).join('; ')}`)
+  report.software = software
+  writeFileSync(join(evidence, `${label}-gpu-report.json`), JSON.stringify(report, null, 2))
+  expect(consoleProblems.length === 0, `console problems: ${consoleProblems.join(' | ')}`)
+  return report
+}
+
+checks.atelier = async function atelier(ctx) {
+  const { page, url } = ctx
+  const d = await openLab(page, url, '/lab/atelier')
+  expect(d.errors.length === 0, `console.error during mount: ${d.errors.slice(0, 3).join(' | ')}`)
+  let diag = await snapshot(page)
+  expect(diag.loaded && diag.model && /atelier\.draco\.glb$/.test(diag.model.url) && diag.model.parts.length === 6 && diag.model.triangles === 1090, `the Draco model arrived through the cache (${JSON.stringify(diag.model)})`)
+  ctx.ok(`atelier: ${diag.model.url.split('/').pop()} (${diag.model.bytes} B, fetch ${diag.model.fetchMs.toFixed(0)} ms, parse ${diag.model.parseMs.toFixed(0)} ms) with six parts`)
+  diag = await api(page, { name: 'seek', args: [0.1] })
+  const assembled = diag.positions
+  expect(diag.chapter.id === 'hero' && diag.cues.includes('caption:hero') && diag.explode === 0 && diag.dissolve === 0, `0.1 is the hero chapter (${diag.chapter.id}, cues ${diag.cues.join(',')})`)
+  diag = await api(page, { name: 'seek', args: [0.5] })
+  expect(diag.chapter.id === 'exploded' && diag.explode === 1, `0.5 is the exploded view at full progress (${diag.explode})`)
+  expect(near(diag.positions.cap.y - assembled.cap.y, 0.65, 1e-3) && near(diag.positions.grille.z - assembled.grille.z, 0.6, 1e-3) && near(diag.positions.base.y - assembled.base.y, -0.38, 1e-3), `parts displaced by the documented offsets (cap +${(diag.positions.cap.y - assembled.cap.y).toFixed(3)}, grille +${(diag.positions.grille.z - assembled.grille.z).toFixed(3)}, base ${(diag.positions.base.y - assembled.base.y).toFixed(3)})`)
+  ctx.ok('atelier: the exploded view scrubs with the chapter and lands on the documented offsets')
+  diag = await api(page, { name: 'seek', args: [0.65] }) // local 0.5 of the dust chapter: fully gathered, not yet released
+  expect(diag.chapter.id === 'dust' && diag.dissolve > 0.9 && diag.particles.morph > 0.9, `mid dust chapter: parts dissolved (${diag.dissolve.toFixed(2)}), particles gathering (morph ${diag.particles.morph.toFixed(2)})`)
+  await api(page, { name: 'advance', args: [4] })
+  const distance = await api(page, { name: 'surfaceDistance', args: [] })
+  expect(distance < 0.35, `particles sit on the product's surface sampled from the model (mean distance ${distance.toFixed(3)} after 4 s of simulation)`)
+  await settledCaption(page)
+  await page.screenshot({ path: join(ctx.evidence, `${ctx.label}-atelier-dust.png`) })
+  diag = await api(page, { name: 'seek', args: [0.79] }) // just past the dust chapter: released and reassembled
+  expect(diag.dissolve < 0.01 && diag.explode < 0.01, `after the dust chapter: parts solid and assembled again (dissolve ${diag.dissolve.toFixed(3)}, explode ${diag.explode.toFixed(3)})`)
+  ctx.ok(`atelier: dissolve shader and GPGPU reconstruction follow the chapter (surface distance ${distance.toFixed(3)}) and give the product back`)
+  diag = await api(page, { name: 'seek', args: [0.95] })
+  expect(diag.chapter.id === 'choose' && diag.cues.includes('caption:choose'), `0.95 is the choose chapter`)
+  await page.selectOption('select[data-option="finish"]', 'oxblood')
+  await page.waitForTimeout(1100)
+  diag = await snapshot(page)
+  const channel = (hex, i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16)
+  const sameColour = (a, b) => [0, 1, 2].every((i) => Math.abs(channel(a, i) - channel(b, i)) <= 2)
+  expect(diag.selection.finish === 'oxblood' && sameColour(diag.paintColor, '#5a1620'), `the finish select recolours the body (${diag.paintColor})`)
+  expect((await api(page, { name: 'set', args: ['grille', 'steel'] })) === true, 'grille option set through the api')
+  const capAt = await api(page, { name: 'screenPositionOf', args: ['cap'] })
+  await page.mouse.move(capAt.x, capAt.y)
+  await page.waitForTimeout(250)
+  await page.mouse.move(capAt.x + 1, capAt.y + 1)
+  await page.waitForTimeout(250)
+  diag = await snapshot(page)
+  expect(diag.hovered === 'cap', `pointer over the projected cap hovers it through the ray picker (${diag.hovered})`)
+  await page.mouse.click(capAt.x + 1, capAt.y + 1)
+  await page.waitForTimeout(250)
+  const label = await page.textContent('[data-selected]')
+  diag = await snapshot(page)
+  expect(diag.selected === 'cap' && /Top plate/.test(label ?? ''), `click selects the cap and the DOM names it (${diag.selected}, "${label}")`)
+  await page.mouse.move(5, 5)
+  ctx.ok('atelier: configurator, hover and selection work on the imported parts')
+  const explore = await api(page, { name: 'explore', args: [] })
+  expect(explore.exploring === true && explore.owners['camera.position'] === 'orbit-controls' && (await api(page, { name: 'scrubPaused', args: [] })) === true, 'explore mode takes the camera and pauses the scrub')
+  const resumed = await api(page, { name: 'resume', args: [] })
+  expect(resumed.exploring === false && resumed.owners['camera.position'] === 'camera-rig', 'resume gives the camera back')
+  await page.evaluate(() => { window.__chapterChanges = []; window.__lab.subscribeChanges((c) => window.__chapterChanges.push(`${c.previous}>${c.index}:${c.source}`)) })
+  await page.click('button[data-chapter="exploded"]')
+  await page.waitForTimeout(1500)
+  const dom = await page.evaluate(() => ({ current: document.querySelector('button[data-chapter][aria-current="step"]')?.getAttribute('data-chapter'), changes: window.__chapterChanges, progress: window.__lab.api.scrollProgress() }))
+  expect(dom.current === 'exploded' && dom.changes.length === 1, `the chapter button travels with one announced change (${dom.changes.join(' ')})`)
+  await page.setViewportSize({ width: 375, height: 667 })
+  await page.waitForTimeout(600)
+  expect((await snapshot(page)).fovScale === 1.3, 'portrait viewport widens the field of view')
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.waitForTimeout(400)
+  ctx.ok('atelier: explore hand-over, chapter buttons without flicker, portrait fov')
+  const sink = {}
+  await experienceTail({ ...ctx, path: '/lab/atelier', name: 'atelier', allowedTextures: 1, metricsSink: sink })
+  return { model: diag.model, distance, legibility: sink.legibility }
+}
+
+export async function runLabChecks(chromium, { url, label, pages, evidence, channel }) {
   mkdirSync(evidence, { recursive: true })
-  const browser = await chromium.launch({ headless: true })
+  // the default headless shell renders with SwiftShader; `channel: 'chromium'` launches the full Chromium in new
+  // headless mode, which uses the machine's GPU (ANGLE Metal here) and exposes WebGPU
+  const browser = await chromium.launch(channel ? { headless: true, channel } : { headless: true })
   const results = []
   const metrics = {}
   const ok = (name) => results.push(name)
@@ -349,6 +668,7 @@ export async function runLabChecks(chromium, { url, label, pages, evidence }) {
       const consoleProblems = []
       page.on('console', (m) => { if (m.type() === 'error') consoleProblems.push(`${m.type()}: ${m.text().slice(0, 200)}`) })
       page.on('pageerror', (e) => consoleProblems.push(`pageerror: ${String(e.message).slice(0, 200)}`))
+      page.on('response', (r) => { if (r.status() >= 400) consoleProblems.push(`HTTP ${r.status()} ${r.url().slice(0, 160)}`) })
       try {
         metrics[name] = await check({ page, browser, url, label, evidence, consoleProblems, ok })
       } catch (error) {
@@ -374,13 +694,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const label = opt('label') ?? 'app'
   const pages = (opt('pages') ?? Object.keys(checks).join(',')).split(',').filter(Boolean)
   const evidence = opt('evidence') ?? join(here, 'evidence')
+  const channel = opt('channel')
   if (!url) {
     console.error('lab-checks: missing --url')
     process.exit(2)
   }
   const { chromium } = createRequire(import.meta.url)('playwright')
   try {
-    await runLabChecks(chromium, { url, label, pages, evidence })
+    await runLabChecks(chromium, { url, label, pages, evidence, channel })
   } catch (error) {
     console.error(`check-lab (${label}): ${error.message}`)
     process.exit(1)

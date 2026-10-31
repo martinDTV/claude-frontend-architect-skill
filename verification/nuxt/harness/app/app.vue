@@ -9,6 +9,9 @@
       <NuxtLink to="/lab/product">Product</NuxtLink>
       <NuxtLink to="/lab/field">Field</NuxtLink>
       <NuxtLink to="/lab/story">Story</NuxtLink>
+      <NuxtLink to="/lab/assets">Assets</NuxtLink>
+      <NuxtLink to="/lab/atelier-tres">Atelier Tres</NuxtLink>
+      <NuxtLink to="/lab/atelier">Atelier</NuxtLink>
     </nav>
     <NuxtPage />
   </div>

@@ -26,7 +26,7 @@ onBeforeUnmount(() => {
         <div ref="controls" class="stage" aria-hidden="true">
           <canvas ref="canvas" class="stage-canvas" />
         </div>
-        <p class="caption">Sixteen thousand particles find a sphere, scatter, and settle on the emblem as you scroll. Move the pointer through them.</p>
+        <p class="caption" data-caption="field">Sixteen thousand particles find a sphere, scatter, and settle on the emblem as you scroll. Move the pointer through them.</p>
         <label class="density">Density <input type="range" data-density min="2" max="100" value="35"></label>
       </div>
     </div>
@@ -38,6 +38,6 @@ onBeforeUnmount(() => {
 .pin { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 .stage { position: absolute; inset: 0; }
 .stage-canvas { display: block; width: 100%; height: 100%; }
-.caption { position: absolute; left: 1.5rem; bottom: 4rem; max-width: 24rem; color: #dfe6ff; }
+.caption { position: absolute; left: 1.5rem; bottom: 4rem; max-width: 24rem; color: #dfe6ff; padding: 0.75rem 1rem; border-radius: 6px; background: rgba(5, 6, 11, 0.6); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
 .density { position: absolute; right: 1.5rem; bottom: 1.5rem; color: #dfe6ff; }
 </style>

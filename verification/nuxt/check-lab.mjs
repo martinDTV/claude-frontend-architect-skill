@@ -51,8 +51,11 @@ if (!ready) {
 }
 // the shared runner lives in verification/browser next to the pinned Playwright and runs as a child process, so this
 // project's import graph (audited by the reference checks) stays inside the project
-const pagesArg = process.argv.indexOf('--pages') >= 0 ? process.argv[process.argv.indexOf('--pages') + 1] : null
-const check = spawnSync(process.execPath, [join(browserDir, 'lab-checks.mjs'), '--url', url, '--label', 'nuxt', '--evidence', join(browserDir, 'evidence'), ...(pagesArg ? ['--pages', pagesArg] : [])], { stdio: 'inherit' })
+// every page this app serves (the gpu measurement page is opt-in: --pages gpu --gpu)
+const pagesArg = process.argv.indexOf('--pages') >= 0 ? process.argv[process.argv.indexOf('--pages') + 1] : 'shaders,particles,product,field,story,assets,tres,atelier'
+// --gpu: the full Chromium (hardware GPU, WebGPU where the machine has it) and a separate evidence folder
+const gpu = process.argv.includes('--gpu')
+const check = spawnSync(process.execPath, [join(browserDir, 'lab-checks.mjs'), '--url', url, '--label', 'nuxt', '--evidence', join(browserDir, gpu ? 'evidence-gpu' : 'evidence'), ...(pagesArg ? ['--pages', pagesArg] : []), ...(gpu ? ['--channel', 'chromium'] : [])], { stdio: 'inherit' })
 stop()
 const code = check.status ?? 1
 process.exit(code)

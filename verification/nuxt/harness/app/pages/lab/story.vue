@@ -57,7 +57,7 @@ onBeforeUnmount(() => {
 .chapters button { min-height: 32px; }
 .chapters button[aria-current='step'] { outline: 2px solid #ffd27a; }
 .captions { position: absolute; left: 1.5rem; bottom: 4rem; margin: 0; padding: 0; list-style: none; max-width: 24rem; color: #f2efe6; }
-.captions li { opacity: 0; transition: opacity 0.4s; }
+.captions li { opacity: 0; transition: opacity 0.4s; padding: 0.75rem 1rem; border-radius: 6px; background: linear-gradient(90deg, rgba(8, 8, 12, 0.84), rgba(8, 8, 12, 0.6)); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
 .captions li[data-active='true'] { opacity: 1; }
 .captions li:not([data-active='true']) { position: absolute; }
 </style>

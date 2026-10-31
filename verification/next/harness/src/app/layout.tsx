@@ -10,7 +10,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <nav aria-label="Primary">
-          <Link href="/">Home</Link> <Link href="/users">Users</Link> <Link href="/motion">Motion</Link> <Link href="/motion/other">Second</Link> <Link href="/lab/shaders">Shader lab</Link> <Link href="/lab/particles">Particle lab</Link> <Link href="/lab/product">Product</Link> <Link href="/lab/field">Field</Link> <Link href="/lab/story">Story</Link>
+          <Link href="/">Home</Link> <Link href="/users">Users</Link> <Link href="/motion">Motion</Link> <Link href="/motion/other">Second</Link> <Link href="/lab/shaders">Shader lab</Link> <Link href="/lab/particles">Particle lab</Link> <Link href="/lab/product">Product</Link> <Link href="/lab/field">Field</Link> <Link href="/lab/story">Story</Link> <Link href="/lab/assets">Assets</Link> <Link href="/lab/atelier-r3f">Atelier R3F</Link> <Link href="/lab/atelier">Atelier</Link>
         </nav>
         <QueryProvider>
           <HttpProvider baseURL="/api/v1">{children}</HttpProvider>

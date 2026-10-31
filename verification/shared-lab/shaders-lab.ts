@@ -24,6 +24,8 @@ export interface MaterialProbe {
 export interface ShaderLabDiagnostics {
   ready: boolean
   errors: string[]
+  /** UNMASKED_RENDERER of the WebGL context (SwiftShader in the test browser, the GPU elsewhere) */
+  renderer: string
   programs: { total: number; runnable: number; failed: string[] }
   materials: MaterialProbe[]
   dissolve: { atZero: number; atOne: number; atHalf: number }
@@ -52,7 +54,7 @@ declare global {
 const SIZE = 64
 
 export async function mountShaderLab(canvas: HTMLCanvasElement, tslCanvas: HTMLCanvasElement): Promise<{ diagnostics: ShaderLabDiagnostics; dispose: () => void }> {
-  const diagnostics: ShaderLabDiagnostics = { ready: false, errors: [], programs: { total: 0, runnable: 0, failed: [] }, materials: [], dissolve: { atZero: 0, atOne: 0, atHalf: 0 }, transitions: [], post: [], tsl: { backend: 'none', materials: [], error: null }, runtime: null, disposed: false, rendererBaseline: { textures: 0, geometries: 0 }, afterDispose: null, disposeTrace: [] }
+  const diagnostics: ShaderLabDiagnostics = { ready: false, errors: [], renderer: '', programs: { total: 0, runnable: 0, failed: [] }, materials: [], dissolve: { atZero: 0, atOne: 0, atHalf: 0 }, transitions: [], post: [], tsl: { backend: 'none', materials: [], error: null }, runtime: null, disposed: false, rendererBaseline: { textures: 0, geometries: 0 }, afterDispose: null, disposeTrace: [] }
   window.__lab = diagnostics
   const originalError = console.error
   console.error = (...args: unknown[]) => {
@@ -62,6 +64,11 @@ export async function mountShaderLab(canvas: HTMLCanvasElement, tslCanvas: HTMLC
 
   const runtime = createSceneRuntime({ canvas, maxPixelRatio: 1, alpha: true })
   const { renderer, registry } = runtime
+  {
+    const gl = renderer.getContext()
+    const debug = gl.getExtension('WEBGL_debug_renderer_info')
+    diagnostics.renderer = String(debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER))
+  }
   const memory = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures })
   const mark = (step: string) => diagnostics.disposeTrace.push({ step, ...memory() })
   mark('runtime')
@@ -215,7 +222,10 @@ export async function mountShaderLab(canvas: HTMLCanvasElement, tslCanvas: HTMLC
   let tsl: WebGPURenderer | null = null
   let tslRow: THREE.Material[] = []
   try {
-    tsl = new WebGPURenderer({ canvas: tslCanvas, forceWebGL: true, antialias: false })
+    // ?backend=webgpu lets a browser with WebGPU run the node materials on the real backend (the GPU harness does);
+    // the default forces the WebGL 2 backend, the only one the headless-shell test browser has
+    const wantWebGPU = new URLSearchParams(location.search).get('backend') === 'webgpu'
+    tsl = new WebGPURenderer({ canvas: tslCanvas, forceWebGL: !wantWebGPU, antialias: false })
     await tsl.init()
     diagnostics.tsl.backend = (tsl.backend as { isWebGLBackend?: boolean }).isWebGLBackend ? 'webgl2' : 'webgpu'
     const scene = new THREE.Scene()

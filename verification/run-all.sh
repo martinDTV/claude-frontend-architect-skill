@@ -17,6 +17,7 @@ node --expose-gc tools/benchmark.mjs > /tmp/fa-benchmark.md && grep -q '| ts-pat
 node extract.mjs
 (cd vue && npx tsc --noEmit && npx vitest run)
 (cd react && npx tsc --noEmit)
+(cd react && npx vitest run)
 (cd creative && npx tsc --noEmit && npx vitest run)
 (cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs && node check-motion.mjs && node check-lab.mjs)
 (cd nuxt && npx nuxt prepare && node check-layers.mjs && npx nuxt typecheck)

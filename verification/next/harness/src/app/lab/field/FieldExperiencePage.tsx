@@ -35,7 +35,7 @@ export function FieldExperiencePage() {
           <div ref={controls} className={styles.stage} aria-hidden="true">
             <canvas ref={canvas} className={styles.canvas} />
           </div>
-          <p className={styles.caption}>Sixteen thousand particles find a sphere, scatter, and settle on the emblem as you scroll. Move the pointer through them.</p>
+          <p className={styles.caption} data-caption="field">Sixteen thousand particles find a sphere, scatter, and settle on the emblem as you scroll. Move the pointer through them.</p>
           <label className={styles.controls}>Density <input type="range" data-density min="2" max="100" defaultValue="35" /></label>
         </div>
       </div>

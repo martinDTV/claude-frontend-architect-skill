@@ -59,7 +59,7 @@ onBeforeUnmount(() => {
 .stage:focus-visible { outline: 3px solid #ffd27a; outline-offset: -3px; }
 .stage-canvas { display: block; width: 100%; height: 100%; }
 .captions { position: absolute; left: 1.5rem; bottom: 5rem; margin: 0; padding: 0; list-style: none; max-width: 22rem; color: #f2efe6; }
-.captions li { opacity: 0; transition: opacity 0.4s; }
+.captions li { opacity: 0; transition: opacity 0.4s; padding: 0.75rem 1rem; border-radius: 6px; background: linear-gradient(90deg, rgba(8, 8, 12, 0.84), rgba(8, 8, 12, 0.6)); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
 .captions li[data-active='true'] { opacity: 1; }
 .captions li:not([data-active='true']) { position: absolute; }
 .configurator { position: absolute; right: 1.5rem; bottom: 1.5rem; display: flex; gap: 0.75rem; align-items: center; color: #f2efe6; }
