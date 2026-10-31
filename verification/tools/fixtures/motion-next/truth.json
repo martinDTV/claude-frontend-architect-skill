@@ -1,0 +1,101 @@
+{
+  "$comment": "Expected ids of the 1.5 motion rules per file (semantic engine). The 1.3 lexical rule leak-gsap is not part of this truth. Written before the rules ran.",
+  "files": {
+    "src/components/motion/GoodUseGSAP.tsx": {
+      "must": [],
+      "mustNot": [
+        "gsap-effect-without-cleanup",
+        "scrolltrigger-without-cleanup",
+        "motion-without-reduced-motion",
+        "gsap-outside-client-lifecycle"
+      ]
+    },
+    "src/components/motion/GoodEffectRevert.tsx": {
+      "must": [],
+      "mustNot": [
+        "gsap-effect-without-cleanup",
+        "scrolltrigger-without-cleanup",
+        "gsap-outside-client-lifecycle"
+      ]
+    },
+    "src/components/motion/EffectNoCleanup.tsx": {
+      "must": [
+        "gsap-effect-without-cleanup"
+      ],
+      "mustNot": [
+        "scrolltrigger-without-cleanup",
+        "gsap-outside-client-lifecycle"
+      ],
+      "levels": {
+        "gsap-effect-without-cleanup": "confirmed"
+      }
+    },
+    "src/components/motion/EffectNoDeps.tsx": {
+      "must": [
+        "gsap-effect-without-cleanup"
+      ],
+      "mustNot": [
+        "gsap-outside-client-lifecycle"
+      ],
+      "levels": {
+        "gsap-effect-without-cleanup": "confirmed"
+      }
+    },
+    "src/components/motion/RenderBodyTween.tsx": {
+      "must": [
+        "gsap-outside-client-lifecycle"
+      ],
+      "mustNot": [
+        "gsap-effect-without-cleanup"
+      ],
+      "levels": {
+        "gsap-outside-client-lifecycle": "heuristic"
+      }
+    },
+    "src/components/motion/ScrollNoCleanup.tsx": {
+      "must": [
+        "scrolltrigger-without-cleanup",
+        "motion-without-reduced-motion"
+      ],
+      "mustNot": [
+        "gsap-effect-without-cleanup",
+        "gsap-outside-client-lifecycle"
+      ],
+      "levels": {
+        "scrolltrigger-without-cleanup": "confirmed",
+        "motion-without-reduced-motion": "heuristic"
+      }
+    },
+    "src/components/motion/HandlerTween.tsx": {
+      "must": [],
+      "mustNot": [
+        "gsap-effect-without-cleanup",
+        "gsap-outside-client-lifecycle",
+        "scrolltrigger-without-cleanup"
+      ]
+    },
+    "src/components/motion/ScrubNoReduced.tsx": {
+      "must": [
+        "motion-without-reduced-motion"
+      ],
+      "mustNot": [
+        "scrolltrigger-without-cleanup",
+        "gsap-effect-without-cleanup"
+      ],
+      "levels": {
+        "motion-without-reduced-motion": "heuristic"
+      }
+    },
+    "src/lib/motion/globalTimeline.ts": {
+      "must": [
+        "gsap-module-scope-animation"
+      ],
+      "mustNot": [
+        "gsap-outside-client-lifecycle"
+      ],
+      "levels": {
+        "gsap-module-scope-animation": "confirmed"
+      }
+    }
+  }
+}

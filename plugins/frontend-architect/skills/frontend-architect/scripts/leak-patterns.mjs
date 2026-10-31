@@ -22,6 +22,15 @@ usage: node leak-patterns.mjs <project-root> [options]
 
 Each finding names the resource, the first line that creates it and what cleanup was expected.
 Verify by reading the file: cleanup may live in a helper, a VueUse composable or a parent.
+
+Motion rules (1.5, semantic engine only; the lexical engine keeps the leak-gsap pair count):
+  gsap-module-scope-animation   gsap.to/from/fromTo/set/timeline or ScrollTrigger.create at module scope (confirmed)
+  gsap-outside-client-lifecycle the same at the top level of <script setup> (confirmed with SSR) or in a React render body (heuristic)
+  gsap-effect-without-cleanup   created inside useEffect/useLayoutEffect whose callback returns no cleanup (confirmed)
+  scrolltrigger-without-cleanup ScrollTriggers in a file with no revert/kill/useGSAP (confirmed), or inside a context that is never reverted (heuristic)
+  motion-without-reduced-motion scroll-driven, pinned or infinite motion with no prefers-reduced-motion branch in the file (heuristic)
+Recognised cleanup: useGSAP, ctx.revert()/mm.revert(), tween.kill()/trigger.kill(), ScrollTrigger.killAll, getAll()+kill. A tween in an
+event handler or a factory function is not reported. .client.vue files and import.meta.client guards are exempt from the SSR rule.
 `
 
 export const RESOURCES = [
@@ -69,6 +78,61 @@ export function scanFile(info) {
   return { resources: out, hasCleanupHook: astHook ?? CLEANUP_HOOK_RE.test(code), cleanupSource: astHook === null ? 'lexical' : 'ast' }
 }
 
+// ---------------------------------------------------------------- motion rules (1.5): GSAP calls with their AST context
+const CLIENT_LIFECYCLE = new Set(['onMounted', 'onBeforeMount', 'onUnmounted', 'onBeforeUnmount', 'onActivated', 'onDeactivated', 'onUpdated', 'useEffect', 'useLayoutEffect', 'useInsertionEffect', 'useGSAP', 'onNuxtReady', 'nextTick', 'watch', 'watchEffect', 'watchPostEffect', 'requestAnimationFrame', 'setTimeout', 'setInterval', 'addEventListener', 'useEventListener', 'callOnce', 'then'])
+const CREATES = new Set(['tween', 'timeline', 'scrolltrigger'])
+const REDUCED_MOTION_RE = /prefers-reduced-motion|usePreferredReducedMotion|useReducedMotion|reducedMotion|reduceMotion|matchMediaRefresh/
+
+/** Findings of the motion rules for one file; empty without the semantic engine or without GSAP creation calls. */
+export function scanMotion(info, project) {
+  const uses = info.semantic?.motionUses ?? []
+  const creates = uses.filter((u) => CREATES.has(u.kind))
+  if (!creates.length) return []
+  const clientOnly = /\.client\.[cm]?[jt]sx?$|\.client\.vue$/.test(info.rel)
+  const isReact = /\.[jt]sx$/.test(info.rel)
+  const ssrOff = project.nuxt ? project.nuxt.ssr === false : false
+  const has = (kind) => uses.some((u) => u.kind === kind)
+  const cleanupEvidence = has('usegsap') || has('revert') || has('kill') || has('killall')
+  const trackerOnly = !cleanupEvidence && (has('context') || has('matchmedia'))
+  const scrollCreates = creates.filter((u) => u.kind === 'scrolltrigger' || u.flags?.scrollTrigger)
+  const out = []
+  const seen = new Set()
+  const push = (f) => {
+    const key = `${f.id}|${f.line}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(f)
+    }
+  }
+  for (const u of creates) {
+    if (clientOnly || u.guarded) continue
+    if (u.calls.some((c) => CLIENT_LIFECYCLE.has(c))) continue
+    const setupLevel = u.topLevel && info.isVue && info.setup
+    const moduleScope = u.topLevel && !setupLevel
+    const renderBody = isReact && u.inFunction && /^[A-Z]/.test(u.enclosingFunction ?? '') && !u.calls.length
+    if (moduleScope) push({ id: 'gsap-module-scope-animation', level: 'confirmed', severity: ssrOff ? 'medium' : 'high', line: u.line, message: `${u.name}() at module scope: one shared animation for every component instance, created when the module is imported${ssrOff ? '' : ', on the server too during SSR'}`, fix: 'create tweens and timelines inside the component lifecycle (onMounted with gsap.context, useGSAP, useEffect with a reverting cleanup) or in a factory called from it; keep module scope for configuration' })
+    else if (setupLevel) push({ id: 'gsap-outside-client-lifecycle', level: project.framework === 'nuxt' && !ssrOff ? 'confirmed' : 'heuristic', severity: ssrOff ? 'low' : 'high', line: u.line, message: `${u.name}() at the top level of <script setup>: it runs during server rendering, where there is no DOM${ssrOff ? ' (ssr: false today; breaks the day SSR is enabled)' : ''}`, fix: 'move it into onMounted (inside gsap.context, reverted in onUnmounted) or guard it with import.meta.client; .client.vue components are exempt' })
+    else if (renderBody) push({ id: 'gsap-outside-client-lifecycle', level: 'heuristic', severity: 'medium', line: u.line, message: `${u.name}() in the render body of ${u.enclosingFunction}: it runs on every render and, with server rendering, on the server`, fix: 'move it into useGSAP(() => {...}, { scope }) or into useEffect with a cleanup that reverts the context' })
+  }
+  if (isReact) {
+    for (const u of creates) {
+      const e = u.effect
+      if (!e || !/^use(?:Layout|Insertion)?Effect$/.test(e.hook) || e.hasCleanupReturn || u.calls.includes('useGSAP')) continue
+      push({ id: 'gsap-effect-without-cleanup', level: 'confirmed', severity: 'medium', line: u.line, message: `${u.name}() inside ${e.hook} whose callback returns no cleanup: the animation survives unmount${e.deps === 'none' ? ' and a new one is created on every render' : ''}; React Strict Mode runs the effect twice and creates it twice`, fix: 'useGSAP(() => {...}, { scope }) from @gsap/react, or create a gsap.context() in the effect and return () => ctx.revert()' })
+    }
+  }
+  if (scrollCreates.length && !cleanupEvidence) {
+    const first = scrollCreates[0]
+    push({ id: 'scrolltrigger-without-cleanup', level: trackerOnly ? 'heuristic' : 'confirmed', severity: 'high', line: first.line, message: trackerOnly ? `${scrollCreates.length} ScrollTrigger(s) created inside gsap.context()/gsap.matchMedia() but nothing in this file reverts or kills them: the context is never reverted on unmount` : `${scrollCreates.length} ScrollTrigger(s) created with no revert(), kill() or useGSAP in this file: pins, listeners and scroll positions survive navigation away from the component`, fix: 'revert the context in onUnmounted or in the effect cleanup (ctx.revert() / mm.revert()), use useGSAP in React, or kill the trigger explicitly' })
+  }
+  const needsReduced = scrollCreates.length > 0 || creates.some((u) => u.flags && (u.flags.scrub || u.flags.pin || u.flags.infinite))
+  if (needsReduced && !has('matchmedia') && !has('matchmediarefresh') && !REDUCED_MOTION_RE.test(info.stripped)) {
+    const u = scrollCreates[0] ?? creates.find((c) => c.flags && (c.flags.scrub || c.flags.pin || c.flags.infinite))
+    push({ id: 'motion-without-reduced-motion', level: 'heuristic', severity: 'medium', line: u.line, message: 'scroll-driven, pinned or infinite motion in this file with no prefers-reduced-motion branch (no gsap.matchMedia, media query or reduced-motion composable)', fix: 'gsap.matchMedia().add({ reduce: "(prefers-reduced-motion: reduce)", motion: "(prefers-reduced-motion: no-preference)" }, ctx => ...) with an instant or minimal variant for reduce' })
+  }
+  return out
+}
+
 export function run(argv) {
   const args = parseArgs(argv)
   if (args.help || !args._[0]) return usage(HELP)
@@ -84,6 +148,7 @@ export function run(argv) {
   const report = createReport('leak-patterns', project)
   const rows = []
   let scanned = 0
+  let motionFindings = 0
   const byResource = {}
   let graph
   try {
@@ -96,6 +161,10 @@ export function run(argv) {
     if (!isCandidate(info)) continue
     scanned++
     const { resources, hasCleanupHook, cleanupSource } = scanFile(info)
+    for (const f of scanMotion(info, project)) {
+      motionFindings++
+      addFinding(report, { ...f, file: info.rel })
+    }
     for (const r of resources) {
       byResource[r.id] = (byResource[r.id] ?? 0) + r.creates
       rows.push({ file: info.rel, ...r, hasCleanupHook, cleanupSource })
@@ -106,7 +175,7 @@ export function run(argv) {
       }
     }
   }
-  report.summary = { filesScanned: scanned, filesWithResources: new Set(rows.map((r) => r.file)).size, resourcesByType: byResource, potentialLeaks: report.findings.length }
+  report.summary = { filesScanned: scanned, filesWithResources: new Set(rows.map((r) => r.file)).size, resourcesByType: byResource, potentialLeaks: report.findings.length, motionFindings, motionRules: graph.analysis?.engine === 'semantic' ? 'active' : 'inactive (lexical engine)' }
   report.data = { rows }
   const sections = rows.length ? [{ title: 'Resources per file', table: { headers: ['file', 'resource', 'creates', 'cleanups', 'first line', 'unmount hook'], rows: rows.map((r) => [r.file, r.id, r.creates, r.cleanups, r.firstLine, r.hasCleanupHook ? 'yes' : 'no']) } }] : []
   return finish(report, args, { sections })

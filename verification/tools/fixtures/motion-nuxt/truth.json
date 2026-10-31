@@ -1,0 +1,105 @@
+{
+  "$comment": "Expected ids of the 1.5 motion rules per file (semantic engine). The 1.3 lexical rule leak-gsap is not part of this truth. Written before the rules ran.",
+  "files": {
+    "app/components/motion/GoodTimeline.vue": {
+      "must": [],
+      "mustNot": [
+        "gsap-outside-client-lifecycle",
+        "scrolltrigger-without-cleanup",
+        "gsap-effect-without-cleanup",
+        "gsap-module-scope-animation",
+        "motion-without-reduced-motion"
+      ]
+    },
+    "app/components/motion/GoodScrollStory.vue": {
+      "must": [],
+      "mustNot": [
+        "scrolltrigger-without-cleanup",
+        "motion-without-reduced-motion",
+        "gsap-outside-client-lifecycle"
+      ]
+    },
+    "app/components/motion/LeakScrollTrigger.vue": {
+      "must": [
+        "scrolltrigger-without-cleanup",
+        "motion-without-reduced-motion"
+      ],
+      "mustNot": [
+        "gsap-outside-client-lifecycle",
+        "gsap-effect-without-cleanup"
+      ],
+      "levels": {
+        "scrolltrigger-without-cleanup": "confirmed",
+        "motion-without-reduced-motion": "heuristic"
+      }
+    },
+    "app/components/motion/SetupTopLevel.vue": {
+      "must": [
+        "gsap-outside-client-lifecycle"
+      ],
+      "mustNot": [
+        "scrolltrigger-without-cleanup",
+        "motion-without-reduced-motion"
+      ],
+      "levels": {
+        "gsap-outside-client-lifecycle": "confirmed"
+      }
+    },
+    "app/components/motion/ContextNeverReverted.vue": {
+      "must": [
+        "scrolltrigger-without-cleanup",
+        "motion-without-reduced-motion"
+      ],
+      "mustNot": [
+        "gsap-outside-client-lifecycle"
+      ],
+      "levels": {
+        "scrolltrigger-without-cleanup": "heuristic",
+        "motion-without-reduced-motion": "heuristic"
+      }
+    },
+    "app/components/motion/GuardedSetup.vue": {
+      "must": [],
+      "mustNot": [
+        "gsap-outside-client-lifecycle",
+        "motion-without-reduced-motion"
+      ]
+    },
+    "app/components/motion/Looping.vue": {
+      "must": [
+        "motion-without-reduced-motion"
+      ],
+      "mustNot": [
+        "gsap-outside-client-lifecycle",
+        "scrolltrigger-without-cleanup"
+      ],
+      "levels": {
+        "motion-without-reduced-motion": "heuristic"
+      }
+    },
+    "app/components/motion/ClientOnlyFile.client.vue": {
+      "must": [],
+      "mustNot": [
+        "gsap-outside-client-lifecycle"
+      ]
+    },
+    "app/composables/useHeroTimeline.ts": {
+      "must": [],
+      "mustNot": [
+        "gsap-module-scope-animation",
+        "gsap-outside-client-lifecycle"
+      ]
+    },
+    "app/lib/motion/sharedTimeline.ts": {
+      "must": [
+        "gsap-module-scope-animation"
+      ],
+      "mustNot": [
+        "gsap-outside-client-lifecycle"
+      ],
+      "levels": {
+        "gsap-module-scope-animation": "confirmed"
+      }
+    }
+  }
+}
