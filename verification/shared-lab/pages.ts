@@ -7,6 +7,8 @@ import gsap from 'gsap'
 import { createProductExperience, PRODUCT_COLORS, type ProductExperience } from '../experiences/product-experience'
 import { createParticleExperience, type ParticleExperience } from '../experiences/particle-experience'
 import { createStoryExperience, STORY_CHAPTERS, type StoryExperience } from '../experiences/story-experience'
+import { createAtelierExperience, ATELIER_CHAPTERS, type AtelierExperience } from '../experiences/atelier-experience'
+import { PART_LABELS, isAtelierPart } from '../experiences/atelier-parts'
 import { meanDistance } from '../particles/formations'
 import { detectInitialTier, readDeviceSignals, QUALITY_TIERS } from '../rendering/quality'
 import { bindScrollExperience, type ScrollBinding } from './bind-scroll'
@@ -60,8 +62,13 @@ export async function mountProductPage(options: PageOptions): Promise<() => void
   }
   const exploreButton = options.container.querySelector<HTMLButtonElement>('button[data-explore]')
   const onExplore = () => {
-    if (experience.diagnostics().exploring) experience.resume()
-    else experience.explore()
+    if (experience.diagnostics().exploring) {
+      experience.resume()
+      binding.resume()
+    } else {
+      binding.pause()
+      experience.explore()
+    }
     if (exploreButton) exploreButton.setAttribute('aria-pressed', String(experience.diagnostics().exploring))
   }
   exploreButton?.addEventListener('click', onExplore)
@@ -78,9 +85,10 @@ export async function mountProductPage(options: PageOptions): Promise<() => void
     api: {
       seek: (p: number) => experience.seek(p),
       set: (option: 'finish' | 'color', value: string) => Boolean(experience.configurator.set(option, value)),
-      explore: () => { experience.explore(); return experience.diagnostics() },
-      resume: () => { experience.resume(); return experience.diagnostics() },
+      explore: () => { binding.pause(); experience.explore(); return experience.diagnostics() },
+      resume: () => { experience.resume(); binding.resume(); return experience.diagnostics() },
       scrollProgress: () => binding.progress,
+      scrubPaused: () => binding.paused,
     },
     diagnostics: () => experience.diagnostics(),
     lifecycle: lifecycle(),
@@ -187,6 +195,7 @@ export async function mountStoryPage(options: PageOptions): Promise<() => void> 
     chapters: STORY_CHAPTERS,
     transitions: experience.transitions,
     tier: { pinned: tiers.pinned.name, detected: tiers.detected.name },
+    subscribeChanges: (listener: (change: { previous: number; index: number; source: string }) => void) => experience.navigator.subscribe(listener),
     api: {
       seek: (p: number) => experience.seek(p),
       key: (k: string) => experience.key(k),
@@ -209,6 +218,88 @@ export async function mountStoryPage(options: PageOptions): Promise<() => void> 
     lifecycle().disposes++
     lab.disposed = true
     const info = experience.diagnostics().stats.info // live renderer.info, after disposal
+    lab.afterDispose = { geometries: info.geometries, textures: info.textures }
+    restore()
+  }
+}
+
+export async function mountAtelierPage(options: PageOptions): Promise<() => void> {
+  const { errors, restore } = captureErrors()
+  const tiers = tierFor(options.canvas)
+  const experience: AtelierExperience = createAtelierExperience({ canvas: options.canvas, controlsElement: options.controls, reducedMotion: options.reducedMotion, tier: tiers.pinned, gsap, onCaption: options.onCaption })
+  const binding = bindScrollExperience(options.container, experience, { reducedMotion: options.reducedMotion })
+  const selects = [...options.container.querySelectorAll<HTMLSelectElement>('select[data-option]')]
+  for (const select of selects) {
+    const option = select.dataset.option as 'finish' | 'grille'
+    select.innerHTML = experience.configurator.available(option).map((v) => `<option value="${v}">${v}</option>`).join('')
+    select.value = experience.configurator.selection[option]
+    select.addEventListener('change', () => experience.configurator.set(option, select.value))
+  }
+  const exploreButton = options.container.querySelector<HTMLButtonElement>('button[data-explore]')
+  const onExplore = () => {
+    if (experience.diagnostics().exploring) {
+      experience.resume()
+      binding.resume()
+    } else {
+      binding.pause()
+      experience.explore()
+    }
+    exploreButton?.setAttribute('aria-pressed', String(experience.diagnostics().exploring))
+  }
+  exploreButton?.addEventListener('click', onExplore)
+  const buttons = [...options.container.querySelectorAll<HTMLButtonElement>('button[data-chapter]')]
+  const syncButtons = () => {
+    const index = experience.navigator.index
+    buttons.forEach((b, i) => { if (i === index) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current') })
+    const live = options.container.querySelector('[data-live]')
+    if (live) live.textContent = `Chapter ${index + 1} of ${ATELIER_CHAPTERS.length}: ${ATELIER_CHAPTERS[index]?.title ?? ''}`
+  }
+  const handlers = buttons.map((b, i) => { const h = () => binding.seekTo(experience.goTo(i)); b.addEventListener('click', h); return h })
+  const unsubscribe = experience.navigator.subscribe(syncButtons)
+  syncButtons()
+  const selectedLabel = options.container.querySelector('[data-selected]')
+  const unsubscribeParts = (() => { const update = () => { const d = experience.diagnostics(); if (selectedLabel) selectedLabel.textContent = d.selected && isAtelierPart(d.selected) ? PART_LABELS[d.selected] : 'Nothing selected' }; options.controls.addEventListener('click', update); return () => options.controls.removeEventListener('click', update) })()
+  lifecycle().mounts++
+  await experience.ready
+  const lab = {
+    kind: 'atelier',
+    ready: true,
+    errors,
+    chapters: ATELIER_CHAPTERS,
+    tier: { pinned: tiers.pinned.name, detected: tiers.detected.name },
+    api: {
+      seek: (p: number) => experience.seek(p),
+      key: (k: string) => experience.key(k),
+      goTo: (i: number) => experience.goTo(i),
+      set: (option: 'finish' | 'grille', value: string) => Boolean(experience.configurator.set(option, value)),
+      explore: () => { binding.pause(); experience.explore(); return experience.diagnostics() },
+      resume: () => { experience.resume(); binding.resume(); return experience.diagnostics() },
+      hover: (part: string | null) => { experience.hover(isAtelierPart(part ?? '') ? (part as never) : null); return experience.diagnostics() },
+      select: (part: string | null) => { experience.select(isAtelierPart(part ?? '') ? (part as never) : null); return experience.diagnostics() },
+      screenPositionOf: (part: string) => (isAtelierPart(part) ? experience.screenPositionOf(part) : null),
+      advance: (seconds: number) => { experience.advance(seconds); return experience.diagnostics() },
+      surfaceDistance: () => experience.particleDistanceToSurface(),
+      scrollProgress: () => binding.progress,
+      scrubPaused: () => binding.paused,
+    },
+    subscribeChanges: (listener: (change: { previous: number; index: number; source: string }) => void) => experience.navigator.subscribe(listener),
+    diagnostics: () => experience.diagnostics(),
+    lifecycle: lifecycle(),
+    disposed: false,
+    afterDispose: null as null | { geometries: number; textures: number },
+    disposal: null as unknown,
+  }
+  window.__lab = lab
+  return () => {
+    binding.dispose()
+    exploreButton?.removeEventListener('click', onExplore)
+    buttons.forEach((b, i) => b.removeEventListener('click', handlers[i]!))
+    unsubscribe()
+    unsubscribeParts()
+    lab.disposal = experience.dispose()
+    lifecycle().disposes++
+    lab.disposed = true
+    const info = experience.diagnostics().stats.info
     lab.afterDispose = { geometries: info.geometries, textures: info.textures }
     restore()
   }
