@@ -68,6 +68,7 @@ Never use Three.js for effects CSS or SVG can do (gradients, parallax of flat im
 - WebGL and GSAP DOM code runs only on the client (`<ClientOnly>`, `onMounted`, `'use client'`, dynamic import without SSR).
 - Do not break the platform: keyboard navigation, focus visibility, anchor links, browser back, text selection, screen reader access to content rendered in canvas (provide DOM equivalents).
 - Clamp device pixel ratio for WebGL (`Math.min(devicePixelRatio, 2)`), lazy load 3D below the fold, pause rendering when off-screen or the tab is hidden.
+- Text and controls over a canvas sit on a surface that guarantees their WCAG 2.2 ratio (4.5:1, 3:1 for large text and focus rings) whatever the scene draws; a screenshot is evidence, not the proof (`creative-quality-rubric.md`, section 7). Without WebGL the page says so and keeps its content readable in the DOM.
 - Text contrast 4.5:1 and UI contrast 3:1 hold in every visual direction, including dark mode and tenant themes; meaning is never conveyed by color alone (`accessibility.md`).
 - Check licenses: GSAP uses its own "standard no-charge" license (verified on npm), not an OSI license; read its terms for your use.
 
