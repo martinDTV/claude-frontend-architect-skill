@@ -422,7 +422,7 @@ export function disposeSceneGraph(root: THREE.Object3D, registry?: ResourceRegis
 
 ## 4. The runtime
 
-The runtime is the browser glue: renderer with a clamped pixel ratio and explicit colour management, the loop scheduled through `renderer.setAnimationLoop` (one scheduler, the one the renderer already has), resize from a `ResizeObserver` on the canvas, pause when the document is hidden or the canvas leaves the viewport, a lost context that stops the loop and a restored one that resumes it, and a `dispose()` that stops, disconnects, disposes what it owns and releases the context. Its diagnostics are what the browser checks read: frames rendered, running flag, pause reasons, context events, `renderer.info` counts.
+The runtime is the browser glue: renderer with a clamped pixel ratio and explicit colour management, the loop scheduled through `renderer.setAnimationLoop` (one scheduler, the one the renderer already has), resize from a `ResizeObserver` on the canvas, pause when the document is hidden or the canvas leaves the viewport, a lost context that stops the loop and a restored one that resumes it, and a `dispose()` that stops, disconnects, disposes what it owns and releases the context. Its diagnostics are what the browser checks read: frames rendered, running flag, pause reasons, context events, `renderer.info` counts, and since 1.5 increment 4B a `timing` block: percentiles (p50, p95, p99, max) over the last 240 frames of the frame interval, of the CPU time of the tick (from the first input system to the end of the render) and, when the context offers `EXT_disjoint_timer_query_webgl2`, of the GPU time of the frame's draws; `resetTiming({ gpu })` opens a measurement window; timer queries are issued only when the window asks for them, so a clean window measures the frame interval and the CPU time with nothing added to the command stream and a second window measures the GPU time (on ANGLE Metal the interval was the same with and without them; the separation is there for drivers where it is not). The frame interval is a pacing fact of the browser and display state, not a measure of load: the harness also records what a blank page clearing a canvas achieves in the same browser, and the CPU and GPU times are the margin. The full Chromium on a real GPU has the timer extension, the software renderer does not, and the harness never reads the two backends side by side. When the browser gives no WebGL context at all the runtime throws `WebGLUnavailableError` (`name: 'WebGLUnavailable'`) instead of a bare three.js error, so a page can switch to its DOM alternative and say so.
 
 ```ts
 // @verify creative:engine/scene-runtime.ts nuxt:lib/lab/engine/scene-runtime.ts next:lib/lab/engine/scene-runtime.ts
@@ -463,6 +463,7 @@ export interface RuntimeDiagnostics {
   size: { width: number; height: number }
   lastDelta: number
   info: { geometries: number; textures: number; programs: number; calls: number; triangles: number; points: number; lines: number }
+  timing: { frame: TimingSummary; cpu: TimingSummary; gpu: TimingSummary | null; gpuTimer: string | null; gpuQueries: boolean }
 }
 
 /** What dispose() freed, with renderer.info.memory at each step: the evidence a page or a test reads. */
@@ -489,13 +490,45 @@ export interface SceneRuntime {
   /** stops, disconnects, disposes the graph and the registry, releases the context; null when already disposed */
   dispose(): DisposalReport | null
   stats(): RuntimeDiagnostics
+  /** starts a fresh timing window (percentiles are over the last 240 frames); `gpu: true` issues timer queries in it */
+  resetTiming(options?: { gpu?: boolean }): void
   readonly disposed: boolean
+}
+
+/** Thrown when the browser gives no WebGL context: the page shows its DOM alternative instead of a blank canvas. */
+export class WebGLUnavailableError extends Error {
+  override readonly name = 'WebGLUnavailable'
+}
+
+function createRenderer(canvas: HTMLCanvasElement, options: SceneRuntimeOptions): THREE.WebGLRenderer {
+  try {
+    return new THREE.WebGLRenderer({ canvas, antialias: options.antialias ?? true, alpha: options.alpha ?? false, powerPreference: options.powerPreference ?? 'high-performance' })
+  } catch (error) {
+    throw new WebGLUnavailableError(`WebGL is not available: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+/** Ring of the last `capacity` samples with percentiles: frame interval, CPU time of the tick and GPU time of the frame. */
+export interface TimingSummary { samples: number; mean: number; p50: number; p95: number; p99: number; max: number }
+export function createSampleRing(capacity = 240) {
+  const values: number[] = []
+  return {
+    push(v: number) { values.push(v); if (values.length > capacity) values.shift() },
+    reset() { values.length = 0 },
+    summary(): TimingSummary {
+      if (values.length === 0) return { samples: 0, mean: 0, p50: 0, p95: 0, p99: 0, max: 0 }
+      const sorted = [...values].sort((a, b) => a - b)
+      const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!
+      const round = (v: number) => Number(v.toFixed(2))
+      return { samples: sorted.length, mean: round(sorted.reduce((a, b) => a + b, 0) / sorted.length), p50: round(at(0.5)), p95: round(at(0.95)), p99: round(at(0.99)), max: round(sorted[sorted.length - 1]!) }
+    },
+  }
 }
 
 export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
   const { canvas } = options
   const onError = options.onError ?? ((error: unknown, where: string) => console.error(`[scene-runtime] ${where}`, error))
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: options.antialias ?? true, alpha: options.alpha ?? false, powerPreference: options.powerPreference ?? 'high-performance' })
+  const renderer = createRenderer(canvas, options)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, options.maxPixelRatio ?? 2))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = options.toneMapping ?? THREE.ACESFilmicToneMapping
@@ -513,11 +546,54 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
   // renderer.info counts per renderer.render() call by default; a post pipeline renders several times per frame, so
   // the runtime resets the counters once per frame and stats() reports the whole frame (calls, triangles)
   renderer.info.autoReset = false
+  // frame timing: the interval between ticks, the CPU time of the tick (from the first input system, registered here
+  // before any other, to the end of the render) and, when the context offers timer queries, the GPU time of the frame's
+  // draws (EXT_disjoint_timer_query_webgl2: the full Chromium on a real GPU has it, the software renderer does not);
+  // percentiles over the last 240 frames, resetTiming() opens a measurement window
+  const gl = renderer.getContext() as WebGL2RenderingContext
+  const timerExt = typeof gl.createQuery === 'function' ? (gl.getExtension('EXT_disjoint_timer_query_webgl2') as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null) : null
+  const timing = { frame: createSampleRing(), cpu: createSampleRing(), gpu: createSampleRing() }
+  // timer queries are issued only inside a window that asked for them, so the clean window measures the frame
+  // interval and the CPU time without anything added to the GPU's command stream; on ANGLE Metal the interval was the
+  // same with and without them, the separation is there for drivers where it is not
+  let gpuQueries = false
+  const pendingQueries: WebGLQuery[] = []
+  const collectQueries = () => {
+    if (!timerExt || gl.isContextLost()) return
+    while (pendingQueries.length) {
+      const query = pendingQueries[0]!
+      if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) break
+      const disjoint = gl.getParameter(timerExt.GPU_DISJOINT_EXT) as boolean
+      const ns = gl.getQueryParameter(query, gl.QUERY_RESULT) as number
+      gl.deleteQuery(query)
+      pendingQueries.shift()
+      if (!disjoint) timing.gpu.push(ns / 1e6)
+    }
+  }
+  let tickStart = 0
+  let lastFrame = { calls: 0, triangles: 0, points: 0, lines: 0 }
+  loop.add('input', () => { tickStart = performance.now() }, 'runtime-tick-start')
   loop.add(
     'render',
     (frame) => {
       renderer.info.reset()
+      let query: WebGLQuery | null = null
+      if (timerExt && gpuQueries && pendingQueries.length < 8 && !gl.isContextLost()) {
+        query = gl.createQuery()
+        if (query) gl.beginQuery(timerExt.TIME_ELAPSED_EXT, query)
+      }
       render(frame)
+      if (query) {
+        gl.endQuery(timerExt!.TIME_ELAPSED_EXT)
+        pendingQueries.push(query)
+      }
+      // the counts of this completed frame: what stats() reports (the live counter also sees work an api call does
+      // between frames, such as stepping a simulation for a read-back)
+      const r = renderer.info.render
+      lastFrame = { calls: r.calls, triangles: r.triangles, points: r.points, lines: r.lines }
+      timing.cpu.push(performance.now() - tickStart)
+      timing.frame.push(frame.delta * 1000)
+      if (gpuQueries || pendingQueries.length) collectQueries()
       frames++
       lastDelta = frame.delta
     },
@@ -613,13 +689,15 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
       const graph = disposeSceneGraph(scene, registry)
       scene.clear()
       const afterGraph = memory()
+      if (timerExt && !gl.isContextLost()) for (const q of pendingQueries.splice(0)) gl.deleteQuery(q)
       const result = registry.dispose() // includes renderer.dispose()
       const afterRegistry = memory()
       if (options.releaseContextOnDispose ?? true) renderer.forceContextLoss()
       return { before, afterGraph, afterRegistry, graph, registry: result }
     },
     stats() {
-      const { memory, render: r, programs } = renderer.info
+      const { memory, programs } = renderer.info
+      const r = lastFrame
       return {
         frames,
         running: loop.running,
@@ -632,7 +710,14 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         size,
         lastDelta,
         info: { geometries: memory.geometries, textures: memory.textures, programs: programs?.length ?? 0, calls: r.calls, triangles: r.triangles, points: r.points, lines: r.lines },
+        timing: { frame: timing.frame.summary(), cpu: timing.cpu.summary(), gpu: timerExt ? timing.gpu.summary() : null, gpuTimer: timerExt ? 'EXT_disjoint_timer_query_webgl2' : null, gpuQueries },
       }
+    },
+    resetTiming(options) {
+      gpuQueries = Boolean(options?.gpu) && Boolean(timerExt)
+      timing.frame.reset()
+      timing.cpu.reset()
+      timing.gpu.reset()
     },
     get disposed() {
       return state.disposed
@@ -872,6 +957,44 @@ describe('disposeSceneGraph', () => {
     expect(disposed.sort()).toEqual(['geometry', 'material', 'ownMap'])
     expect(result).toMatchObject({ geometries: 2, materials: 1, textures: 1 })
     expect(result.kept).toEqual(['envmap:shared', 'prop-material:external'])
+  })
+})
+```
+
+```ts
+// @verify creative:engine/scene-runtime.test.ts
+import { describe, expect, it } from 'vitest'
+import { WebGLUnavailableError, createSampleRing, createSceneRuntime } from './scene-runtime'
+
+describe('scene runtime: timing rings and the unavailable-WebGL error', () => {
+  it('keeps the last samples and reports percentiles the gpu harness can compare across backends', () => {
+    const ring = createSampleRing(100)
+    expect(ring.summary()).toEqual({ samples: 0, mean: 0, p50: 0, p95: 0, p99: 0, max: 0 })
+    for (let i = 1; i <= 100; i++) ring.push(i) // 1..100 ms
+    const s = ring.summary()
+    expect(s.samples).toBe(100)
+    expect(s.p50).toBe(51)
+    expect(s.p95).toBe(96)
+    expect(s.p99).toBe(100)
+    expect(s.max).toBe(100)
+    expect(s.mean).toBe(50.5)
+    for (let i = 0; i < 100; i++) ring.push(1) // the ring forgets the old window
+    expect(ring.summary().max).toBe(1)
+    ring.reset()
+    expect(ring.summary().samples).toBe(0)
+  })
+
+  it('throws a typed error when the canvas gives no WebGL context, so a page can show its DOM alternative', () => {
+    const canvas = { getContext: () => null, addEventListener() {}, removeEventListener() {}, style: {}, width: 300, height: 150, clientWidth: 300, clientHeight: 150 } as unknown as HTMLCanvasElement
+    let caught: unknown = null
+    try {
+      createSceneRuntime({ canvas })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(WebGLUnavailableError)
+    expect((caught as Error).name).toBe('WebGLUnavailable')
+    expect((caught as Error).message).toMatch(/WebGL is not available/)
   })
 })
 ```

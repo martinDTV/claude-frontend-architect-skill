@@ -246,6 +246,7 @@ import * as THREE from 'three'
 
 export interface ShadowSetup {
   mapSize: number
+  /** PCF (default) or the hard BasicShadowMap when false */
   soft?: boolean
   bias?: number
   normalBias?: number
@@ -253,7 +254,9 @@ export interface ShadowSetup {
 
 export function configureShadows(renderer: THREE.WebGLRenderer, light: THREE.DirectionalLight, setup: ShadowSetup): void {
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = setup.soft === false ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
+  // r186 removed PCFSoftShadowMap (PCF is the soft filter now; the old constant made the renderer warn on every mount);
+  // soft: false asks for the hard, cheapest filter
+  renderer.shadowMap.type = setup.soft === false ? THREE.BasicShadowMap : THREE.PCFShadowMap
   light.castShadow = true
   light.shadow.mapSize.set(setup.mapSize, setup.mapSize)
   light.shadow.bias = setup.bias ?? -0.0002

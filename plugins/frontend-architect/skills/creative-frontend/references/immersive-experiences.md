@@ -89,6 +89,8 @@ export interface ProductExperience {
   explore(): void
   resume(): void
   diagnostics(): ProductDiagnostics
+  /** opens a fresh frame-timing window (the gpu harness measures from here) */
+  resetTiming(options?: { gpu?: boolean }): void
   dispose(): DisposalReport | null
 }
 
@@ -243,6 +245,7 @@ export function createProductExperience(options: ProductExperienceOptions): Prod
       bridge?.resume()
     },
     diagnostics,
+    resetTiming: (options) => runtime.resetTiming(options),
     dispose() {
       cues.reset()
       bridge?.dispose()
@@ -310,6 +313,8 @@ export interface ParticleExperience {
   readPositions(): Float32Array | null
   readonly formations: { a: Float32Array; b: Float32Array }
   diagnostics(): ParticleDiagnostics
+  /** opens a fresh frame-timing window (the gpu harness measures from here) */
+  resetTiming(options?: { gpu?: boolean }): void
   dispose(): DisposalReport | null
 }
 
@@ -402,7 +407,7 @@ export function createParticleExperience(options: ParticleExperienceOptions): Pa
     density: state.density,
     tier: tier.name,
     adaptiveTier: controller?.tier.name ?? null,
-    drawCalls: renderer.info.render.calls,
+    drawCalls: runtime.stats().info.calls, // the last completed frame's draws
     reducedMotion: options.reducedMotion,
     stats: runtime.stats(),
   })
@@ -429,6 +434,7 @@ export function createParticleExperience(options: ParticleExperienceOptions): Pa
     readPositions: () => (sim ? sim.readPositions() : null),
     formations,
     diagnostics,
+    resetTiming: (options) => runtime.resetTiming(options),
     dispose() {
       pointer.dispose()
       if (sim) {
@@ -498,6 +504,8 @@ export interface StoryExperience {
   /** camera position a space's rig would hold at a local progress (for checks) */
   checkpoint(space: number, local: number): { x: number; y: number; z: number }
   diagnostics(): StoryDiagnostics
+  /** opens a fresh frame-timing window (the gpu harness measures from here) */
+  resetTiming(options?: { gpu?: boolean }): void
   dispose(): DisposalReport | null
 }
 
@@ -721,6 +729,7 @@ export function createStoryExperience(options: StoryExperienceOptions): StoryExp
       return at
     },
     diagnostics,
+    resetTiming: (options) => runtime.resetTiming(options),
     dispose() {
       cues.reset()
       post.dispose()
