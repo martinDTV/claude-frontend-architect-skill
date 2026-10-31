@@ -44,13 +44,32 @@ const HTTP_RE = /(?:\$fetch|useFetch|useLazyFetch|useAsyncData|apiFetch|fetch)\s
 const QUERY_RE = /\b(?:useQuery|useInfiniteQuery|useFetch|useLazyFetch|useAsyncData|useLazyAsyncData|\$fetch|apiFetch)\s*\(|\b(?:\$?api|http|axios|client|request)\.(?:get|post|put|patch|delete)\s*\(/g
 const DATA_WORD_RE = /\b(?:data|response|result|results|res|items|rows|payload|json|records|list|page|body|await)\b/i
 const LITERAL_RHS_RE = /^(?:true|false|null|undefined|\[\s*\]|\{\s*\}|''|""|``|-?\d+(?:\.\d+)?)\s*$/
-const SECRET_RE = /token|jwt|access|refresh|secret|password|bearer|session|credential|api[-_]?key/i
+// A secret by name: token-like compounds and the words that only ever name credentials. Generic words (access, refresh,
+// session, auth) are weak on their own: `accessibility-prefs` and `refresh-rate` are not tokens; they count when the
+// value comes from a response (data, payload, json...) or the file is auth code, and they are heuristic otherwise.
+const SECRET_RE = /\b(?:(?:access|refresh|id|auth|session|api|bearer|csrf|xsrf)[-_ ]?)?tokens?\b|\bjwt\b|\bsecrets?\b|\bpassword\b|\bpasswd\b|\bcredentials?\b|\bapi[-_]?keys?\b|\bbearer\b|\bprivate[-_]?key\b|\bsession[-_]?id\b/i
+const WEAK_SECRET_RE = /\b(?:access|refresh|session|auth)\b/i
+const AUTH_FILE_RE = /(?:^|\/)(?:auth|login|session|token|credential)[\w-]*\.|(?:^|\/)(?:auth|session|login)\//i
 const CONTAINER_RE = /^(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*(?::[^=]+)?=\s*(new\s+(?:Map|Set|WeakMap|WeakSet)\b|\[\s*\]|\{\s*\}|(?:ref|reactive|shallowRef|shallowReactive)\s*(?:<[^>]*>)?\s*\(|axios\.create\s*\(|\$fetch\.create\s*\(|ofetch\.create\s*\(|createHttpClient\s*\(|new\s+(?:QueryClient|EventEmitter|AbortController)\b)/
 const MUTABLE_BINDING_RE = /^(?:export\s+)?(?:let|var)\s+([\w$]+)/
 const EXCLUDE_TOP_RE = /^(?:export\s+)?(?:const|let|var)\s+[\w$]+\s*(?::[^=]+)?=\s*(?:defineStore|defineNuxtPlugin|defineEventHandler|defineNuxtRouteMiddleware|defineNuxtConfig|defineAppConfig|defineComponent|createGlobalState|createSharedComposable|z\.|v\.|object\(|import\.meta|process\.env|Symbol\(|\d|['"`]|true|false|null)/
 
 function isClientOnly(rel, code) {
   return /\.client\.[cm]?[jt]sx?$|\.client\.vue$/.test(rel) || /^\s*['"]use client['"]/.test(code)
+}
+
+/**
+ * How sure the key and value say "credential": `confirmed` for a token-like name, or a generic auth word (access,
+ * refresh, session, auth) when the value comes from a response or the file is auth code; `heuristic` for a generic word
+ * elsewhere, or a credential-like key holding a literal (a flag such as password-strength-tips-seen); null otherwise.
+ */
+function secretGrade(key, value, rel) {
+  const text = `${key} ${value}`
+  const literal = LITERAL_RHS_RE.test(String(value).trim())
+  if (SECRET_RE.test(text)) return literal ? 'heuristic' : 'confirmed'
+  if (!WEAK_SECRET_RE.test(key)) return null
+  if (!literal && (DATA_WORD_RE.test(String(value)) || AUTH_FILE_RE.test(rel))) return 'confirmed'
+  return 'heuristic'
 }
 
 export function run(argv) {
@@ -143,18 +162,22 @@ export function run(argv) {
     for (const m of code.matchAll(/\b(localStorage|sessionStorage)\.setItem\s*\(\s*(?:(['"`])([^'"`]*)\2|([\w$.[\]]+))\s*,\s*([^)]*)\)/g)) {
       const key = m[3] ?? m[4]
       const value = m[5]
-      const sensitive = SECRET_RE.test(`${key} ${value}`) && !/theme|locale|lang|sidebar|collapsed|dismiss|onboard|cookie-consent/i.test(key)
+      const grade = secretGrade(key, value, rel)
+      const sensitive = grade !== null && !/theme|locale|lang|sidebar|collapsed|dismiss|onboard|cookie-consent/i.test(key)
       storageKeys.push({ storage: m[1], key, file: rel, sensitive })
       const testDouble = /(?:^|\/)(?:fake|mock|stub|dev-only|__mocks__|fixtures?)(?:[./-]|$)/i.test(rel) || /\b(?:fake|mock|stub)\b/i.test(key)
-      if (sensitive) addFinding(report, { id: 'token-in-web-storage', level: 'confirmed', severity: testDouble ? 'low' : 'high', file: rel, line: lineAt(code, m.index), message: `${m[1]}.setItem('${key}', ${value.trim().slice(0, 40)}) stores a token or secret readable by any script (XSS)${testDouble ? ' (looks like a test double: confirm it never ships to production)' : ''}`, fix: 'use an HttpOnly, Secure, SameSite cookie session (or a BFF); if a token must live in the browser keep it in memory and document the risk in an ADR' })
+      if (sensitive && grade === 'heuristic') addFinding(report, { id: 'token-in-web-storage', level: 'heuristic', severity: 'low', file: rel, line: lineAt(code, m.index), message: `${m[1]}.setItem('${key}', ${value.trim().slice(0, 40)}): the key sounds like a credential but the value is a literal or the context is not auth code; read it`, fix: 'if it is a token or secret, move it to an HttpOnly cookie session; if it is a preference, rename the key so it does not read as one' })
+      else if (sensitive) addFinding(report, { id: 'token-in-web-storage', level: 'confirmed', severity: testDouble ? 'low' : 'high', file: rel, line: lineAt(code, m.index), message: `${m[1]}.setItem('${key}', ${value.trim().slice(0, 40)}) stores a token or secret readable by any script (XSS)${testDouble ? ' (looks like a test double: confirm it never ships to production)' : ''}`, fix: 'use an HttpOnly, Secure, SameSite cookie session (or a BFF); if a token must live in the browser keep it in memory and document the risk in an ADR' })
     }
     for (const m of code.matchAll(/\b(useLocalStorage|useSessionStorage|useStorage)\s*(?:<[^>]*>)?\s*\(\s*['"]([^'"]+)['"]/g)) {
-      const sensitive = SECRET_RE.test(m[2])
+      const grade = secretGrade(m[2], '', rel)
+      const sensitive = grade !== null
       storageKeys.push({ storage: m[1], key: m[2], file: rel, sensitive })
-      if (sensitive) addFinding(report, { id: 'token-in-web-storage', level: 'confirmed', severity: 'high', file: rel, line: lineAt(code, m.index), message: `${m[1]}('${m[2]}') persists a token-like value in web storage`, fix: 'HttpOnly cookie session; never tokens in storage' })
+      if (sensitive) addFinding(report, { id: 'token-in-web-storage', level: grade, severity: grade === 'confirmed' ? 'high' : 'low', file: rel, line: lineAt(code, m.index), message: `${m[1]}('${m[2]}') persists a token-like value in web storage`, fix: 'HttpOnly cookie session; never tokens in storage' })
     }
     for (const m of code.matchAll(/document\.cookie\s*=\s*([^;\n]*)/g)) {
-      if (SECRET_RE.test(m[1])) addFinding(report, { id: 'token-in-web-storage', level: 'confirmed', severity: 'high', file: rel, line: lineAt(code, m.index), message: 'a token is written to document.cookie from JavaScript (not HttpOnly)', fix: 'the server sets the session cookie with HttpOnly; the browser never sees the token' })
+      const grade = secretGrade(m[1], m[1], rel)
+      if (grade) addFinding(report, { id: 'token-in-web-storage', level: grade, severity: grade === 'confirmed' ? 'high' : 'low', file: rel, line: lineAt(code, m.index), message: 'a token is written to document.cookie from JavaScript (not HttpOnly)', fix: 'the server sets the session cookie with HttpOnly; the browser never sees the token' })
     }
 
     // ---- Module-level mutable state (modules and non-setup script blocks)

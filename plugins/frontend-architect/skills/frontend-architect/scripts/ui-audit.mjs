@@ -182,7 +182,7 @@ export function run(argv) {
     }
     const hasName = (e) => NAME_ATTRS.some((a) => typeof e.attrs[a] === 'string' && e.attrs[a].trim()) || e.hasText
     const nameIsBound = (e) => NAME_ATTRS.some((a) => a in e.bound)
-    const isFocusable = (e) => (e.tag === 'a' && ('href' in e.attrs || 'href' in e.bound || 'to' in e.bound)) || (INTERACTIVE_TAGS.has(e.tag) && e.tag !== 'a') || ('tabindex' in e.attrs && Number(e.attrs.tabindex) >= 0)
+    const isFocusable = (e) => (e.attrs.tabindex === '-1' ? false : (e.tag === 'a' && ('href' in e.attrs || 'href' in e.bound || 'to' in e.bound)) || (INTERACTIVE_TAGS.has(e.tag) && e.tag !== 'a') || ('tabindex' in e.attrs && Number(e.attrs.tabindex) >= 0))
     // a click handler makes an element interactive only when it does something: `@click.stop` with no expression, or a
     // handler that only stops propagation / prevents default, is event plumbing, not an action
     const PLUMBING_RE = /^(?:\(?\s*\w*\s*\)?\s*=>\s*)?(?:\{\s*)?(?:\w+\.(?:stopPropagation|preventDefault)\(\)\s*;?\s*)+(?:\})?$/
@@ -208,7 +208,7 @@ export function run(argv) {
         }
         // images
         if (e.tag === 'img') {
-          if ('alt' in e.attrs || e.attrs.role === 'presentation' || e.attrs.role === 'none') { /* fine, including alt="" */ } else if ('alt' in e.bound) {
+          if ('alt' in e.attrs || e.attrs.role === 'presentation' || e.attrs.role === 'none' || e.attrs['aria-hidden'] === 'true' || NAME_ATTRS.some((a) => a in e.attrs || a in e.bound) || 'aria-labelledby' in e.attrs) { /* fine, including alt="", a hidden image or one named by ARIA */ } else if ('alt' in e.bound) {
             counts.browser++
             emit({ id: 'img-alt-dynamic', verification: 'browser', severity: 'low', ...where(e), message: `<img> alt is bound (${e.bound.alt.slice(0, 40)}): the rendered text decides; check it in the browser`, fix: 'make sure the bound value is a meaningful description, or alt="" when decorative' })
           } else emit({ id: 'img-missing-alt', verification: 'static', severity: 'high', ...where(e), message: '<img> without an alt attribute', fix: 'alt="" for decorative images, a description otherwise (or role="presentation")' })
@@ -248,18 +248,23 @@ export function run(argv) {
             else if (nameIsBound(e)) {
               counts.browser++
               emit({ id: 'button-without-accessible-name', verification: 'browser', severity: 'low', ...where(e), message: 'button name comes from a bound attribute: verify it is never empty', fix: 'guarantee a non-empty aria-label in every state' })
-            } else if (e.childTags.some((t) => /^[A-Z]/.test(t) || t.includes('-'))) emit({ id: 'button-without-accessible-name', verification: 'review', severity: 'medium', ...where(e), message: `button with no text and no aria-label; its child component (${e.childTags.join(', ')}) may or may not render a name`, fix: 'add aria-label (or visually hidden text) unless the child component is known to provide the name' })
+            } else if (e.childTags.some((t) => t === 'img' || t === 'svg')) emit({ id: 'button-without-accessible-name', verification: 'review', severity: 'medium', ...where(e), message: 'button with no text and no aria-label; its image or svg may name it (alt, <title>): verify', fix: 'an alt on the image or a <title> in the svg, otherwise an aria-label on the button' })
+            else if (e.childTags.some((t) => /^[A-Z]/.test(t) || t.includes('-'))) emit({ id: 'button-without-accessible-name', verification: 'review', severity: 'medium', ...where(e), message: `button with no text and no aria-label; its child component (${e.childTags.join(', ')}) may or may not render a name`, fix: 'add aria-label (or visually hidden text) unless the child component is known to provide the name' })
             else emit({ id: 'button-without-accessible-name', verification: 'static', severity: 'high', ...where(e), message: 'button with no text content, no aria-label, no aria-labelledby and no title', fix: 'give the button visible text or an aria-label naming the action' })
           }
         }
         // links
-        if (e.tag === 'a' && !('href' in e.attrs) && !('href' in e.bound) && !('to' in e.bound) && realHandler(e, 'click')) emit({ id: 'link-without-href', verification: 'static', severity: 'medium', ...where(e), message: '<a> with a click handler and no href: not focusable, not announced as a link', fix: 'use a <button> for actions; keep <a href> for navigation' })
+        if (e.tag === 'a' && e.attrs.role !== 'button' && !('href' in e.attrs) && !('href' in e.bound) && !('to' in e.bound) && realHandler(e, 'click')) emit({ id: 'link-without-href', verification: 'static', severity: 'medium', ...where(e), message: '<a> with a click handler and no href: not focusable, not announced as a link', fix: 'use a <button> for actions; keep <a href> for navigation' })
         // click on non-interactive
         if (realHandler(e, 'click') && !INTERACTIVE_TAGS.has(e.tag) && e.tag !== 'label') {
           const role = e.attrs.role
           const keyHandler = ['keydown', 'keyup', 'keypress'].some((k) => e.events.has(k))
           const tabbable = 'tabindex' in e.attrs || 'tabindex' in e.bound
-          if ((!role || !INTERACTIVE_ROLES.has(role)) && focusDelegation(e)) emit({ id: 'click-handler-on-non-interactive', verification: 'review', severity: 'low', ...where(e), message: `<${e.tag}> click only moves focus (${e.handlers.click.exp.slice(0, 40)}): a wrapper that focuses an inner control; verify the control itself is reachable by keyboard`, fix: 'keep the real control focusable and labelled; the wrapper needs no role' })
+          const managedMember = /^(?:option|menuitem|menuitemcheckbox|menuitemradio|treeitem|gridcell|tab|row)$/.test(role ?? '') && elements.some((x) => x.isComponent === false && ('aria-activedescendant' in x.attrs || 'aria-activedescendant' in x.bound) && e.parents?.includes(x.tag))
+          const selfOnly = Boolean(e.handlers?.click?.modifiers?.includes('self'))
+          if (managedMember) { /* the container with aria-activedescendant owns focus; the member needs no tabindex */ }
+          else if (selfOnly && (!role || !INTERACTIVE_ROLES.has(role))) emit({ id: 'click-handler-on-non-interactive', verification: 'review', severity: 'low', ...where(e), message: `<${e.tag}> handles click only on itself (.self): a backdrop or dismiss area; make sure a real control (close button, Escape) does the same`, fix: 'keep a visible close control and an Escape handler; the backdrop click is an extra, never the only way' })
+          else if ((!role || !INTERACTIVE_ROLES.has(role)) && focusDelegation(e)) emit({ id: 'click-handler-on-non-interactive', verification: 'review', severity: 'low', ...where(e), message: `<${e.tag}> click only moves focus (${e.handlers.click.exp.slice(0, 40)}): a wrapper that focuses an inner control; verify the control itself is reachable by keyboard`, fix: 'keep the real control focusable and labelled; the wrapper needs no role' })
           else if (!role || !INTERACTIVE_ROLES.has(role)) emit({ id: 'click-handler-on-non-interactive', verification: 'static', severity: 'medium', ...where(e), message: `<${e.tag}> handles click but has no interactive role: keyboard and screen-reader users cannot reach it`, fix: 'use a <button>; if the element must stay, add role="button", tabindex="0" and a keydown handler for Enter/Space' })
           else if (!tabbable) emit({ id: 'click-handler-on-non-interactive', verification: 'static', severity: 'medium', ...where(e), message: `<${e.tag} role="${role}"> is not focusable (no tabindex)`, fix: 'add tabindex="0" and a keydown handler, or use a <button>' })
           else if (!keyHandler) emit({ id: 'click-handler-on-non-interactive', verification: 'review', severity: 'low', ...where(e), message: `<${e.tag} role="${role}"> is focusable but no keydown/keyup handler was found here`, fix: 'handle Enter and Space (a shared directive counts: verify it)' })
@@ -268,7 +273,7 @@ export function run(argv) {
         if (isFocusable(e) && e.parents && e.parents.some((p) => p === 'button' || p === 'a')) emit({ id: 'nested-interactive', verification: 'static', severity: 'high', ...where(e), message: `<${e.tag}> nested inside <${e.parents.find((p) => p === 'button' || p === 'a')}>: interactive content inside interactive content`, fix: 'flatten: one interactive element per control' })
         // aria
         if (e.attrs['aria-hidden'] === 'true' && isFocusable(e)) emit({ id: 'aria-hidden-on-focusable', verification: 'static', severity: 'high', ...where(e), message: `aria-hidden="true" on a focusable <${e.tag}>: reachable by keyboard, invisible to screen readers`, fix: 'hide it for everyone (hidden / inert) or keep it visible to assistive technology' })
-        if (typeof e.attrs.role === 'string' && !e.attrs.role.split(/\s+/).some((r) => VALID_ROLES.has(r))) emit({ id: 'invalid-role', verification: 'static', severity: 'medium', ...where(e), message: `role="${e.attrs.role}" is not a WAI-ARIA role`, fix: 'use a valid role or remove the attribute' })
+        if (typeof e.attrs.role === 'string' && !e.attrs.role.split(/\s+/).some((r) => VALID_ROLES.has(r) || /^(?:doc|graphics)-[a-z]+$/.test(r))) emit({ id: 'invalid-role', verification: 'static', severity: 'medium', ...where(e), message: `role="${e.attrs.role}" is not a WAI-ARIA role`, fix: 'use a valid role or remove the attribute' })
         for (const name of [...Object.keys(e.attrs), ...Object.keys(e.bound)]) if (name.startsWith('aria-') && !ARIA_ATTRS.has(name)) emit({ id: 'unknown-aria-attribute', verification: 'static', severity: 'medium', ...where(e), message: `${name} is not an ARIA attribute`, fix: 'check the spelling against the WAI-ARIA attribute list' })
         if ('tabindex' in e.attrs && Number(e.attrs.tabindex) > 0) emit({ id: 'positive-tabindex', verification: 'static', severity: 'medium', ...where(e), message: `tabindex="${e.attrs.tabindex}" forces a custom tab order`, fix: 'use tabindex="0" / "-1" and let the DOM order drive focus' })
         if (e.tag === 'iframe' && !('title' in e.attrs) && !('title' in e.bound)) emit({ id: 'iframe-without-title', verification: 'static', severity: 'medium', ...where(e), message: '<iframe> without a title', fix: 'title describes the embedded content' })

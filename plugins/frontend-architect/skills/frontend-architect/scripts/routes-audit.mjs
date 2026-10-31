@@ -172,11 +172,17 @@ export function run(argv) {
   const hasDirective = (info, name) => (info.semantic ? info.semantic.directives.includes(name) : new RegExp(`^\\s*['"]${name}['"]`).test(info.code))
   const sections = []
 
-  // Fixed role checks (both frameworks)
+  // Fixed role checks (both frameworks): UI code only (server handlers are where a role check belongs), the compared
+  // operand is the role itself (`user.role === 'admin'`, `roles.includes('editor')`), and an ARIA role value is not a
+  // permission (`props.role === 'alert'`)
+  const ARIA_ROLE_VALUES = /^(?:alert|alertdialog|application|article|banner|button|cell|checkbox|columnheader|combobox|complementary|contentinfo|dialog|document|feed|figure|form|grid|gridcell|group|heading|img|link|list|listbox|listitem|log|main|marquee|math|menu|menubar|menuitem|menuitemcheckbox|menuitemradio|navigation|none|note|option|presentation|progressbar|radio|radiogroup|region|row|rowgroup|rowheader|scrollbar|search|searchbox|separator|slider|spinbutton|status|switch|tab|table|tablist|tabpanel|term|textbox|timer|toolbar|tooltip|tree|treegrid|treeitem)$/
+  const SERVER_FILE_RE = /(^|\/)(?:server|api)\/|(^|\/)route\.[cm]?[jt]sx?$|(^|\/)proxy\.[cm]?[jt]s$|(^|\/)middleware\.[cm]?[jt]s$/
   for (const info of infos) {
-    for (const m of info.stripped.matchAll(/\b(?:rol|role|roles|perfil|profile)\b[^;\n]{0,40}?(?:===|==|!==|!=|includes\s*\()\s*(['"])([\w-]+)\1/g)) {
-      const literal = info.code.slice(m.index, m.index + m[0].length + 40).match(/(?:===|==|!==|!=|includes\s*\()\s*['"]([\w-]+)['"]/)?.[1] ?? m[2]
-      if (!literal || /^(?:undefined|null|true|false)$/.test(literal)) continue
+    if (SERVER_FILE_RE.test(info.rel)) continue
+    // `stripped` blanks string contents (positions kept): the shape is matched there, the literal read from `code`
+    for (const m of info.stripped.matchAll(/\b(?:rol|role|roles|perfil|profile)s?\b(?:\.value)?\s*(?:\)|\])?\s*(?:(?:===|==|!==|!=)\s*(['"])[^'"\n]*\1|\.includes\s*\(\s*(['"])[^'"\n]*\2)/g)) {
+      const literal = info.code.slice(m.index, m.index + m[0].length).match(/(['"])([\w-]+)\1/)?.[2]
+      if (!literal || /^(?:undefined|null|true|false)$/.test(literal) || ARIA_ROLE_VALUES.test(literal)) continue
       addFinding(report, { id: 'hardcoded-role-check', level: 'heuristic', severity: 'low', file: info.rel, line: lineOf(info.stripped, m.index) + (info.isVue ? info.scriptLine : 0), message: `literal role check ('${literal}') in UI code`, fix: 'read permissions from the server-provided matrix (can(action)); the backend enforces; literal roles rot when roles change' })
     }
   }
@@ -185,7 +191,14 @@ export function run(argv) {
     const pagesDir = `${project.srcDir === '.' ? '' : `${project.srcDir}/`}pages/`
     const middlewareDir = `${project.srcDir === '.' ? '' : `${project.srcDir}/`}middleware/`
     const globalMiddleware = infos.filter((i) => i.rel.startsWith(middlewareDir) && /\.global\.[cm]?[jt]s$/.test(i.rel)).map((i) => ({ file: i.rel, name: i.rel.slice(middlewareDir.length).replace(/\.global\.[cm]?[jt]s$/, ''), authLike: /auth|session|guard|login|permis|protect/i.test(i.rel.split('/').pop()) || (/\b(?:navigateTo|abortNavigation)\b/.test(i.stripped) && /\b(?:user|session|token|auth|logged|isAuthenticated)\b/i.test(i.stripped)) }))
-    const namedMiddleware = infos.filter((i) => i.rel.startsWith(middlewareDir) && !/\.global\./.test(i.rel)).map((i) => i.rel.slice(middlewareDir.length).replace(/\.[cm]?[jt]s$/, ''))
+    const layerMiddlewareRe = /^layers\/[^/]+\/(?:app\/)?middleware\/(.+)\.[cm]?[jt]s$/
+    const namedMiddleware = [
+      ...infos.filter((i) => i.rel.startsWith(middlewareDir) && !/\.global\./.test(i.rel)).map((i) => i.rel.slice(middlewareDir.length).replace(/\.[cm]?[jt]s$/, '')),
+      // Nuxt layers (layers/<x>/app/middleware or layers/<x>/middleware) register their named middleware too
+      ...infos.map((i) => layerMiddlewareRe.exec(i.rel)?.[1]).filter((n) => n && !n.includes('.global')),
+      // middleware registered by name from a plugin
+      ...infos.flatMap((i) => [...i.stripped.matchAll(/addRouteMiddleware\s*\(\s*(['"])[^'"\n]*\1/g)].map((m) => i.code.slice(m.index, m.index + m[0].length).match(/(['"])([\w-]+)\1/)?.[2]).filter(Boolean)),
+    ]
     const addRouteGlobal = infos.some((i) => /addRouteMiddleware\s*\([^)]*global\s*:\s*true/.test(i.stripped))
     const globalAuth = globalMiddleware.some((g) => g.authLike) || addRouteGlobal
 
@@ -224,7 +237,11 @@ export function run(argv) {
       }
     }
     const inconsistent = [...new Set(pages.flatMap((p) => p.middleware))].filter((m) => !namedMiddleware.includes(m) && m !== 'inline' && !m.startsWith('('))
-    if (inconsistent.length) addFinding(report, { id: 'unknown-middleware', level: 'confirmed', severity: 'medium', message: `pages reference middleware not found in ${middlewareDir}: ${inconsistent.join(', ')}`, fix: 'check the names; Nuxt fails at runtime when a named middleware does not exist' })
+    // modules known to register named route middleware (auth and permission modules); with one of them installed an
+    // unknown name is something to read, not a runtime failure the file proves
+    const MIDDLEWARE_MODULES = /^(?:@sidebase\/nuxt-auth|nuxt-auth-utils|@nuxtjs\/supabase|@nuxtjs\/kinde|@logto\/nuxt|nuxt-permissions|nuxt-authorization|@nuxtjs\/auth-next|@hebilicious\/authjs-nuxt|nuxt-clerk|@clerk\/nuxt|nuxt-oidc-auth)$/
+    const providers = (project.nuxt?.modules ?? []).filter((m) => MIDDLEWARE_MODULES.test(m))
+    if (inconsistent.length) addFinding(report, { id: 'unknown-middleware', level: providers.length ? 'heuristic' : 'confirmed', severity: 'medium', message: `pages reference middleware not found in ${middlewareDir}, in a layer or in addRouteMiddleware: ${inconsistent.join(', ')}${providers.length ? ` (${providers.join(', ')} may register it)` : ''}`, fix: 'check the names; Nuxt fails at runtime when a named middleware does not exist' })
 
     report.summary = { pages: pages.length, guarded: pages.filter((p) => p.status === 'guarded').length, byGlobal: pages.filter((p) => p.status === 'global').length, public: pages.filter((p) => p.status === 'public').length, unguarded: pages.filter((p) => p.status === 'unguarded').length, redirects: pages.filter((p) => p.status === 'redirect').length, metaParser: tsApi ? 'ast' : 'lexical', globalMiddleware: globalMiddleware.map((g) => g.name).join(', ') || 'none', namedMiddleware: namedMiddleware.join(', ') || 'none', ssr: project.nuxt.ssr, routeRulesSsrFalse: project.nuxt.routeRulesSsrFalse.join(', ') || '-' }
     report.data = { pages, globalMiddleware, namedMiddleware }
@@ -292,6 +309,7 @@ export function run(argv) {
   }
 
   if (project.framework !== 'nuxt' && project.framework !== 'next') report.notes.push('route inventory is implemented for Nuxt and Next.js; only role-check findings apply to this project')
+  if (project.framework === 'next' && !project.next.appDir) report.notes.push(project.next.pagesDir ? `this project uses the Pages Router (${project.next.pagesDir}): the route inventory covers the App Router only, so no page, handler or Server Action is listed here; only role-check findings apply` : 'no App Router directory found: no route inventory; only role-check findings apply')
   report.notes.push('Guards and matchers are UX gates. Authorization is enforced by the backend, Server Functions, Route Handlers and Nitro routes; this report cannot prove that.')
   return finish(report, args, { sections })
 }

@@ -192,6 +192,18 @@
       "line": 15,
       "id": "form-control-without-label",
       "verification": "browser"
+    },
+    {
+      "file": "app/components/forms/Edge.vue",
+      "line": 14,
+      "id": "button-without-accessible-name",
+      "verification": "review"
+    },
+    {
+      "file": "app/components/forms/Edge.vue",
+      "line": 23,
+      "id": "click-handler-on-non-interactive",
+      "verification": "review"
     }
   ],
   "cleanFiles": [
@@ -204,10 +216,11 @@
   },
   "totals": {
     "static": 21,
-    "review": 7,
+    "review": 9,
     "browser": 4
   },
   "notes": [
     "1.4 calibration on an 80k-line Nuxt application: buttons named by nested text, @click.stop without a handler, click handlers that only focus an inner control (review) and controls hidden by a display:none class (browser) were false positives of the first rule set; GoodForm, BadForm:32, Wrapped:15 and Card.tsx cover them."
-  ]
+  ],
+  "note-1.5.0": "Edge.vue (1.5.0) holds correct markup the static rules used to confirm: images hidden or named by ARIA, a button named by its image (review), aria-hidden with tabindex=-1, DPUB and graphics roles, an anchor with role=button, listbox options under aria-activedescendant, a backdrop with @click.self (review)."
 }

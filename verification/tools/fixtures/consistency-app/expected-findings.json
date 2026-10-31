@@ -123,9 +123,9 @@
   {
    "file": "app/components/Drift.vue",
    "line": 8,
-   "id": "off-grid-size",
-   "class": "defect",
-   "level": "confirmed",
+   "id": "arbitrary-size",
+   "class": "heuristic",
+   "level": "heuristic",
    "evidence": "text-[17px]"
   },
   {
@@ -211,14 +211,6 @@
   {
    "file": "app/components/Drift.vue",
    "line": 16,
-   "id": "literal-color",
-   "class": "defect",
-   "level": "confirmed",
-   "evidence": "rgba(0, 0, 0, 0.2)"
-  },
-  {
-   "file": "app/components/Drift.vue",
-   "line": 16,
    "id": "literal-shadow",
    "class": "heuristic",
    "level": "heuristic",
@@ -290,11 +282,12 @@
   }
  ],
  "byClass": {
-  "defect": 20,
+  "defect": 18,
   "imagery": 2,
   "allowed": 1,
-  "heuristic": 12,
+  "heuristic": 13,
   "recommendation": 1
  },
- "distinctLiteralColors": 11
+ "distinctLiteralColors": 10,
+ "note-1.5.0": "text-[17px] is an arbitrary type size (heuristic), not an off-grid spacing; a shadow colour is reported once, as the shadow; sizes of 2 px or less and generic font families are not literals; radii are judged against the contract radius scale when a contract is given"
 }

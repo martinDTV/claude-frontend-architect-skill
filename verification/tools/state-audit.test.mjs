@@ -69,3 +69,32 @@ test('nuxt: server data copied from a query into a store is reported once, with 
   // the store definition itself (which may hold arrays) is covered by server-data-in-store, not by this rule
   assert.ok(!copies.some((f) => f.file.startsWith('app/stores/')))
 })
+
+test('token-in-web-storage grades by name strength, value and context: generic words and literals are heuristic, token-like names and response values are confirmed (1.5.0)', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const dir = mkdtempSync(join(tmpdir(), 'fa-state-'))
+  mkdirSync(join(dir, 'app', 'composables'), { recursive: true })
+  mkdirSync(join(dir, 'app', 'stores'), { recursive: true })
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'probe', dependencies: { nuxt: '^4.6.0' } }))
+  writeFileSync(join(dir, 'app', 'composables', 'usePrefs.ts'), [
+    "export function usePrefs() {",
+    "  localStorage.setItem('accessibility-prefs', JSON.stringify({ motion: 'reduce' }))", // no whole word: nothing
+    "  localStorage.setItem('refresh-rate', 60)", // weak word, literal: heuristic
+    "  localStorage.setItem('password-strength-tips-seen', true)", // strong word, literal: heuristic
+    "  localStorage.setItem('last-session-id', crypto.randomUUID())", // a session id is a credential by name: confirmed
+    "  localStorage.setItem('id_token', res.data.idToken)", // token-like name: confirmed wherever it is
+    "  const view = useLocalStorage('nexus:access', 'table')", // weak word in a key alone, outside auth code: heuristic
+    "}",
+  ].join('\n'))
+  writeFileSync(join(dir, 'app', 'stores', 'session.ts'), "export function save(data) { localStorage.setItem('nexus:refresh', data.refresh) }") // weak word, response value, auth file: confirmed
+  const { report } = runTool('state-audit.mjs', [dir, '--fail-on', 'none'])
+  const byKey = Object.fromEntries(byId(report, 'token-in-web-storage').map((f) => [f.message.match(/'([^']+)'/)[1], f.level]))
+  assert.equal(byKey['accessibility-prefs'], undefined, 'a substring is not a word')
+  assert.equal(byKey['refresh-rate'], 'heuristic')
+  assert.equal(byKey['password-strength-tips-seen'], 'heuristic')
+  assert.equal(byKey['last-session-id'], 'confirmed', 'session-id is token-like whatever the file')
+  assert.equal(byKey['id_token'], 'confirmed')
+  assert.equal(byKey['nexus:access'], 'heuristic')
+  assert.equal(byKey['nexus:refresh'], 'confirmed')
+})
