@@ -19,3 +19,5 @@ verification/browser/evidence/
 verification/next/public/
 verification/nuxt/public/
 verification/browser/evidence-gpu/
+# written by `next dev` (check-strict.mjs) on first start; not ours
+verification/next/AGENTS.md

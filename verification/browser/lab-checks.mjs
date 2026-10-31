@@ -128,35 +128,70 @@ checks.particles = async function particles({ page, url, label, evidence, consol
 }
 
 import { decodePng } from '../../plugins/frontend-architect/skills/frontend-architect/scripts/lib/png.mjs'
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { collectTextRecords, cropPixels, evaluateFocusIndicator, evaluateText, hideTextIn } from './lib/legibility.mjs'
 
 /**
- * Legibility of the DOM caption over the canvas, measured on the evidence screenshot: the caption's text luminance
- * against the mean luminance of its background box, as a WCAG-style contrast ratio of the two means. A measurement for
- * the rubric's legibility criterion, not a verdict: the human review reads the frame.
+ * Legibility of every visible text under <main> in one state of the page, graded per WCAG 2.2 (4.5:1, or 3:1 for large
+ * text) with the strongest proof available: exact from CSS on an opaque chain, a bound over every possible canvas
+ * colour under a translucent scrim, and a capture with the text hidden as the observed value (lib/legibility.mjs).
+ * Transitional records (an ancestor mid-fade) are kept apart. The hidden-text capture goes to a temp file: the evidence
+ * folder keeps the frames a person looks at.
  */
-function captionContrast(pngPath, box) {
-  const image = decodePng(readFileSync(pngPath))
-  const { width, pixels } = image
-  const luminance = (r, g, b) => {
-    const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
-    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+async function measureLegibility(page, state) {
+  const records = await page.evaluate(collectTextRecords, 'main')
+  await page.evaluate(hideTextIn, { selectors: ['main'], on: true })
+  const shot = join(tmpdir(), `fa-legibility-${process.pid}-${Date.now()}.png`)
+  await page.screenshot({ path: shot })
+  await page.evaluate(hideTextIn, { on: false })
+  const image = decodePng(readFileSync(shot))
+  rmSync(shot, { force: true })
+  const results = records.map((r) => ({ ...evaluateText(r, cropPixels(image, r.rect)), tag: r.tag, rect: r.rect }))
+  return { state, results }
+}
+
+const describeText = (r) => `${r.selector.split(' > ').slice(-2).join(' > ')} "${r.text.slice(0, 28)}" ${r.ratio}:1 < ${r.required}:1 (${r.method}${r.observed ? `, observed p05 ${r.observed.p05}` : ''})`
+
+/**
+ * Grades one measured state: every non-transitional text meets its ratio by CSS or by the bound (a capture alone is
+ * reported, never accepted as proof for the lab pages), and no interactive control is caught mid-fade.
+ */
+function gradeLegibility(measured, where) {
+  const graded = measured.results.filter((r) => !r.transitional)
+  const failing = graded.filter((r) => !r.passes || r.method === 'estimate')
+  expect(failing.length === 0, `${where}: text below its WCAG ratio or proven only by a capture: ${failing.slice(0, 4).map(describeText).join(' | ')}`)
+  const fadingControls = measured.results.filter((r) => r.transitional && r.interactive)
+  expect(fadingControls.length === 0, `${where}: interactive control mid-fade: ${fadingControls.map((r) => r.selector).join(', ')}`)
+  const by = { css: 0, bound: 0, estimate: 0 }
+  for (const r of graded) by[r.method] = (by[r.method] ?? 0) + 1
+  const worst = graded.reduce((w, r) => (r.ratio !== null && (w === null || r.ratio / r.required < w.ratio / w.required) ? r : w), null)
+  return { texts: graded.length, transitional: measured.results.length - graded.length, by, worst: worst ? { text: worst.text.slice(0, 28), ratio: worst.ratio, required: worst.required, method: worst.method, observed: worst.observed?.p05 ?? null } : null }
+}
+
+/**
+ * Focus indicators (SC 1.4.11 for author rings; a user-agent ring is exempt): Tab through the document until every
+ * focusable inside <main> has been visited once (or 40 presses), grade the ring of each.
+ */
+async function measureFocus(page, limit = 40) {
+  const visited = []
+  const seen = new Set()
+  for (let i = 0; i < limit; i++) {
+    await page.keyboard.press('Tab')
+    const focused = await page.evaluate(() => {
+      const el = document.activeElement
+      if (!el || el === document.body) return null
+      const main = document.querySelector('main')
+      return { inMain: Boolean(main && main.contains(el)), tag: el.tagName.toLowerCase(), text: (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 30), key: `${el.tagName}|${[...el.attributes].map((a) => `${a.name}=${a.value}`).join(';')}` }
+    })
+    if (!focused || seen.has(focused.key)) { if (focused && seen.has(focused.key)) break; continue }
+    seen.add(focused.key)
+    if (!focused.inMain) continue
+    const record = (await page.evaluate(collectTextRecords, 'main')).find((r) => r.focused)
+    const ring = record ? evaluateFocusIndicator(record) : { method: 'css', indicator: 'unknown', passes: false, note: 'focused element has no text record' }
+    visited.push({ tag: focused.tag, text: focused.text, ...ring })
   }
-  const samples = []
-  for (let y = Math.max(0, box.y); y < Math.min(image.height, box.y + box.height); y += 2) {
-    for (let x = Math.max(0, box.x); x < Math.min(width, box.x + box.width); x += 2) {
-      const i = (y * width + x) * 4
-      samples.push(luminance(pixels[i], pixels[i + 1], pixels[i + 2]))
-    }
-  }
-  if (samples.length < 10) return null
-  samples.sort((a, b) => a - b)
-  const dark = samples.slice(0, Math.floor(samples.length * 0.2))
-  const bright = samples.slice(Math.floor(samples.length * 0.8))
-  const mean = (arr) => arr.reduce((s, v) => s + v, 0) / Math.max(1, arr.length)
-  const lo = mean(dark)
-  const hi = mean(bright)
-  return { ratio: Number(((hi + 0.05) / (lo + 0.05)).toFixed(2)), background: Number(mean(samples).toFixed(3)) }
+  return visited
 }
 
 const api = (page, call) => page.evaluate((c) => {
@@ -168,6 +203,18 @@ const api = (page, call) => page.evaluate((c) => {
 const closeTo = (p, q, tolerance) => Math.abs(p.x - q.x) <= tolerance && Math.abs(p.y - q.y) <= tolerance && Math.abs(p.z - q.z) <= tolerance
 const fmt = (p) => `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`
 const snapshot = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__lab.diagnostics())))
+/** Waits until a diagnostics field stops changing (three equal reads, 150 ms apart) or 5 s pass, then returns the snapshot. */
+async function settled(page, read) {
+  let last = null
+  let stable = 0
+  for (let i = 0; i < 34 && stable < 3; i++) {
+    await page.waitForTimeout(150)
+    const value = JSON.stringify(read(await snapshot(page)))
+    stable = value === last ? stable + 1 : 0
+    last = value
+  }
+  return snapshot(page)
+}
 
 /** Captions cross-fade over 0.4 s: evidence shows the settled frame, not a frame of the fade. */
 const settledCaption = (page) => page.waitForFunction(() => {
@@ -183,28 +230,34 @@ async function experienceTail({ page, browser, url, label, path, evidence, conso
   expect(scrolled > 0.2 && scrolled < 0.8, `scroll drives the progress through the scrub (${scrolled.toFixed(2)} at half the page)`)
   ok(`${name}: scroll scrubs the progress (${scrolled.toFixed(2)} at mid-page)`)
   const legibility = []
+  const summaries = []
   for (const p of [0, 0.5, 1]) {
     await api(page, { name: 'seek', args: [p] })
     // a simulation gets three seconds of fixed steps so the evidence shows a settled state, not the first frame after the seek
     await page.evaluate(() => (window.__lab.api.advance ? window.__lab.api.advance(3) : null))
     await page.waitForTimeout(250)
     await settledCaption(page)
-    const shot = join(evidence, `${label}-${name}-${p}.png`)
-    await page.screenshot({ path: shot })
-    // the visible caption's box, for the legibility measurement (text over the canvas is the first thing that goes wrong)
-    const box = await page.evaluate(() => {
-      const el = document.querySelector('[data-caption][data-active="true"], .caption, [data-caption]')
-      if (!el) return null
-      const r = el.getBoundingClientRect()
-      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }
-    })
-    const contrast = box && box.width > 0 && box.height > 0 ? captionContrast(shot, box) : null
-    legibility.push({ progress: p, box, contrast })
+    await page.screenshot({ path: join(evidence, `${label}-${name}-${p}.png`) })
+    const measured = await measureLegibility(page, `progress:${p}`)
+    legibility.push(measured)
+    summaries.push({ state: measured.state, ...gradeLegibility(measured, `${name} at progress ${p}`) })
   }
-  // text over the canvas must separate from its background in every frame (3:1 is the floor for large text)
-  for (const l of legibility) if (l.contrast) expect(l.contrast.ratio >= 3, `caption legible at progress ${l.progress} (contrast ${l.contrast.ratio}:1 over a background of ${l.contrast.background})`)
-  ok(`${name}: caption contrast ${legibility.map((l) => `${l.progress}: ${l.contrast ? l.contrast.ratio + ':1' : 'n/a'}`).join(', ')} (measured on the evidence screenshots)`)
-  metricsSink.legibility = legibility
+  // mid-fade: captions cross-fade over 0.4 s; the fading text is recorded, not graded, and no control may be fading
+  await api(page, { name: 'seek', args: [0] })
+  await settledCaption(page)
+  await api(page, { name: 'seek', args: [0.5] })
+  await page.waitForTimeout(120)
+  const midFade = await measureLegibility(page, 'mid-fade')
+  legibility.push(midFade)
+  summaries.push({ state: 'mid-fade', ...gradeLegibility(midFade, `${name} mid-fade`) })
+  // focus indicators of every control inside <main>
+  await api(page, { name: 'seek', args: [0] })
+  const focus = await measureFocus(page)
+  const badRings = focus.filter((f) => !f.passes)
+  expect(badRings.length === 0, `${name}: focus indicator below 3:1 or missing: ${badRings.map((f) => `${f.tag} "${f.text}" (${f.indicator}${f.ratio ? ` ${f.ratio}:1` : ''})`).join(', ')}`)
+  const fmtState = (s) => `${s.state}: ${s.texts} texts, ${s.by.css} css / ${s.by.bound} bound${s.transitional ? `, ${s.transitional} fading` : ''}, worst ${s.worst ? `${s.worst.ratio}:1 for ${s.worst.required}:1${s.worst.observed ? ` (observed ${s.worst.observed}:1)` : ''}` : 'n/a'}`
+  ok(`${name}: legibility ${summaries.map(fmtState).join('; ')}; focus rings ${focus.length} (${focus.filter((f) => f.indicator === 'author').length} author, ${focus.filter((f) => f.indicator === 'user-agent').length} user-agent)`)
+  metricsSink.legibility = { states: legibility, summaries, focus }
   // the same sweep before both samples: geometries upload lazily the first time a space or a transition renders
   const sweep = async () => {
     for (const p of [0, 0.34, 0.5, 0.68, 1]) {
@@ -272,8 +325,7 @@ checks.product = async function product(ctx) {
   const captionsActive = await page.evaluate(() => [...document.querySelectorAll('[data-caption][data-active="true"]')].map((e) => e.getAttribute('data-caption')))
   expect(captionsActive.length === 1 && captionsActive[0] === 'establishing', `one DOM caption active at 0 (${captionsActive.join(',')})`)
   await page.selectOption('select[data-option="color"]', 'rose')
-  await page.waitForTimeout(1100)
-  let diag = await snapshot(page)
+  let diag = await settled(page, (d) => d.capColor)
   const channel = (hex, i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16)
   const sameColour = (a, b) => [0, 1, 2].every((i) => Math.abs(channel(a, i) - channel(b, i)) <= 2) // the tween lands within float rounding
   expect(diag.selection.color === 'rose' && sameColour(diag.capColor, d.colors.rose), `the colour select recolours the collar through a tween (${diag.capColor} vs ${d.colors.rose})`)
@@ -479,7 +531,7 @@ async function declarativeAtelier(ctx, path, name) {
   await page.waitForTimeout(1600)
   d = await snapshot(page)
   expect(d.exploded === true && d.explodeProgress === 1, `exploded (progress ${d.explodeProgress})`)
-  expect(near(d.positions.cap.y - assembled.cap.y, 0.65, 1e-3) && near(d.positions.grille.z - assembled.grille.z, 0.6, 1e-3) && near(d.positions.base.y - assembled.base.y, -0.38, 1e-3) && near(d.positions.body.y - assembled.body.y, 0, 1e-6), `parts moved by the documented offsets (cap +${(d.positions.cap.y - assembled.cap.y).toFixed(3)}, grille +${(d.positions.grille.z - assembled.grille.z).toFixed(3)}, base ${(d.positions.base.y - assembled.base.y).toFixed(3)})`)
+  expect(near(d.positions.cap.y - assembled.cap.y, 0.65, 1e-3) && near(d.positions.grille.x - assembled.grille.x, 0.55, 1e-3) && near(d.positions.grille.z - assembled.grille.z, 0.25, 1e-3) && near(d.positions.base.y - assembled.base.y, -0.45, 1e-3) && near(d.positions.body.y - assembled.body.y, 0, 1e-6), `parts moved by the documented offsets (cap +${(d.positions.cap.y - assembled.cap.y).toFixed(3)}, grille +${(d.positions.grille.z - assembled.grille.z).toFixed(3)}, base ${(d.positions.base.y - assembled.base.y).toFixed(3)})`)
   await page.click('button[data-explode]')
   await page.waitForTimeout(1600)
   d = await snapshot(page)
@@ -488,9 +540,17 @@ async function declarativeAtelier(ctx, path, name) {
   ok(`${name}: exploded view through GSAP moves the parts by their offsets and reassembles exactly`)
   expect(d.frames > 10, `frame loop running (${d.frames})`)
   await page.screenshot({ path: join(evidence, `${label}-${name}.png`) })
+  const assembledText = await measureLegibility(page, 'assembled')
+  const assembledGrade = gradeLegibility(assembledText, `${name} assembled`)
   await api(page, { name: 'explode', args: [true] })
   await page.waitForTimeout(1200)
   await page.screenshot({ path: join(evidence, `${label}-${name}-exploded.png`) })
+  const explodedText = await measureLegibility(page, 'exploded')
+  const explodedGrade = gradeLegibility(explodedText, `${name} exploded`)
+  const focus = await measureFocus(page)
+  const badRings = focus.filter((f) => !f.passes)
+  expect(badRings.length === 0, `${name}: focus indicator below 3:1 or missing: ${badRings.map((f) => `${f.tag} "${f.text}" (${f.indicator})`).join(', ')}`)
+  ok(`${name}: legibility assembled ${assembledGrade.texts} texts (${assembledGrade.by.css} css / ${assembledGrade.by.bound} bound), exploded ${explodedGrade.texts}; focus rings ${focus.length}`)
   // lifecycle: route change disposes, re-entry recreates with equal counts
   const lifecycleBefore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__labLifecycle)))
   const firstInfo = d.info
@@ -520,7 +580,7 @@ async function declarativeAtelier(ctx, path, name) {
   expect(r1.explodeProgress === 1, `reduced motion: the exploded view is a cut (progress ${r1.explodeProgress} after 150 ms)`)
   ok(`${name}: reduced motion cuts to the exploded view instead of animating`)
   await reduced.close()
-  return { assembled, exploded: d.positions, info: firstInfo }
+  return { assembled, exploded: d.positions, info: firstInfo, legibility: { states: [assembledText, explodedText], summaries: [{ state: 'assembled', ...assembledGrade }, { state: 'exploded', ...explodedGrade }], focus } }
 }
 checks.r3f = (ctx) => declarativeAtelier(ctx, '/lab/atelier-r3f', 'r3f')
 checks.tres = (ctx) => declarativeAtelier(ctx, '/lab/atelier-tres', 'tres')
@@ -563,21 +623,88 @@ checks.gpu = async function gpu({ page, url, label, evidence, consoleProblems, o
   report.particles = { renderer: particles.renderer, bench: particles.bench, adaptive: particles.adaptive, contextLoss: particles.contextLoss }
   ok(`gpu: particles ${particles.bench.map((r) => `${r.mode}@${r.count}: js ${r.jsMs.toFixed(2)} ms, frame p50 ${r.frameMs.p50.toFixed(1)} ms`).join('; ')}`)
   await leave(page, url, 'Second')
-  // experiences: frames per second over three seconds at mid progress, draw calls and triangles
-  for (const [name, path] of [['product', '/lab/product'], ['field', '/lab/field'], ['story', '/lab/story']]) {
-    await page.goto(`${url}${path}`, { waitUntil: 'load' })
-    await page.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true, null, { timeout: 240000 })
-    await api(page, { name: 'seek', args: [0.5] })
-    await page.waitForTimeout(600)
-    const a = await snapshot(page)
-    await page.waitForTimeout(3000)
-    const b = await snapshot(page)
-    const frames = b.stats.frames - a.stats.frames
-    const msPerFrame = 3000 / Math.max(1, frames)
-    report.experiences[name] = { framesIn3s: frames, msPerFrame: Number(msPerFrame.toFixed(2)), fps: Number((1000 / msPerFrame).toFixed(1)), calls: b.stats.info.calls, triangles: b.stats.info.triangles, pixelRatio: b.stats.pixelRatio, size: b.stats.size, tier: b.tier ?? null }
+  // experiences on this backend: steady-state frame, CPU and (with timer queries) GPU time percentiles at a mid
+  // progress, draw calls, triangles and resident resources; the peak during a progress sweep (chapter transitions,
+  // dissolves, particle hand-overs); the counts and frame time after three leave/re-enter cycles. Every record names
+  // its backend: software and hardware numbers are never read side by side. 60 fps at vsync says a frame fits in
+  // 16.7 ms, not how much is left: the CPU and GPU times are the margin
+  const backend = software ? 'software' : 'hardware'
+  // what this browser paces a blank WebGL page at: the experiences' frame intervals are read against it, not as load
+  await page.goto('about:blank')
+  const pacing = await page.evaluate(() => new Promise((resolve) => {
+    const c = document.createElement('canvas')
+    c.width = 640
+    c.height = 360
+    document.body.appendChild(c)
+    const gl = c.getContext('webgl2')
+    const ts = []
+    const tick = (t) => {
+      if (gl) { gl.clearColor(0.1, 0.1, 0.1, 1); gl.clear(gl.COLOR_BUFFER_BIT) }
+      ts.push(t)
+      if (ts.length < 90) requestAnimationFrame(tick)
+      else { const d = ts.slice(1).map((v, i) => v - ts[i]).sort((a, b) => a - b); resolve({ p50: Number(d[Math.floor(d.length / 2)].toFixed(1)), min: Number(d[0].toFixed(1)), max: Number(d[d.length - 1].toFixed(1)) }) }
+    }
+    requestAnimationFrame(tick)
+  }))
+  report.pacing = { blankWebGLPage: pacing }
+  ok(`gpu (${backend}): this browser paces a blank WebGL page at ${pacing.p50} ms per frame (min ${pacing.min}, max ${pacing.max}); the frame intervals below are read against that, the CPU and GPU times are the margin`)
+  for (const [name, path, mid] of [['product', '/lab/product', 0.5], ['field', '/lab/field', 0.5], ['story', '/lab/story', 0.5], ['atelier', '/lab/atelier', 0.12]]) {
+    await openLab(page, url, path)
+    await api(page, { name: 'seek', args: [mid] })
+    await page.waitForTimeout(500)
+    // clean window: frame interval and CPU time with no query in the command stream (the software renderer draws the
+    // product at a few frames per second: a longer window, fewer samples required)
+    await api(page, { name: 'resetTiming', args: [false] })
+    await page.waitForTimeout(software ? 8000 : 4000)
+    const steady = await snapshot(page)
+    const t = steady.stats.timing
+    expect(t && t.frame.samples >= (software ? 10 : 30), `${name}: the frame timing window has samples (${t?.frame?.samples})`)
+    // GPU window: timer queries on (they add pipeline latency, so the frame interval of this window is reported apart)
+    let gpuWindow = null
+    if (!software) {
+      await api(page, { name: 'resetTiming', args: [true] })
+      await page.waitForTimeout(3000)
+      gpuWindow = (await snapshot(page)).stats.timing
+      expect(gpuWindow.gpu && gpuWindow.gpu.samples > 0, `${name}: GPU timer queries deliver samples on the hardware backend (${gpuWindow.gpuTimer})`)
+    }
+    await api(page, { name: 'resetTiming', args: [!software] })
+    for (let i = 0; i <= 20; i++) {
+      await api(page, { name: 'seek', args: [i / 20] })
+      await page.waitForTimeout(120)
+    }
+    const sweep = (await snapshot(page)).stats.timing
+    const lifecycleBefore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__labLifecycle)))
+    for (let i = 0; i < 3; i++) {
+      await leave(page, url, 'Second')
+      await page.goBack({ waitUntil: 'load' })
+      await page.waitForFunction(() => Boolean(window.__lab) && window.__lab.ready === true && window.__lab.disposed === false, null, { timeout: 240000 })
+    }
+    await api(page, { name: 'seek', args: [mid] })
+    await page.waitForTimeout(500)
+    await api(page, { name: 'resetTiming', args: [false] })
+    await page.waitForTimeout(2500)
+    const again = await snapshot(page)
+    const lifecycleAfter = await page.evaluate(() => JSON.parse(JSON.stringify(window.__labLifecycle)))
+    expect(lifecycleAfter.mounts === lifecycleBefore.mounts + 3 && lifecycleAfter.disposes === lifecycleBefore.disposes + 3, `${name}: three leave/re-enter cycles balance (${lifecycleAfter.mounts}/${lifecycleAfter.disposes})`)
+    expect(again.stats.info.geometries === steady.stats.info.geometries && Math.abs(again.stats.info.textures - steady.stats.info.textures) <= 2 && again.stats.info.programs <= steady.stats.info.programs + 1, `${name}: resident resources after three re-entries match the first visit (${again.stats.info.geometries}g/${again.stats.info.textures}t/${again.stats.info.programs}p vs ${steady.stats.info.geometries}g/${steady.stats.info.textures}t/${steady.stats.info.programs}p)`)
+    report.experiences[name] = {
+      backend,
+      renderer: shaders.renderer,
+      steady: { frame: t.frame, cpu: t.cpu, gpu: gpuWindow ? gpuWindow.gpu : null, gpuTimer: gpuWindow ? gpuWindow.gpuTimer : null, frameWithQueries: gpuWindow ? gpuWindow.frame : null, calls: steady.stats.info.calls, triangles: steady.stats.info.triangles, geometries: steady.stats.info.geometries, textures: steady.stats.info.textures, programs: steady.stats.info.programs, pixelRatio: steady.stats.pixelRatio, size: steady.stats.size },
+      sweep: { frame: sweep.frame, cpu: sweep.cpu, gpu: sweep.gpu },
+      afterNavigation: { cycles: 3, frame: again.stats.timing.frame, cpu: again.stats.timing.cpu, gpu: again.stats.timing.gpu, geometries: again.stats.info.geometries, textures: again.stats.info.textures, programs: again.stats.info.programs },
+      // the increment-4 shape, kept
+      fps: t.frame.p50 > 0 ? Number((1000 / t.frame.p50).toFixed(1)) : null,
+      msPerFrame: t.frame.p50,
+      calls: steady.stats.info.calls,
+      triangles: steady.stats.info.triangles,
+      pixelRatio: steady.stats.pixelRatio,
+      size: steady.stats.size,
+    }
+    const ms = (x) => (x && x.samples ? `${x.p50}/${x.p95}/${x.p99}` : 'n/a')
+    ok(`gpu (${backend}): ${name} frame p50/p95/p99 ${ms(t.frame)} ms, cpu ${ms(t.cpu)} ms, gpu ${gpuWindow ? `${ms(gpuWindow.gpu)} ms (${gpuWindow.gpuTimer}; frame p50 ${gpuWindow.frame.p50} ms while queries were on)` : 'n/a (no timer query on this backend)'}, ${steady.stats.info.calls} calls, ${steady.stats.info.triangles} tris, ${steady.stats.info.geometries}g/${steady.stats.info.textures}t/${steady.stats.info.programs}p at ${steady.stats.size.width}×${steady.stats.size.height}@${steady.stats.pixelRatio}; sweep p99 frame ${sweep.frame.p99} ms${sweep.gpu && sweep.gpu.samples ? `, gpu ${sweep.gpu.p99} ms` : ''}; after 3 re-entries frame p50 ${again.stats.timing.frame.p50} ms, same residents`)
     await leave(page, url, 'Second')
   }
-  ok(`gpu: experiences ${Object.entries(report.experiences).map(([n, r]) => `${n} ${r.fps} fps (${r.msPerFrame} ms, ${r.calls} calls, ${r.triangles} tris at ${r.size.width}×${r.size.height}@${r.pixelRatio})`).join('; ')}`)
   report.software = software
   writeFileSync(join(evidence, `${label}-gpu-report.json`), JSON.stringify(report, null, 2))
   expect(consoleProblems.length === 0, `console problems: ${consoleProblems.join(' | ')}`)
@@ -596,7 +723,7 @@ checks.atelier = async function atelier(ctx) {
   expect(diag.chapter.id === 'hero' && diag.cues.includes('caption:hero') && diag.explode === 0 && diag.dissolve === 0, `0.1 is the hero chapter (${diag.chapter.id}, cues ${diag.cues.join(',')})`)
   diag = await api(page, { name: 'seek', args: [0.5] })
   expect(diag.chapter.id === 'exploded' && diag.explode === 1, `0.5 is the exploded view at full progress (${diag.explode})`)
-  expect(near(diag.positions.cap.y - assembled.cap.y, 0.65, 1e-3) && near(diag.positions.grille.z - assembled.grille.z, 0.6, 1e-3) && near(diag.positions.base.y - assembled.base.y, -0.38, 1e-3), `parts displaced by the documented offsets (cap +${(diag.positions.cap.y - assembled.cap.y).toFixed(3)}, grille +${(diag.positions.grille.z - assembled.grille.z).toFixed(3)}, base ${(diag.positions.base.y - assembled.base.y).toFixed(3)})`)
+  expect(near(diag.positions.cap.y - assembled.cap.y, 0.65, 1e-3) && near(diag.positions.grille.x - assembled.grille.x, 0.55, 1e-3) && near(diag.positions.grille.z - assembled.grille.z, 0.25, 1e-3) && near(diag.positions.base.y - assembled.base.y, -0.45, 1e-3), `parts displaced by the documented offsets (cap +${(diag.positions.cap.y - assembled.cap.y).toFixed(3)}, grille +${(diag.positions.grille.z - assembled.grille.z).toFixed(3)}, base ${(diag.positions.base.y - assembled.base.y).toFixed(3)})`)
   ctx.ok('atelier: the exploded view scrubs with the chapter and lands on the documented offsets')
   diag = await api(page, { name: 'seek', args: [0.65] }) // local 0.5 of the dust chapter: fully gathered, not yet released
   expect(diag.chapter.id === 'dust' && diag.dissolve > 0.9 && diag.particles.morph > 0.9, `mid dust chapter: parts dissolved (${diag.dissolve.toFixed(2)}), particles gathering (morph ${diag.particles.morph.toFixed(2)})`)
@@ -611,8 +738,7 @@ checks.atelier = async function atelier(ctx) {
   diag = await api(page, { name: 'seek', args: [0.95] })
   expect(diag.chapter.id === 'choose' && diag.cues.includes('caption:choose'), `0.95 is the choose chapter`)
   await page.selectOption('select[data-option="finish"]', 'oxblood')
-  await page.waitForTimeout(1100)
-  diag = await snapshot(page)
+  diag = await settled(page, (d) => d.paintColor)
   const channel = (hex, i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16)
   const sameColour = (a, b) => [0, 1, 2].every((i) => Math.abs(channel(a, i) - channel(b, i)) <= 2)
   expect(diag.selection.finish === 'oxblood' && sameColour(diag.paintColor, '#5a1620'), `the finish select recolours the body (${diag.paintColor})`)
@@ -649,6 +775,172 @@ checks.atelier = async function atelier(ctx) {
   const sink = {}
   await experienceTail({ ...ctx, path: '/lab/atelier', name: 'atelier', allowedTextures: 1, metricsSink: sink })
   return { model: diag.model, distance, legibility: sink.legibility }
+}
+
+
+/**
+ * Accessibility of the experience pages beyond the pointer (1.5 increment 4B): no WebGL → a named state and the DOM
+ * alternative, no control left that drives nothing; a failed model → a named error and balanced counters; every
+ * control in <main> reachable by Tab in DOM order with an accessible name; a pointer-free path to part selection;
+ * no control covered by the canvas; reflow at 320 px and text at 200% without horizontal overflow. Runs on every
+ * experience page the app serves.
+ */
+checks.a11y = async function a11y({ page, browser, url, label, consoleProblems, ok }) {
+  const declarative = label === 'next' ? '/lab/atelier-r3f' : '/lab/atelier-tres'
+  const pages = ['/lab/product', '/lab/field', '/lab/story', '/lab/atelier', declarative]
+  const report = {}
+  const statusSettled = (p) => p.waitForFunction(() => { const s = document.querySelector('[data-status]'); return Boolean(s) && s.textContent !== 'loading' }, null, { timeout: 120000 })
+  let phase = 'start'
+  const within = (label, fn) => fn().catch((error) => { throw new Error(`${phase} ${label}: ${error.message}`) })
+  const pageState = (p) => p.evaluate(() => {
+    const visible = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0 }
+    return {
+      status: document.querySelector('[data-status]')?.textContent ?? null,
+      problem: document.querySelector('[data-problem]')?.textContent ?? null,
+      alert: document.querySelector('[data-problem]')?.getAttribute('role') ?? null,
+      entries: [...document.querySelectorAll('[data-caption], .caption, [data-fallback] li')].filter(visible).length,
+      canvasVisible: [...document.querySelectorAll('canvas')].some(visible),
+      controls: [...document.querySelectorAll('main button, main select, main input, main a')].filter(visible).length,
+      lifecycle: window.__labLifecycle ? { ...window.__labLifecycle } : null,
+    }
+  })
+  // 1. no WebGL: an init script makes every WebGL context request fail, as a browser without it would
+  phase = 'no-webgl'
+  for (const path of pages) await within(path, async () => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    await ctx.addInitScript(() => {
+      const original = HTMLCanvasElement.prototype.getContext
+      HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return /webgl/i.test(String(type)) ? null : original.call(this, type, ...rest) }
+    })
+    const p = await ctx.newPage()
+    const errors = []
+    p.on('pageerror', (e) => errors.push(String(e.message).slice(0, 160)))
+    await p.goto(`${url}${path}`, { waitUntil: 'load' })
+    await statusSettled(p)
+    await p.waitForTimeout(300)
+    const state = await pageState(p)
+    expect(state.status === 'unsupported', `${path}: without WebGL the page names the state (status "${state.status}", problem "${state.problem}")`)
+    expect(state.alert === 'alert' && /cannot show the 3D scene/.test(state.problem ?? ''), `${path}: the alternative is announced through role=alert ("${state.problem}")`)
+    expect(state.entries > 0, `${path}: the content is readable in the DOM without the scene (${state.entries} entries visible)`)
+    expect(!state.canvasVisible && state.controls === 0, `${path}: nothing is left that would drive a scene that is not there (canvas visible ${state.canvasVisible}, controls ${state.controls})`)
+    expect(errors.length === 0, `${path}: no uncaught error without WebGL (${errors.slice(0, 2).join(' | ')})`)
+    const fallbackText = gradeLegibility(await measureLegibility(p, 'no-webgl'), `${path} without WebGL`)
+    report[path] = { noWebGL: { status: state.status, entries: state.entries, legibility: fallbackText } }
+    await ctx.close()
+  })
+  ok(`a11y: without WebGL every page says so (role=alert), lists its content in the DOM and hides the scene's controls (${pages.length} pages)`)
+  // 2. a failed model: the atelier pages name the error; the imperative page leaves balanced counters behind
+  phase = 'failed-load'
+  for (const path of ['/lab/atelier', declarative]) await within(path, async () => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    const p = await ctx.newPage()
+    await p.route('**/models/*.glb', (route) => route.abort('failed'))
+    const errors = []
+    p.on('pageerror', (e) => errors.push(String(e.message).slice(0, 160)))
+    await p.goto(`${url}${path}`, { waitUntil: 'load' })
+    // the declarative page publishes its api before the model arrives (status "ready"), and React surfaces the
+    // rejected load through Suspense and the boundary about a second later: wait for the announcement itself
+    await p.waitForFunction(() => Boolean(document.querySelector('[data-problem]')) || (window.__lab && window.__lab.ready === true), null, { timeout: 20000 }).catch(() => {})
+    await p.waitForTimeout(300)
+    const state = await pageState(p)
+    expect(state.status === 'error', `${path}: a failed model load ends in a named error state (status "${state.status}", problem "${state.problem}")`)
+    expect(state.alert === 'alert' && /could not be loaded/.test(state.problem ?? ''), `${path}: the error is announced through role=alert ("${state.problem}")`)
+    if (path === '/lab/atelier') expect(state.lifecycle && state.lifecycle.mounts === state.lifecycle.disposes, `${path}: the failed mount disposed what it had created (${JSON.stringify(state.lifecycle)})`)
+    // React 19 also reports a boundary-caught error through the window's error event (reportError); the model's own
+    // error is the only one allowed there, anything else is a failure the page did not handle
+    const foreign = errors.filter((e) => !/atelier[^ ]*\.glb|Failed to fetch/.test(e))
+    expect(foreign.length === 0, `${path}: nothing but the model's own error reached the window (${foreign.slice(0, 2).join(' | ')})`)
+    report[path].failedLoad = { status: state.status, problem: state.problem, lifecycle: state.lifecycle, windowErrors: errors.slice(0, 3) }
+    await ctx.close()
+  })
+  ok('a11y: a failed model load ends in a named, announced error on both atelier pages; the imperative one leaves balanced counters')
+  // 3. keyboard: reach, order and names of every control; the pointer-free part selection; nothing covered by the canvas
+  phase = 'keyboard'
+  const stageIntoView = (p) => p.evaluate(() => { const stage = document.querySelector('main canvas') ?? document.querySelector('main'); stage?.scrollIntoView({ block: 'start' }) })
+  for (const path of pages) await within(path, async () => {
+    await openLab(page, url, path)
+    await stageIntoView(page)
+    await page.waitForTimeout(300)
+    const controls = await page.evaluate(() => {
+      const visible = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden' }
+      const items = [...document.querySelectorAll('main button, main select, main input, main a, main [tabindex="0"]')].filter(visible)
+      items.forEach((e, i) => e.setAttribute('data-fa-i', String(i)))
+      return items.map((e, i) => {
+        // a <label> that wraps the control names it by its own text, not by the options inside the control
+        const label = e.labels && e.labels[0] ? [...e.labels[0].childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ') : ''
+        const name = (e.getAttribute('aria-label') || label || e.textContent || e.getAttribute('title') || '').replace(/\s+/g, ' ').trim()
+        const r = e.getBoundingClientRect()
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+        return { i, tag: e.tagName.toLowerCase(), name, container: e.getAttribute('role') === 'group', covered: !(hit === e || e.contains(hit)) }
+      })
+    })
+    const sequence = []
+    for (let k = 0; k < 60; k++) {
+      await page.keyboard.press('Tab')
+      const i = await page.evaluate(() => { const el = document.activeElement; const v = el?.getAttribute('data-fa-i'); return v === null || v === undefined ? null : Number(v) })
+      if (i !== null) { if (sequence.includes(i)) break; sequence.push(i) }
+      if (sequence.length === controls.length) break
+    }
+    const unreached = controls.filter((c) => !sequence.includes(c.i))
+    expect(unreached.length === 0, `${path}: every control in <main> is reachable with Tab (missing ${unreached.map((c) => `${c.tag} "${c.name}"`).join(', ')})`)
+    const inOrder = sequence.every((v, k) => k === 0 || v > sequence[k - 1])
+    expect(inOrder, `${path}: the Tab order follows the DOM order (${sequence.join(' ')})`)
+    const unnamed = controls.filter((c) => !c.name)
+    expect(unnamed.length === 0, `${path}: every control has an accessible name (${unnamed.map((c) => c.tag).join(', ')})`)
+    const covered = controls.filter((c) => !c.container && c.covered)
+    expect(covered.length === 0, `${path}: no control is covered by the canvas or another layer (${covered.map((c) => `${c.tag} "${c.name}"`).join(', ')})`)
+    let partSelection = null
+    if (/atelier/.test(path)) {
+      await page.selectOption('select[data-part]', 'cap')
+      await page.waitForTimeout(200)
+      const chosen = await page.evaluate(() => ({ selected: window.__lab.diagnostics().selected, label: document.querySelector('[data-selected]')?.textContent ?? '' }))
+      expect(chosen.selected === 'cap' && /Top plate/.test(chosen.label), `${path}: the part select selects without a pointer (${JSON.stringify(chosen)})`)
+      await page.selectOption('select[data-part]', '')
+      await page.waitForTimeout(200)
+      const cleared = await page.evaluate(() => window.__lab.diagnostics().selected)
+      expect(cleared === null, `${path}: "None" clears the selection (${cleared})`)
+      partSelection = { chosen, cleared }
+    }
+    report[path].keyboard = { controls: controls.length, sequence, partSelection }
+    await leave(page, url, 'Second')
+  })
+  ok(`a11y: every control reachable by Tab in DOM order with a name, none covered by the canvas, part selection works from the keyboard on the atelier pages`)
+  // 4. reflow at 320 px and text at 200%: no horizontal overflow, controls and captions inside the viewport
+  phase = 'reflow'
+  for (const path of pages) await within(path, async () => {
+    const ctx = await browser.newContext({ viewport: { width: 320, height: 568 } })
+    const p = await ctx.newPage()
+    await p.goto(`${url}${path}`, { waitUntil: 'load' })
+    await statusSettled(p)
+    await stageIntoView(p)
+    await p.waitForTimeout(400)
+    const narrow = await p.evaluate(() => {
+      const de = document.documentElement
+      const outside = [...document.querySelectorAll('main button, main select, main input, [data-caption][data-active="true"], .caption')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > innerWidth + 1 || r.left < -1) }).map((e) => e.tagName.toLowerCase() + ' ' + (e.textContent || '').trim().slice(0, 16))
+      return { scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, outside }
+    })
+    expect(narrow.scrollWidth <= narrow.clientWidth + 1, `${path}: no horizontal overflow at 320 px (${narrow.scrollWidth} > ${narrow.clientWidth})`)
+    expect(narrow.outside.length === 0, `${path}: controls and captions stay inside a 320 px viewport (${narrow.outside.join(', ')})`)
+    await ctx.close()
+    await openLab(page, url, path)
+    await stageIntoView(page)
+    const zoomed = await page.evaluate(async () => {
+      document.documentElement.style.fontSize = '200%'
+      await new Promise((r) => setTimeout(r, 400))
+      const de = document.documentElement
+      const captions = [...document.querySelectorAll('[data-caption][data-active="true"], .caption')].map((e) => { const r = e.getBoundingClientRect(); return { inside: r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && r.left >= -1, clipped: e.scrollHeight > e.clientHeight + 2 } })
+      const out = { scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, captions }
+      document.documentElement.style.fontSize = ''
+      return out
+    })
+    expect(zoomed.scrollWidth <= zoomed.clientWidth + 1, `${path}: no horizontal overflow at 200% text (${zoomed.scrollWidth} > ${zoomed.clientWidth})`)
+    expect(zoomed.captions.every((c) => c.inside && !c.clipped), `${path}: captions stay inside the viewport and unclipped at 200% text (${JSON.stringify(zoomed.captions)})`)
+    report[path].reflow = { narrow, zoomed }
+    await leave(page, url, 'Second')
+  })
+  ok('a11y: no horizontal overflow at 320 px or at 200% text; controls and captions stay inside the viewport')
+  expect(consoleProblems.length === 0, `console problems: ${consoleProblems.join(' | ')}`)
+  return report
 }
 
 export async function runLabChecks(chromium, { url, label, pages, evidence, channel }) {

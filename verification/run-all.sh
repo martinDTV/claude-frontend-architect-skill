@@ -19,7 +19,7 @@ node extract.mjs
 (cd react && npx tsc --noEmit)
 (cd react && npx vitest run)
 (cd creative && npx tsc --noEmit && npx vitest run)
-(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs && node check-motion.mjs && node check-lab.mjs)
+(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs && node check-motion.mjs && node check-lab.mjs && node check-strict.mjs)
 (cd nuxt && npx nuxt prepare && node check-layers.mjs && npx nuxt typecheck)
 ./ssr-test/run.sh
 # 1.5: the documented ScrollStory on the positive production build (mount, route change, re-entry, reduced motion, keyboard, 375 px)
