@@ -64,6 +64,7 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
     jsxTags: new Map(),
     jsxElements: [], // { tag, line, attrs: { name: string|true|'{expr}' }, selfClosing, hasText, parents: [tags], depth }
     browserApiUses: [], // { name, line, topLevel, inFunction, calls: [enclosing callee names], guarded, guard }
+    motionUses: [], // 1.5: GSAP calls with their context { kind, name, line, flags, effect, ...context }
     parseDiagnostics: sf.parseDiagnostics?.length ?? 0,
   }
   const BROWSER_GLOBALS = new Set(['window', 'document', 'localStorage', 'sessionStorage', 'navigator', 'location', 'history', 'screen', 'matchMedia', 'requestAnimationFrame', 'IntersectionObserver', 'ResizeObserver', 'MutationObserver', 'customElements', 'indexedDB', 'Notification'])
@@ -165,6 +166,69 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
     return { calls, inFunction, enclosingFunction, guarded, guard, topLevel: !inFunction }
   }
 
+  // 1.5: GSAP call records (motion engineering rules). The kind says what the call creates or cleans; the flags
+  // come from the configuration object literal (scrollTrigger, scrub, pin, infinite repeat); `effect` describes the
+  // nearest enclosing effect or lifecycle call, including whether a React effect returns a cleanup function.
+  const MOTION_CALLS = [
+    ['tween', /^gsap\.(?:to|from|fromTo|set|quickTo|quickSetter)$/],
+    ['timeline', /^gsap\.timeline$/],
+    ['scrolltrigger', /^ScrollTrigger\.(?:create|batch)$/],
+    ['context', /^gsap\.context$/],
+    ['matchmedia', /^gsap\.matchMedia$/],
+    ['matchmediarefresh', /^gsap\.matchMediaRefresh$/],
+    ['usegsap', /^useGSAP$/],
+    ['killall', /^ScrollTrigger\.killAll$/],
+    ['getall', /^ScrollTrigger\.getAll$/],
+    ['refresh', /^ScrollTrigger\.refresh$/],
+  ]
+  // lifecycle hooks only: gsap.context(), gsap.matchMedia() and mm.add() are trackers that run where they are called,
+  // so the enclosing hook is what decides whether a cleanup exists
+  const EFFECT_CALLS = new Set(['useEffect', 'useLayoutEffect', 'useInsertionEffect', 'useGSAP', 'onMounted', 'onBeforeMount', 'onUnmounted', 'onBeforeUnmount', 'onScopeDispose', 'onActivated', 'onDeactivated', 'watch', 'watchEffect', 'watchPostEffect', 'onNuxtReady', 'nextTick'])
+  const returnsCleanup = (fn) => {
+    if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return null
+    if (!ts.isBlock(fn.body)) return false
+    return fn.body.statements.some((st) => ts.isReturnStatement(st) && st.expression && (ts.isArrowFunction(st.expression) || ts.isFunctionExpression(st.expression) || ts.isIdentifier(st.expression) || ts.isPropertyAccessExpression(st.expression) || ts.isCallExpression(st.expression)))
+  }
+  const effectInfoOf = (node) => {
+    let n = node.parent
+    while (n && !ts.isSourceFile(n)) {
+      if (ts.isCallExpression(n)) {
+        const callee = n.expression
+        const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : null
+        if (name && EFFECT_CALLS.has(name)) {
+          const info = { hook: name, hasCleanupReturn: null, deps: null }
+          if (name === 'useEffect' || name === 'useLayoutEffect' || name === 'useInsertionEffect') {
+            info.hasCleanupReturn = returnsCleanup(n.arguments[0])
+            const deps = n.arguments[1]
+            info.deps = !deps ? 'none' : ts.isArrayLiteralExpression(deps) ? (deps.elements.length ? 'list' : 'empty') : 'expr'
+          }
+          return info
+        }
+      }
+      n = n.parent
+    }
+    return null
+  }
+  const motionFlags = (call) => {
+    const flags = { scrollTrigger: false, scrub: false, pin: false, infinite: false }
+    const scan = (obj, nested) => {
+      if (!obj || !ts.isObjectLiteralExpression(obj)) return
+      for (const prop of obj.properties) {
+        if (!ts.isPropertyAssignment(prop) || !prop.name) continue
+        const key = prop.name.getText(sf).replace(/^['"]|['"]$/g, '')
+        if (key === 'scrollTrigger') {
+          flags.scrollTrigger = true
+          scan(prop.initializer, true)
+        } else if (key === 'scrub') flags.scrub = true
+        else if (key === 'pin') flags.pin = true
+        else if (key === 'repeat' && ts.isPrefixUnaryExpression(prop.initializer) && prop.initializer.operator === ts.SyntaxKind.MinusToken) flags.infinite = true
+        else if (nested && key === 'animation') scan(prop.initializer, false)
+      }
+    }
+    for (const a of call.arguments) scan(a, false)
+    return flags
+  }
+
   const visit = (node) => {
     // declarations
     if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) bindingNames(ts, node.name, out.declared)
@@ -185,6 +249,12 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
       } else if (ts.isPropertyAccessExpression(callee)) {
         const object = ts.isIdentifier(callee.expression) ? callee.expression.text : ts.isPropertyAccessExpression(callee.expression) ? callee.expression.getText(sf).slice(0, 60) : callee.expression.kind === ts.SyntaxKind.ThisKeyword ? 'this' : null
         out.memberCalls.push({ object, name: callee.name.text, line })
+      }
+      // GSAP call records (motion engineering rules, 1.5)
+      if (ts.isIdentifier(callee) || ts.isPropertyAccessExpression(callee)) {
+        const calleeText = callee.getText(sf)
+        const kind = MOTION_CALLS.find(([, re]) => re.test(calleeText))?.[0] ?? (ts.isPropertyAccessExpression(callee) && /^(?:revert|kill)$/.test(callee.name.text) ? callee.name.text : null)
+        if (kind) out.motionUses.push({ kind, name: calleeText.slice(0, 80), line, flags: kind === 'tween' || kind === 'timeline' || kind === 'scrolltrigger' ? motionFlags(node) : null, effect: effectInfoOf(node), ...contextOf(node) })
       }
     }
     // JSX tags and elements (attributes kept for the UI audit)
