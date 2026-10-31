@@ -187,7 +187,7 @@ Every component tag of a template is classified (`componentsByResolution`): `loc
 
 ### Main-module guard
 
-The seven tools start with `isMainModule(import.meta.url)`: real paths of `process.argv[1]` and of the module are compared, so symbolic links, relative invocations from another directory and paths with spaces run the analysis. The harness and CI run a tool through a symbolic link and fail when it prints nothing.
+The twelve tools start with `isMainModule(import.meta.url)`: real paths of `process.argv[1]` and of the module are compared, so symbolic links, relative invocations from another directory and paths with spaces run the analysis. The harness and CI run a tool through a symbolic link and fail when it prints nothing.
 
 ## 1.4.0: element records, identifier context, page meta
 

@@ -2,6 +2,8 @@
 
 Visual and interaction criteria for the screens that make up ERPs, back offices, clinical systems and SaaS consoles: dashboards, long forms, dense tables, deep navigation, and the states around them. Engineering of tables and forms (contracts, state, validation) is in the `frontend-architect` skill (`data-tables.md`, `forms.md`, `charts.md`); accessibility rules in `accessibility.md`; the visual foundations in `visual-design.md` and `layout-and-responsive.md`.
 
+The behaviours behind these compositions (data regions and their states, the URL as table state, row actions and confirmations, forms that recover, preferences, keyboard reach) are `frontend-architect/references/enterprise-application.md`; this file is the visual side.
+
 ## Contents
 - Dashboards
 - Complex forms

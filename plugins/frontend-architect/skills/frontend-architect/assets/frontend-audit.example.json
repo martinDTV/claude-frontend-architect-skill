@@ -102,5 +102,11 @@
     "entryCssKb": 60,
     "maxChunkKb": 300,
     "totalJsKb": null
+  },
+  "_comment_designConsistency": "Colour literals design-consistency.mjs reports as documented exceptions (allowed) instead of defects: imagery surfaces, brand marks drawn in HTML.",
+  "designConsistency": {
+    "allow": [
+      "#f3efe8"
+    ]
   }
 }

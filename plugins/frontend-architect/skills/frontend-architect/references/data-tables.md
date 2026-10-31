@@ -92,7 +92,7 @@ Virtualize when more than roughly 200 rows are rendered at once, when cells are 
 ## States, density and responsive behavior
 
 - Loading: skeleton rows with the final column widths; keep the header. Empty: say why (no data vs no matches) and offer the next action (clear filters, create). Error: message and retry. Partial: show rows with a banner when one of several sources failed.
-- Density: data-entry tables want compact rows (32 to 36 px) and tabular numerals; occasional-use tables can be comfortable. Visual rules live in the creative skill's `enterprise-ui-patterns.md`.
+- Density: data-entry tables want compact rows (32 to 36 px) and tabular numerals; occasional-use tables can be comfortable. Visual rules live in the creative skill's `enterprise-application.md`.
 - Responsive: below the tablet breakpoint either a card list of the essential columns, horizontal scroll with a sticky first column, or a column-priority system (hide low-priority columns first). Never shrink text below 14 px to fit.
 
 ## Vue / Nuxt specifics

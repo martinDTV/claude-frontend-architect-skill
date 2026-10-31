@@ -64,7 +64,7 @@ When installed, use them for visual direction and audits, and keep this skill fo
 
 ## Where visual criteria live
 
-This file owns the architecture of a design system: tokens, states, consistency and governance. The visual decisions themselves (direction, composition, typography choices, color roles, identity, avoiding generic interfaces) are in the `creative-frontend` skill's `visual-design.md`; dense enterprise screens (dashboards, long forms, high-volume tables, navigation, notifications) in its `enterprise-ui-patterns.md`; grids, breakpoints, density and internationalization room in `layout-and-responsive.md`; motion tokens and timing in `motion-design.md`. Read those when the question is "how should it look"; read this file when the question is "how do we encode and keep it consistent".
+This file owns the architecture of a design system: tokens, states, consistency and governance. The visual decisions themselves (direction, composition, typography choices, color roles, identity, avoiding generic interfaces) are in the `creative-frontend` skill's `visual-design.md`; dense enterprise screens (dashboards, long forms, high-volume tables, navigation, notifications) in its `enterprise-application.md`; grids, breakpoints, density and internationalization room in `layout-and-responsive.md`; motion tokens and timing in `motion-design.md`. Read those when the question is "how should it look"; read this file when the question is "how do we encode and keep it consistent".
 
 ## Token architecture for multi-brand and multi-tenant products
 

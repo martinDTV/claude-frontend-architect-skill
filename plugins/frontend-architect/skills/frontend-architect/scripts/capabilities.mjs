@@ -18,9 +18,9 @@ capabilities — capabilities a task needs, their internal owners, and the exter
 
 usage: node capabilities.mjs [project-root] (--task "<text>" | --needs <list>) [options]
   --task <text>         the task in the user's words (English or Spanish); capabilities are inferred from it
-  --needs <list>        explicit capabilities, comma-separated (visual-direction, design-system, ui-implementation,
-                        visual-critique, ui-polish, responsive-design, accessibility-review, motion-design,
-                        3d-experience, frontend-architecture, browser-verification); overrides inference
+  --needs <list>        explicit capabilities, comma-separated (creative-direction, visual-direction, design-system,
+                        ui-implementation, visual-critique, ui-polish, responsive-design, accessibility-review,
+                        motion-design, 3d-experience, frontend-architecture, browser-verification); overrides inference
   --config-dir <dir>    Claude Code configuration directory to read (default: ~/.claude; pass the value of
                         CLAUDE_CONFIG_DIR when you use another profile; the tool never reads environment variables)
   --project <dir>       project whose .claude/settings*.json and .claude/skills apply (default: the first

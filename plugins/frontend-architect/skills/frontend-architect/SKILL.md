@@ -52,7 +52,7 @@ Load two or three files per task. The full catalog with one-line descriptions is
 | Next.js and React specifics | `nextjs.md`, `react.md` |
 | TypeScript strictness and modeling | `typescript.md` |
 | Forms, tables, charts, i18n | `forms.md`, `data-tables.md`, `charts.md`, `i18n.md` |
-| An enterprise application (shell, data regions and their states, URL table state, row actions and confirmations, forms that recover, preferences, palette, density, keyboard, table-to-cards) in Nuxt UI or shadcn/ui | `enterprise-ui-patterns.md` (reference apps under `verification/`) |
+| An enterprise application (shell, data regions and their states, URL table state, row actions and confirmations, forms that recover, preferences, palette, density, keyboard, table-to-cards) in Nuxt UI or shadcn/ui | `enterprise-application.md` (reference apps under `verification/`) |
 | A launch or landing page (one sentence, three ideas, one action; motion that explains; no layout shift) | `landing-pages.md`, with `creative-frontend` for the motion |
 | A shop's frontend (catalogue with filters in the URL, product page with variants, local bag, stock states, no payments) | `commerce-ui.md` |
 | Auth, sessions, tenants, security | `auth-session-tenant.md`, `security.md` |

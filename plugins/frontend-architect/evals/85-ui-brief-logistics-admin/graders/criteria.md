@@ -10,7 +10,7 @@ The response PASSES only if it does all of the following:
 - Covers accessibility and legibility as part of done: keyboard reach of the toolbar, focus trapped and restored in overlays, status by word and shape not colour alone, contrast in both themes, 320px reflow and 200% text (naming at least one concrete pitfall such as rem widths doubling or implicit grid columns).
 - Gives a verification plan that separates what a tool proves (browser checks on the production build, axe, contrast, overflow, hydration), what it only flags (heuristics to read), and what a person must judge (hierarchy, copy, whether the density suits dispatchers), and says what evidence each leaves (JSON reports, screenshots, before and after numbers).
 - States proportionality: no 3D, no scroll storytelling, no generated palette or style library, no microfrontends; motion limited to feedback and reduced-motion respected.
-- Names the references it relied on (enterprise-ui-patterns, design-contract, data-tables, forms, persistence, accessibility, ui-verification or equivalents).
+- Names the references it relied on (enterprise-application, design-contract, data-tables, forms, persistence, accessibility, ui-verification or equivalents).
 
 The response FAILS if it does any of the following:
 - Starts from colours or components without requirements and a contract, or chooses a palette by taste alone.

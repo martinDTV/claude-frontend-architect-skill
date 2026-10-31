@@ -88,7 +88,7 @@ Selection criteria: data volume (SVG degrades above ~5k points; canvas scales fu
 - Consistent units, time zones and number formats across tiles; one legend convention.
 - Load tiles independently with skeletons sized like the final chart (same height, aspect ratio); never let a slow chart block the page.
 - Limit to what fits one question per tile; drill-down navigates to a detail page rather than stacking modals.
-- Density: dashboards for daily operators can be dense; executive views need fewer, larger charts. Visual guidance in `enterprise-ui-patterns.md`.
+- Density: dashboards for daily operators can be dense; executive views need fewer, larger charts. Visual guidance in `enterprise-application.md`.
 
 ## SSR, hydration and layout shift
 

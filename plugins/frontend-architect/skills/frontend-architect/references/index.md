@@ -46,13 +46,14 @@ Every reference of the `frontend-architect` skill with the situation that justif
 |---|---|
 | `references/forms.md` | Building or reviewing forms: schema-first validation (UForm, vee-validate, React Hook Form, useActionState), server error mapping, wizards, async validation, uploads, form accessibility |
 | `references/data-tables.md` | Enterprise lists and tables: server pagination contract, URL state, a `useServerTable` design, TanStack Table or UTable, virtualization, selection and bulk actions, exports, table accessibility |
-| `references/enterprise-ui-patterns.md` | Building or reviewing an enterprise application: the shell, data regions with five reachable states, the URL as table state, row actions with undo and confirmations that name the consequence, forms that recover, preferences, search palette, density and theme, keyboard and focus, table-to-cards; the same behaviours in Nuxt UI and shadcn/ui, the `data-*` hooks one browser check drives, and what that check proves |
+| `references/enterprise-application.md` | Building or reviewing an enterprise application: the shell, data regions with five reachable states, the URL as table state, row actions with undo and confirmations that name the consequence, forms that recover, preferences, search palette, density and theme, keyboard and focus, table-to-cards; the same behaviours in Nuxt UI and shadcn/ui, the `data-*` hooks one browser check drives, and what that check proves |
 | `references/landing-pages.md` | Building or reviewing a launch or landing page: structure (one sentence, three ideas, one action), editorial typography and grid, motion that explains with reduced motion as a branch and total cleanup, no layout shift, the action in every section, dark mode, the form, what the browser check proves and what stays with the human |
 | `references/commerce-ui.md` | Building or reviewing a shop's frontend: the domain as pure functions, filters as navigation through the URL, the card grid, availability as words, the product page with unambiguous variants and a sticky purchase panel, a local bag with versioned storage and a dialog drawer, no payments, what the browser check proves |
 | `references/charts.md` | Any chart or dashboard: library choice, chart type by question, encoding and color rules, accessibility, performance, realtime, S-curves and Gantt, testing |
 | `references/i18n.md` | Locales, routing strategies and SEO, SSR locale detection, ICU messages, Intl formatting and time zones per tenant, RTL, translation workflow |
 | `references/component-libraries.md` | Nuxt UI, shadcn/ui and alternatives |
 | `references/design-systems.md` | Tokens, theming, multi-brand, component API conventions, governance, UI states |
+| `references/design-contract.md` | Turning a brief into a visual direction that can be checked and built: requirements, decisions, scales and colour roles validated by `scripts/design-contract.mjs` and emitted as tokens (CSS, Tailwind v4, Nuxt UI, DTCG), scoped when a second contract lives inside an app |
 | `references/accessibility.md` | Accessible components, forms, focus, motion, audits |
 | `references/ui-verification.md` | Verifying built screens: the static UI audit and its verification levels, the opt-in browser mode (axe-core, keyboard, dialogs, forms, responsive, hydration, visual regression), what each can and cannot prove, authorization and evidence rules, human-review criteria that no tool replaces |
 
@@ -87,4 +88,4 @@ Every reference of the `frontend-architect` skill with the situation that justif
 
 ## Scripts
 
-Documented in `scripts/README.md`: flags, exit codes, configuration keys, confidence levels and typical false positives of the audit scripts and of the capability planner.
+Twelve read-only Node scripts under `scripts/`: `domain-deps`, `component-complexity`, `state-audit`, `routes-audit`, `leak-patterns`, `contracts-check`, `bundle-budget`, `ui-audit`, `browser-audit` (opt-in browser mode), `capabilities`, `design-contract` and `design-consistency`. Documented in `scripts/README.md`: flags, exit codes, configuration keys, confidence levels and typical false positives of the audit scripts and of the capability planner.

@@ -61,11 +61,14 @@ With `S` pointing at the skill's `scripts/` directory and the project root as th
 | 5 | `node $S/routes-audit.mjs . --config <file> --md` | Unguarded pages, literal role checks, `'use client'` too high, Server Actions without checks |
 | 6 | `node $S/leak-patterns.mjs . --md` | Resources without cleanup, by file |
 | 7 | `node $S/contracts-check.mjs . --md` | Module entries (index.ts or package.json exports), internal imports, unexported package subpaths, barrels publishing names declared elsewhere, implicit (auto-import) dependencies, cycles; `--write-baseline` for later diffs |
-| 8 | `node $S/bundle-budget.mjs . --md` | Startup and chunk sizes, only when a production build exists |
-| 9 | Project's own `typecheck`, `lint`, `test` | Measured quality signals (report real results, including "no tests") |
-| 10 | `frontend-reviewer` agent | An independent pass; reconcile its findings with yours and keep the union with tiers |
+| 8 | `node $S/ui-audit.mjs . --md` | Accessibility and form patterns the markup proves (`static`), suggests (`review`) or leaves to a rendered page (`browser`) |
+| 9 | `node $S/design-consistency.mjs . --contract <contract.json> --exclude '<vendored ui>/**' --md` | Where the code departs from its token layer (literal colours, fonts, shadows, durations, off-grid sizes), classed as defect, heuristic, recommendation, imagery or allowed; only when a token layer exists, and with the library's copied components and pre-contract code excluded by name |
+| 10 | `node $S/bundle-budget.mjs . --md` | Startup and chunk sizes, only when a production build exists |
+| 11 | `node $S/browser-audit.mjs <url> --playwright <dir> …` | Only when the user asks for a rendered check and names the URL (`ui-verification.md`): axe, keyboard, dialogs, responsive, hydration, forms |
+| 12 | Project's own `typecheck`, `lint`, `test` | Measured quality signals (report real results, including "no tests") |
+| 13 | `frontend-reviewer` agent | An independent pass; reconcile its findings with yours and keep the union with tiers |
 
-Run 2–7 in under a minute on a 100k-line app. They parse the code with the project's own TypeScript and `vue/compiler-sfc` when installed (the `Analysis` line of each report says `engine: semantic`, with the compiler version and the `tsconfig` used) and fall back to lexical analysis otherwise; they never execute project code. Quote the engine and an edge's `resolution` when a finding rests on a dependency, and treat *Unresolved imports* as unknowns rather than as absence of coupling (`scripts/README.md`, section "Analysis engine").
+Run 2–9 in under a minute on a 100k-line app. They parse the code with the project's own TypeScript and `vue/compiler-sfc` when installed (the `Analysis` line of each report says `engine: semantic`, with the compiler version and the `tsconfig` used) and fall back to lexical analysis otherwise; they never execute project code. Quote the engine and an edge's `resolution` when a finding rests on a dependency, and treat *Unresolved imports* as unknowns rather than as absence of coupling (`scripts/README.md`, section "Analysis engine").
 
 ## Reading the tool output
 

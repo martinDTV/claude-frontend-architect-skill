@@ -62,12 +62,15 @@ The order matters: steps 1–3 decide what the product should feel like, 4 ties 
              "status": { "success": "#2f8a5b", "warning": "#b8791f", "danger": "#c23b3b", "info": "#2b6fc9" },
              "roles": { "light": { "canvas": "{neutral.50}", "fg": "{neutral.900}", "accent": "{accent.700}", "…": "…" }, "dark": { "…": "…" } } },
   "states": { "focusRing": { "width": 2, "offset": 2 }, "minTarget": 24, "disabledOpacity": 0.5, "hover": "one ramp step darker" },
+  // optional: "color.pairs" adds pairs to the default WCAG checks ([foreground, background, ratio, what]); "color.ramps" pins
+  // explicit steps instead of the generated OKLCH ramp; "elevation.color" is the shadow colour as "r g b"; a "$schema" key
+  // is accepted and ignored by the validator
   "darkMode": true,
   "imagery": { "policy": "…" }
 }
 ```
 
-The eighteen roles every theme defines: `canvas`, `surface`, `surface-raised`, `fg`, `fg-muted`, `border` (dividers, no ratio), `border-strong` (control boundaries, 3:1), `accent`, `accent-fg`, `accent-hover`, `focus`, and `success`, `warning`, `danger`, `info` each with its `-fg`. Components never use a ramp step directly: a surface that needs a tint asks for a role, and the role is added to the contract.
+The nineteen roles every theme defines: `canvas`, `surface`, `surface-raised`, `fg`, `fg-muted`, `border` (dividers, no ratio), `border-strong` (control boundaries, 3:1), `accent`, `accent-fg`, `accent-hover`, `focus`, and `success`, `warning`, `danger`, `info` each with its `-fg`. Components never use a ramp step directly: a surface that needs a tint asks for a role, and the role is added to the contract.
 
 ## 4. What the tool proves and what it only flags
 
@@ -91,7 +94,7 @@ Confirmed findings are facts about the file. Heuristics are leads. Nothing here 
 
 ## 5. Emitting tokens
 
-`--emit css` writes `:root` custom properties (ramps `--color-accent-700`, roles `--color-fg`, type `--text-xl` with `clamp()` above the fluid step, `--space-*`, `--radius-*`, `--shadow-*`, `--duration-*`, `--ease-*`, breakpoints, focus ring, targets) and a `.dark, [data-theme="dark"]` block that redefines the roles only. `--emit tailwind` writes the same as a Tailwind v4 stylesheet: scales in `@theme` (so `text-xl`, `rounded-md`, `shadow-popover`, `ease-standard`, `bg-accent-700` exist), roles as plain variables per theme and an `@theme inline` block that exposes them as colours (`bg-canvas`, `text-fg`, `text-fg-muted`, `border-border-strong`, `ring-focus`), plus a `dark` custom variant driven by the class or `data-theme`. `--emit nuxt-ui` writes the mapping of Nuxt UI's `--ui-*` variables onto the roles and the `app.config.ts` colours. `--emit dtcg` writes a Design Tokens Format Module file (2025.10 draft: `$type`/`$value`, groups, `{color.accent.700}` aliases, colours as sRGB components with the hex, dimensions and durations with units, cubic-bezier easings, shadow composites; fluid sizes carry min and max with the `clamp()` in `$extensions`) for tools that speak it.
+`--emit css` writes `:root` custom properties (ramps `--color-accent-700`, roles `--color-fg`, type `--text-xl` with `clamp()` above the fluid step, `--space-*`, `--radius-*`, `--shadow-*`, `--duration-*`, `--ease-*`, breakpoints, focus ring, targets) and a `.dark, [data-theme="dark"]` block that redefines the roles only. `--emit tailwind` (with `--role-prefix <p>` when the host library owns the plain role names, and `--scope <selector>` for a second contract, both below) writes the same as a Tailwind v4 stylesheet: scales in `@theme` (so `text-xl`, `rounded-md`, `shadow-popover`, `ease-standard`, `bg-accent-700` exist), roles as plain variables per theme and an `@theme inline` block that exposes them as colours (`bg-canvas`, `text-fg`, `text-fg-muted`, `border-border-strong`, `ring-focus`), plus a `dark` custom variant driven by the class or `data-theme`. `--emit nuxt-ui` writes the mapping of Nuxt UI's `--ui-*` variables onto the roles and the `app.config.ts` colours. `--emit dtcg` writes a Design Tokens Format Module file (2025.10 draft: `$type`/`$value`, groups, `{color.accent.700}` aliases, colours as sRGB components with the hex, dimensions and durations with units, cubic-bezier easings, shadow composites; fluid sizes carry min and max with the `clamp()` in `$extensions`) for tools that speak it.
 
 The contract's spacing base is not written to Tailwind's `--spacing` unit: every spacing utility multiplies that unit, so an 8 px base would double `p-4` and `gap-10` for the host library's components as well. The base governs the `--space-*` tokens and the off-grid rule; author on the base with `p-(--space-16)` or multiples of it.
 
@@ -108,7 +111,7 @@ The emitters print to stdout; the build writes the file where the app reads it (
 ## 7. Governance
 
 - The contract is versioned; a change to a role, a scale or a decision bumps `version` and lands with the regenerated tokens in the same commit. The validator runs in CI next to the tests.
-- Drift is measured, not felt: raw colours, sizes and shadows in product code are what the consistency audit looks for (`ui-audit`'s `tokens` family, 1.5 increment 5, block E); a finding there is either a missing role to add to the contract or a line to fix.
+- Drift is measured, not felt: raw colours, sizes and shadows in product code are what the consistency audit looks for (`scripts/design-consistency.mjs`, 1.5 increment 5, block E); a finding there is either a missing role to add to the contract or a line to fix.
 - What never varies per product inside one organisation: the accessibility floors (ratios, ring, targets, reduced motion) and the role vocabulary. Everything else (families, ratios, seeds, radius and elevation policy, density) is the product's identity and is expected to differ: a logistics back office, a product launch page and a specialist shop share no visual default except those floors.
 - A contract is reviewed by reading its decisions against the brief before any screen exists, and by the rubric's human half after the first screens exist; both reviews leave notes in the repository next to the contract.
 
