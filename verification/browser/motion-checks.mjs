@@ -96,10 +96,12 @@ export async function runMotionChecks(chromium, { url, storyPath, otherPath, oth
     // 5. keyboard: Tab reaches the primary navigation and the skip link before the story steps
     await page.goto(`${url}${storyPath}`, { waitUntil: 'load' })
     await settled(page)
+    // the primary navigation grew with the 1.5 lab pages: tab until the skip link is reached (bounded)
     const focusOrder = []
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 16; i++) {
       await page.keyboard.press('Tab')
       focusOrder.push(await page.evaluate(() => { const a = document.activeElement; return a ? `${a.tagName.toLowerCase()}:${(a.textContent || '').trim().slice(0, 24)}` : 'none' }))
+      if (/^a:Skip the story/.test(focusOrder[focusOrder.length - 1])) break
     }
     expect(focusOrder.some((f) => /^a:(Home|Motion)/.test(f)), `Tab reaches the primary navigation (${focusOrder.join(' → ')})`)
     expect(focusOrder.some((f) => /^a:Skip the story/.test(f)), `Tab reaches the skip link (${focusOrder.join(' → ')})`)
