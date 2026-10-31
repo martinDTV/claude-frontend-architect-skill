@@ -2,6 +2,18 @@
 
 Two tools verify built screens. `scripts/ui-audit.mjs` reads markup and proves little, honestly. `scripts/browser-audit.mjs` drives a real browser and observes behaviour, only when the user authorises it. Neither replaces a human review, and neither result is "WCAG conformance". Use this file when the task is to verify accessibility, forms, responsive behaviour, visual regressions or hydration of screens that already exist; for building them, `accessibility.md`, `forms.md` and the `creative-frontend` skill's `layout-and-responsive.md` hold the criteria.
 
+## Contents
+- What each level can prove
+- Static audit
+- Browser mode
+- Forms: where each concern is verified
+- Responsive and visual
+- SSR and hydration
+- Visual quality: five classes for every finding
+- The refinement loop, with evidence
+- What no tool verifies (say it in the report)
+- Report shape
+
 ## What each level can prove
 
 | Level | Source | Proves | Cannot prove |
@@ -77,6 +89,32 @@ State of the pending flag: when the component owns it (local ref or a prop), the
 
 - Static: `state-audit` reports `browser-api-in-setup` (confirmed at the top level of `<script setup>` or in module scope with SSR on; heuristic in a React render body; low severity when `ssr: false`) and `nondeterministic-render` (heuristic: `Date.now()`, `Math.random()`, `new Date()`, `crypto.randomUUID()` feeding the render). Not a hazard, and not reported: uses inside `onMounted`/`onBeforeMount`/`useEffect`/`useLayoutEffect`/event handlers, under `import.meta.client`, `process.client` or `typeof window !== 'undefined'`, and `.client.vue`/`.client.ts` files. `'use client'` is not a guard: client components still render on the server.
 - Browser: `hydration-mismatch` (the framework logged a hydration problem) and `client-only-rendered-content` (words present only after client rendering). Cross-request state leaks are not observable from one browser; `ssr-test/` in the repository shows the concurrent-request test shape, and `state-audit` reports module-level state in server-executed code.
+
+## Visual quality: five classes for every finding
+
+A visual review mixes things that are not alike. Every finding the skill reports, from a tool or from a person, is filed in one of five classes, and the report keeps them apart:
+
+| Class | Who establishes it | Examples | Reported as |
+|---|---|---|---|
+| **Confirmed defect** | A tool from a file or a measurement | A literal `#ff0000` where the token layer exists (`design-consistency`), a 2.8:1 caption (legibility grade), `aria-sort` on a button (axe), a page that scrolls sideways at 320 px (`browser-audit`), a hydration mismatch (console rule), a contract pair below its ratio (`design-contract`) | `level: confirmed`; it fails the check |
+| **Heuristic** | A tool from a signal that needs reading | An arbitrary size on the grid, a shadow outside the tokens, `axe-region`, `text-clipped-at-scale`, an icon-only button whose child may render a name | `level: heuristic`; listed, never failing on its own |
+| **Design recommendation** | A tool across files, or the reviewer's craft | Twelve distinct literal colours, three type scales on one screen, a density that does not match the audience, a hierarchy that puts the secondary first | `class: recommendation` / an opinion, labelled as such |
+| **Human judgement** | A person on the rendered screens | Whether the sentence is the right sentence, whether the illustration carries a hero, whether the pairing reads as the brand, the copy's tone, the imagery | Named in the report as judgement, with who judged and on what evidence (screenshots, both themes, two widths) |
+| **Unverifiable** | Nobody, from the code | Perceived quality, taste, how the page will age | Said plainly; never dressed up as a score |
+
+The tools that feed the first three: `design-contract.mjs` (the contract), `design-consistency.mjs` (the code against the tokens), `ui-audit.mjs` (the markup), `browser-audit.mjs` and the legibility grade (the rendered page), and the reference checks under `verification/browser`. Their JSON carries `level`, and `design-consistency` adds `class`; the report template (`assets/audit-report-template.md`) has a section per class.
+
+## The refinement loop, with evidence
+
+Visual work converges when every iteration leaves evidence: what was measured, what class the finding had, what changed, and the same measurement after. The loop the skill follows, and followed to build its own reference screens:
+
+1. **Measure before touching anything**: the contract validates, the consistency audit runs on the code, the browser check runs on the production build at the viewports and text scales the audience uses (375 and 320 px, 1280 px, 100% and 200% text, light and dark, motion on and off).
+2. **Classify** each finding with the table above. Confirmed defects are fixed; heuristics are read and either fixed, allowed with a reason in the configuration, or dismissed in writing; recommendations go to the human review with the screenshots; judgement is recorded as judgement.
+3. **Fix at the cause**, not at the symptom: a rem width that doubles at 200% is a sizing rule, not one element; an implicit grid column is a layout rule; a fixed bar that covers controls is a scroll-margin rule for the page.
+4. **Re-measure the same way** and record the before and after next to each other. A fix that moves a number from 2.8:1 to 4.6:1 is evidence; "looks better" is not.
+5. **Stop when the checks pass and the human review has no open judgement**, and say which heuristics remain and why.
+
+What this loop caught on the skill's own reference screens (increment 5), as examples of the classes: confirmed defects (a Nuxt root without `<NuxtLayout>` that silently dropped the whole shell; `aria-sort` on the sort button instead of the header cell; a select named by `aria-label` whose value was not in its name; a table that scrolled sideways without being focusable; a random comparator used as a shuffle that made the server and the browser disagree; rem widths, implicit single grid columns and non-wrapping toolbars overflowing 320 px at 200% text; fixed bars and a sticky header covering controls scrolled into view; a scoped contract that doubled every spacing utility by rewriting Tailwind's unit), a false positive turned into a rule (a disabled control at the disabled opacity reported as a fade), heuristics left standing with a reason (`axe-region` on pages whose shell holds content outside landmarks by the library's structure, `text-clipped-at-scale` where a truncation is the design), and judgement (the landing's hero sentence and illustration, the shop's warmth) recorded for a person.
 
 ## What no tool verifies (say it in the report)
 

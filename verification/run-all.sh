@@ -15,6 +15,10 @@ fi
 LINK=$(mktemp -d) && ln -s "$PWD/../plugins/frontend-architect/skills/frontend-architect/scripts" "$LINK/scripts" && node "$LINK/scripts/domain-deps.mjs" tools/fixtures/ts-paths --engine lexical --fail-on none | grep -q '^domain-deps (frontend-architect tools' && rm -rf "$LINK"
 node --expose-gc tools/benchmark.mjs > /tmp/fa-benchmark.md && grep -q '| ts-paths | semantic | semantic | 19 | 19 | 0 | 0 | 100% | 100% | 100% |' /tmp/fa-benchmark.md
 node extract.mjs
+# 1.5 increment 5, block E: the reference applications carry no literal where their tokens should be (the harness copies,
+# the 3D labs that predate the contract, and the library's own copied components are judged as such and left out)
+node ../plugins/frontend-architect/skills/frontend-architect/scripts/design-consistency.mjs nuxt --contract design/contracts/atlas-logistics.json --exclude 'harness/**,**/lab/**' > /tmp/fa-consistency-nuxt.txt
+node ../plugins/frontend-architect/skills/frontend-architect/scripts/design-consistency.mjs next --contract design/contracts/atlas-logistics.json --exclude 'harness/**,**/lab/**,**/components/ui/**' > /tmp/fa-consistency-next.txt
 (cd vue && npx tsc --noEmit && npx vitest run)
 (cd react && npx tsc --noEmit)
 (cd react && npx vitest run)
