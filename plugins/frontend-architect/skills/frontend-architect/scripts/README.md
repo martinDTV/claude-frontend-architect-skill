@@ -12,6 +12,7 @@ Read-only, dependency-free Node (>= 18) tools that turn the skill's rules into m
 | `contracts-check.mjs` | Module entry points, internal imports, module cycles, and breaking changes against a baseline | Only with `--write-baseline` |
 | `bundle-budget.mjs` | Startup and chunk sizes (gzip) of an existing build against budgets | No (never builds) |
 | `ui-audit.mjs` (1.4) | Accessibility and form-quality patterns provable from Vue templates and JSX; every finding says whether the markup proves it (`static`), needs reading (`review`) or needs a rendered page (`browser`); controls inside a component that declares a label-like prop are counted as encapsulated, not reported | No |
+| `capabilities.mjs` (1.5) | Which capabilities a task needs, their internal owners, and which known external design skills are available, enabled and current in a Claude Code profile and project: a plan with evidence rules, never an execution | No |
 | `browser-audit.mjs` (1.4, opt-in **browser mode**) | What a rendered page shows: axe-core violations, keyboard reachability, dialogs, form behaviour, responsive defects per viewport and text scale, server HTML against the hydrated DOM, visual regression against approved baselines | Only under `--out` (report, optional masked screenshots) and, with `--write-baseline` / `--approve`, under `--baseline-dir`; nothing elsewhere |
 
 Every tool supports `--help`, `--json`, `--md` and `--fail-on confirmed|any|none`. The static tools (all but `browser-audit`) are read-only toward the project and spawn nothing; `browser-audit` is the one tool that drives a browser, and only when you hand it one (`--playwright <dir>`); the section *Browser mode* below lists what it will and will not do. Exit codes: `0` nothing to fail on, `1` findings matched `--fail-on` (default: any **confirmed** finding), `2` the tool could not run (no `package.json`, no build, bad config).
@@ -109,6 +110,20 @@ Passing axe-core and these checks is not WCAG conformance. Reading order, the me
 - **Grades by basis.** `basis`, `criteria`, `impact`, `rule` on every axe finding; `confirmed` only for WCAG-tagged rules of impact critical or serious whose exceptions axe evaluates; best-practice rules heuristic/low; `axe-needs-review` with samples. The re-grade of seven axe 4.14 rules is listed in `verification/tools/baselines/migrations.json`.
 - **WCAG 2.2 target size** (`axe-target-size`, heuristic/medium, per viewport, raw counts under 24 and 44 px kept apart), **landmarks** (`axe-region` once per page or per shell), **reflow** (`--viewports reflow`, 320 px, criteria `1.4.10`, exception heuristic), **custom viewports** (`WIDTHxHEIGHT`), **text scale 200%** with `textScaleApplied`, `text-scale-not-applied` and `text-clipped-at-scale`.
 - Additive fields only; `durationMs` per page and `summary.msPerPage` for budgets. Measured cost with the default configuration: about +6% per page on the fixture (`docs/ui-verification.md`, 6.4).
+
+## Capability coordination (1.5)
+
+`node capabilities.mjs [project-root] --task "<text>" | --needs <list> [--config-dir <dir>] [--max-external <n>] [--no-detect] [--json|--md]`. Read-only: it reads `assets/capabilities.json`, `<config>/plugins/installed_plugins.json`, the three settings files (`enabledPlugins`, `skillOverrides`), the `skills/` directories of the profile and the project, and the marketplace catalogs; it reads no environment variable (`--config-dir` for a profile other than `~/.claude`), spawns nothing, writes nothing, and never runs a skill.
+
+| Output | Meaning |
+|---|---|
+| `data.plan.rows[]` | per needed capability: `owner`, `externalAllowed`, `collaborator` (`invoke`, `version`, `scope`, `risk`, `preconditions`, `execution: not-run`, `evidenceRequired`), `alternatives`, `deferred`, `fallback` |
+| `data.integrations[]` | every registry integration with `state` (`available`, `disabled`, `hidden-from-model`, `obsolete`, `not-cached`, `not-installed`), `version`, `scope`, `enabledBy`, `reasons` |
+| `data.lookalikes[]`, `data.unlisted[]` | a skill named like an integration that is not it (heuristic `integration-lookalike`); other skills present, counted only |
+| findings | `collaboration-selected`, `collaboration-overlap`, `collaboration-deferred`, `external-fallback`, `no-external-collaboration`, `no-capability-recognised`, `integration-disabled`, `integration-hidden`, `integration-obsolete`, `integration-not-cached`, `integration-not-installed` (info); `integration-lookalike` (heuristic). Never `confirmed` |
+| `summary.executed` | always `none (this tool never runs a skill)` |
+
+Rules that keep the plan proportional: `ui-implementation` needs a UI noun and a building verb (or a UI noun without improvement words); fixes, refactors and migrations without design words stay technical; "without changing the design" removes every visual capability; a 3D-led task keeps external design skills out; at most `--max-external` (default 1) distinct integrations per plan. The protocol for acting on a plan, the known integrations and the limits are in `references/capabilities.md`; the tests are `verification/tools/capabilities.test.mjs` (generated profiles and projects: none, each integration alone, several, disabled, hidden, obsolete, lookalike, foreign project record, missing cache, technical-only tasks, explicit needs, offline plan, determinism, read-only).
 
 ## Public routes (routes-audit)
 

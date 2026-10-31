@@ -66,6 +66,12 @@ Every reference of the `frontend-architect` skill with the situation that justif
 | `references/testing-scenarios.md` | Adversarial test catalog (contract drift, a11y, visual, responsive, CSP/XSS, concurrency and races, expired session, revoked permission, tenant switch, hydration, SSR leak, failure recovery, leaks), fixtures and factories, anti-flaky rules, minimal matrix by app type |
 | `references/ecosystem-status.md` | Verified package versions, deprecations and compatibility notes |
 
+## Coordination
+
+| File | Read when |
+|---|---|
+| `references/capabilities.md` | A task mixes architecture with visual work, the user asks which design skill to use, or a report claims an external skill ran: capability vocabulary and owners, how `scripts/capabilities.mjs` plans and what it reads, the known integrations (Frontend Design, Impeccable, UI UX Pro Max) with their risks, the activation and evidence protocol, use cases, what Claude Code supports |
+
 ## Assets
 
 | File | Use |
@@ -74,7 +80,8 @@ Every reference of the `frontend-architect` skill with the situation that justif
 | `assets/audit-report-template.md` | Shape of an audit report: short answer, inventory, dependency map, demonstrated problems, hypothetical risks, options, target, plan, criteria to reopen |
 | `assets/frontend-audit.example.json` | Starting point for `.frontend-audit.json`, the folder → domain classification the scripts use |
 | `assets/lighthouse-budgets.json` | Starting budgets for Lighthouse CI per route pattern |
+| `assets/capabilities.json` | Capability registry read by `scripts/capabilities.mjs`: capabilities and owners, known external integrations with their detection rules, capabilities, licence, what they run and write, risk and preconditions, selection policy |
 
 ## Scripts
 
-Documented in `scripts/README.md`: flags, exit codes, configuration keys, confidence levels and typical false positives of the seven audit scripts.
+Documented in `scripts/README.md`: flags, exit codes, configuration keys, confidence levels and typical false positives of the audit scripts and of the capability planner.

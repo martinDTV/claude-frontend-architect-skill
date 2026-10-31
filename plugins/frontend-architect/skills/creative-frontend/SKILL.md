@@ -68,7 +68,7 @@ Never use Three.js for effects CSS or SVG can do (gradients, parallax of flat im
 
 ## Companion skills
 
-If installed, use the official **GreenSock `gsap-skills`** for exact GSAP API usage and **`emilkowalski/skills`** for motion taste and animation reviews; `anthropics/skills` `frontend-design` and `pbakaus/impeccable` for visual direction and audits. This skill keeps the decision criteria, lifecycle, performance and accessibility rules; when a companion conflicts with the installed version's official docs, the docs win.
+If installed, use the official **GreenSock `gsap-skills`** for exact GSAP API usage and **`emilkowalski/skills`** for motion taste and animation reviews. Design collaborators (`frontend-design`, `impeccable`, `ui-ux-pro-max`) are selected through the `frontend-architect` skill's capability protocol (`capabilities.md` there): only when the plan finds one available and the session lists it, for visual direction, critique or polish, never for motion, 3D, accessibility or browser evidence. Their output is a suggestion; this skill's rules, the user's instructions and the project's conventions decide, and nothing counts as executed without its Skill tool result. This skill keeps the decision criteria, lifecycle, performance and accessibility rules; when a companion conflicts with the installed version's official docs, the docs win.
 
 ## References
 
