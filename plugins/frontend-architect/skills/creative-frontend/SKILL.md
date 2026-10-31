@@ -36,7 +36,7 @@ Critique or redesign tasks start by naming what is generic or inconsistent again
 2. **Pick the lightest tool that does the job** (table below). One animation engine and at most one scroll engine per project.
 3. **Design the fallback first**: `prefers-reduced-motion`, low-power devices, no WebGL. The page must be usable and its content readable without the effect.
 4. **Integrate with the framework lifecycle**: create in mounted/effect, clean up on unmount, client-only for WebGL (`references/animation-lifecycle.md`).
-5. **Budget and measure**: frame time on a mid-range phone, bundle size of the engine, LCP and INP of the page.
+5. **Budget and measure**: frame time on a mid-range phone, bundle size of the engine, LCP and INP of the page. For 3D experiences, score the result with `creative-quality-rubric.md` (what the checks verify, what needs eyes) before calling it done.
 
 ## Choosing the tool
 
@@ -49,9 +49,13 @@ Critique or redesign tasks start by naming what is generic or inconsistent again
 | Smooth scroll | Native first; Lenis only when the design needs it (`motion-scroll.md`) |
 | Designer-made vector animations | Lottie (After Effects) or Rive (interactive, state machines) |
 | No-code 3D scene from a designer | Spline (check runtime weight) |
-| Real-time 3D, product viewers, scenes | Three.js (`threejs.md`) via TresJS in Vue (`tresjs.md`) or React Three Fiber in React (`react-three-fiber.md`) |
-| Custom visual effects, distortion, noise, particles | Shaders (`webgl-shaders.md`) |
-| Heavy compute or modern GPU features | WebGPU, only with a WebGL fallback and a measured need |
+| Real-time 3D, product viewers, scenes | Three.js (`threejs.md`) via TresJS in Vue (`tresjs.md`) or React Three Fiber in React (`react-three-fiber.md`); for an experience with a time architecture, ownership, cameras, post-processing and quality tiers, `immersive-3d-architecture.md` and the references it lists |
+| Cinematic cameras, shot sequences, scroll-driven 3D stories, GLTF clips | `cinematic-motion.md` (rig, paths, sequences, cues, clip player, scene transitions) |
+| Custom visual effects, distortion, noise, dissolve, holograms, refraction | Shaders (`webgl-shaders.md` for the minimal pattern, `shader-engineering.md` for the GLSL and TSL libraries and the post-processing pipeline) |
+| Thousands to hundreds of thousands of particles, dispersion and reconstruction | `gpu-particles.md` (instanced field, GPGPU simulation, CPU baseline, adaptive density) |
+| Studio look: environments without assets, tone mapping, physical materials, shadows, quality tiers | `rendering-quality.md` |
+| Picking, configurators, chapter navigation, camera controls that share the camera | `interactive-3d.md` |
+| Heavy compute or modern GPU features | WebGPU through `WebGPURenderer` + TSL, only with the WebGL 2 backend as fallback and a measured need (`shader-engineering.md` section 1) |
 
 Never use Three.js for effects CSS or SVG can do (gradients, parallax of flat images, simple tilt). Durations, easings and the microinteraction catalog are in `motion-design.md`.
 
@@ -85,4 +89,12 @@ If installed, use the official **GreenSock `gsap-skills`** for exact GSAP API us
 | `references/threejs.md` | Renderer setup, loading models, performance, disposal |
 | `references/tresjs.md` | Three.js in Vue/Nuxt |
 | `references/react-three-fiber.md` | Three.js in React/Next.js |
-| `references/webgl-shaders.md` | GLSL, ShaderMaterial, uniforms, post-processing, WebGPU |
+| `references/webgl-shaders.md` | GLSL, ShaderMaterial, uniforms, post-processing, WebGPU (the minimal pattern) |
+| `references/immersive-3d-architecture.md` | Building an ambitious 3D experience: the technical contract (what is stable, what is not, what was verified), one clock and ordered update phases, property ownership, resource ownership and registry, the scene runtime (resize, pause, context loss, disposal), driving GSAP from the loop, framework integration rules |
+| `references/cinematic-motion.md` | Camera rig and shot vocabulary (dolly, orbit, tracking), arc-length paths, shot sequences on scroll or time, cue sheets for HTML/lights/uniforms, the clip player for GLTF skeletal and morph animation, frame-rate independent damping, scene transitions, GSAP + Three.js coordination |
+| `references/shader-engineering.md` | GLSL vs TSL contract, uniforms that never allocate, noise/lighting/transition chunks, dissolve, holographic, iridescent, refraction, image transition and displaced materials, the post-processing pipeline with quality tiers, TSL node materials for WebGPURenderer, visual direction |
+| `references/gpu-particles.md` | What GPU-driven means, formations (sphere, ring, grid, mesh surface), the instanced field, the GPGPU simulation with forces and a pointer, the CPU baseline and the measured comparison, adaptive density, fallbacks |
+| `references/rendering-quality.md` | Environments without assets, colour management and tone mapping, physical material presets, shadows and reflections, quality tiers and device budgets, progressive quality, visual coherence |
+| `references/interactive-3d.md` | Accessibility contract, pointer in world space, raycast and GPU picking, controls that share the camera with the rig, chapter navigator (scroll, keys, buttons, hash), configurators as state machines, the physics seam |
+| `references/immersive-experiences.md` | The three reference experiences (cinematic product, GPU particles, immersive story), how they are mounted in Nuxt and Next, and what the browser checks prove about them |
+| `references/creative-quality-rubric.md` | Scoring an experience: eleven criteria, what is verified automatically and what needs a human, anti-patterns that cap the score, the review procedure |

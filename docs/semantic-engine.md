@@ -79,6 +79,10 @@ Imports the engine cannot place are listed under *Unresolved imports* with a rea
 - `server-env-in-client` (heuristic): a direct `process.env.X` read in a client module, or in a module it imports one hop away, excluding `NEXT_PUBLIC_*` and `NODE_ENV`.
 - Not flagged on their own: using `'use client'`, a client component importing a pure helper, a Server Action without a call to a specific `authorize` function (the tools do not know the project's authorization API; `routes-audit` keeps its heuristic for handlers without any visible check).
 
+## 1.5: motion and 3D records
+
+The parser also emits `motionUses` (every GSAP call with its enclosing lifecycle hook, whether a React effect returns a cleanup, the configuration flags `scrollTrigger`/`scrub`/`pin`/`repeat: -1` and the tween target text) and `threeUses` (every `new` of a class imported from `three`, classified as renderer, render target, geometry, material, texture, loader, composer, pass or scene object, plus `dispose`, `setAnimationLoop`, `requestAnimationFrame`, `setPixelRatio`, loader `load`, context-loss listeners, `needsUpdate`, uniform-box and transform writes), each with the usual context and, for the 3D records, whether the node sits inside a frame callback and under a guard. Vue single-file components merge the records of both script blocks with the line shift. `leak-patterns` turns them into the motion and 3D rules (`scripts/README.md`); the lexical engine has neither.
+
 ## Effect on each tool
 
 | Tool | With the semantic engine |
