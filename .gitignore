@@ -16,3 +16,6 @@ verification/nuxt/app/
 verification/nuxt/nuxt.config.ts
 verification/nuxt/layers/
 verification/browser/evidence/
+verification/next/public/
+verification/nuxt/public/
+verification/browser/evidence-gpu/

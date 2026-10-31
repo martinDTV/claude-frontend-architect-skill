@@ -1,0 +1,102 @@
+{
+  "generator": "verification/assets/make-fixtures.mjs",
+  "parts": [
+    {
+      "name": "base",
+      "parent": null,
+      "material": "rubber",
+      "vertices": 292,
+      "triangles": 192,
+      "morph": null
+    },
+    {
+      "name": "body",
+      "parent": null,
+      "material": "paint",
+      "vertices": 98,
+      "triangles": 96,
+      "morph": null
+    },
+    {
+      "name": "grille",
+      "parent": null,
+      "material": "grille",
+      "vertices": 325,
+      "triangles": 512,
+      "morph": "inflate"
+    },
+    {
+      "name": "cap",
+      "parent": null,
+      "material": "cap",
+      "vertices": 292,
+      "triangles": 192,
+      "morph": null
+    },
+    {
+      "name": "knob",
+      "parent": "cap",
+      "material": "brass",
+      "vertices": 148,
+      "triangles": 96,
+      "morph": null
+    },
+    {
+      "name": "label",
+      "parent": "body",
+      "material": "label",
+      "vertices": 4,
+      "triangles": 2,
+      "morph": null
+    }
+  ],
+  "triangles": 1090,
+  "animation": {
+    "name": "reveal",
+    "duration": 2,
+    "channels": [
+      "cap.translation",
+      "knob.rotation",
+      "grille.weights"
+    ]
+  },
+  "texture": {
+    "size": 64,
+    "png": 382,
+    "ktx2": 16608
+  },
+  "files": {
+    "atelier.glb": {
+      "bytes": 55516,
+      "sha256": "c84aba557b8b8ec52e7af566e439dabdf4ad500e5d8e704421fb480ff32fa1e8"
+    },
+    "atelier.draco.glb": {
+      "bytes": 16476,
+      "sha256": "8f616c686d3118d8db47cda3e7091d07deb4ff6b0d7ef58d4da00ca774c5ff72"
+    },
+    "atelier.meshopt.glb": {
+      "bytes": 35340,
+      "sha256": "3548169463c402604d006c9ab7aae4edf9b1eda183e52d70a61fc126ef6e5e22"
+    },
+    "atelier.ktx2.glb": {
+      "bytes": 71868,
+      "sha256": "6655acda2c380a04dad7722a3c2b29cc3eb284142d86ce9f44b6d165ae959ad3"
+    },
+    "atelier.untextured.glb": {
+      "bytes": 54872,
+      "sha256": "35d9554a5cbb576daffff9a4ba235a6d97e0fc7f9bb8e233081ea4d64530b8e3"
+    },
+    "label.ktx2": {
+      "bytes": 16608,
+      "sha256": "a8ad88c77874909371b6c6c61e8c214d1c21712675cd43029f6cef3e4b9a8a12"
+    },
+    "label.png": {
+      "bytes": 382,
+      "sha256": "e9285f9805ddecccf961bae33d594a6e222213990475bd672aa6f7aa8ce5e8a5"
+    },
+    "atelier.truncated.glb": {
+      "bytes": 33309,
+      "sha256": "6f54c23585ab741bad5ee02b6e6a4766948afbcf3071a705dfffad2c88133dcc"
+    }
+  }
+}
