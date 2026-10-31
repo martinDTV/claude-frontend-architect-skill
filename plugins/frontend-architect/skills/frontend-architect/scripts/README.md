@@ -139,6 +139,25 @@ With the semantic engine, `leak-patterns` reads every GSAP call with its AST con
 
 Not reported: tweens in event handlers and factories, one-off `gsap.set` under a client guard, anything in a `.client.` file. Fixtures with truths written first: `verification/tools/fixtures/motion-nuxt` (10 files) and `motion-next` (9 files), precision and recall 100% on both; the historical fixtures gain no finding. Known noise: the 1.3 `leak-gsap` pair rule still fires on the same files (and on guarded or factory code it cannot read); it stays for compatibility and for the lexical engine.
 
+## 3D rules (leak-patterns, 1.5, increment 3)
+
+With the semantic engine, `leak-patterns` also reads every Three.js construction (`new X` where `X` is imported from `three`, `three/webgpu` or `three/addons/*`, as a namespace or a named import; never by name alone) and the lifecycle calls around it (`dispose`, `setAnimationLoop`, `requestAnimationFrame`/`cancelAnimationFrame`, `setPixelRatio`, loader `load`, anything carrying the `webglcontextlost` string, `needsUpdate` and uniform-box writes, transform writes), each with its AST context plus whether it sits inside a frame callback (a function passed to `useFrame`, `onBeforeRender`/`onRender`/`onLoop`, `setAnimationLoop`, `requestAnimationFrame`, `gsap.ticker.add` or `loop.add`, or a function named in such a call anywhere in the file) and whether a condition guards it. The lexical engine keeps the 1.3 pair count (`leak-three`); the report says `threeRules: inactive` there.
+
+| Finding | Condition | Level |
+|---|---|---|
+| `three-resource-in-frame-loop` | a geometry, material, texture, render target, loader, pass, composer or scene object constructed inside a frame callback | confirmed/high (medium for scene objects); heuristic under an `if`/ternary/`&&` guard (a lazy init) |
+| `three-renderer-outside-client-lifecycle` | a renderer at module scope (confirmed), at the top level of `<script setup>` (confirmed on Nuxt with SSR) or in a React render body (heuristic); exempt: client guards, `.client.` files | confirmed / heuristic |
+| `three-load-outside-client-lifecycle` | a loader's `load()`/`loadAsync()` in the same places | heuristic/medium |
+| `three-animation-loop-without-stop` | `setAnimationLoop(fn)` or a `requestAnimationFrame` loop in a file with no `setAnimationLoop(null)`, `cancelAnimationFrame`, `.stop()`, `runtime.dispose()`; confirmed when the React effect returns no cleanup or the Vue component has no unmount hook at all | confirmed/high / heuristic/medium |
+| `three-owned-resource-without-dispose` | geometries, materials, textures, render targets or renderers created inside a lifecycle hook (or a React effect) in a file with no `.dispose(`, registry (`registry.own`, `stack.track`), `disposeObject`/`disposeSceneGraph` or `createSceneRuntime` | heuristic/medium, never confirmed (ownership may live in another module) |
+| `three-context-loss-unhandled` | a renderer is created and nothing in the file mentions `webglcontextlost` or uses the runtime | info/low |
+| `three-unclamped-pixel-ratio` | `setPixelRatio(…devicePixelRatio…)` with no `Math.min`, clamp or ternary | heuristic/medium |
+| `three-material-recompile-in-frame-loop` | `<material>.needsUpdate = true` inside a frame callback | heuristic/medium |
+| `three-uniform-object-in-frame-loop` | `uniforms.x = { … }` inside a frame callback | heuristic/low |
+| `three-competing-animation-drivers` | a GSAP tween targets a transform (`camera.position`, `mesh.rotation`…) that a frame callback in the same file also writes | heuristic/medium |
+
+Not reported: factories that return their disposal, declarative TresJS and React Three Fiber elements (the framework owns them), math objects (`Vector3`, `Matrix4`) in loops, anything in a `.client.` file for the SSR rules. Not statically verifiable and therefore not a rule: adaptive quality beyond the pixel-ratio clamp, correct disposal when ownership crosses modules, shader compilation success (the browser checks cover it). Fixtures with truths written first: `verification/tools/fixtures/three-nuxt` (12 files) and `three-next` (11 files), precision and recall 100% on both; the historical and motion fixtures gain no finding; the documented engine, experiences and labs of the verification projects are clean (one true positive on the 1.3 `createScene` example led to a fix there).
+
 ## Public routes (routes-audit)
 
 A page needs no guard when `publicRoutes` in the config matches it, or when its route starts with one of the generic names the tool treats as public by default: `auth`, `login`, `logout`, `register`, `signup`, `signin`, `sign-in`, `sign-up`, `callback`, `forgot-password`, `reset-password`, `verify-email`, `forbidden`, `no-access`, `unauthorized`, `suspended`, `maintenance`, `error`, `403`, `404`, `500`. Anything specific to a product (a public status page, a legal page, a kiosk route) goes in `publicRoutes`; the default list carries no project names.

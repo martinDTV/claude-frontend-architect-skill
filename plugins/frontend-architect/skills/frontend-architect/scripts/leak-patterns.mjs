@@ -31,6 +31,22 @@ Motion rules (1.5, semantic engine only; the lexical engine keeps the leak-gsap 
   motion-without-reduced-motion scroll-driven, pinned or infinite motion with no prefers-reduced-motion branch in the file (heuristic)
 Recognised cleanup: useGSAP, ctx.revert()/mm.revert(), tween.kill()/trigger.kill(), ScrollTrigger.killAll, getAll()+kill. A tween in an
 event handler or a factory function is not reported. .client.vue files and import.meta.client guards are exempt from the SSR rule.
+
+  3D rules (1.5, semantic engine only; Three.js classes recognised through the file's imports from three):
+    three-resource-in-frame-loop        confirmed  a geometry, material, texture, render target, loader, pass or object
+                                                   constructed inside a frame callback (useFrame, onBeforeRender,
+                                                   setAnimationLoop, a requestAnimationFrame loop); heuristic under a guard
+    three-renderer-outside-client-lifecycle confirmed/heuristic  a renderer built at module scope, at the top level of
+                                                   <script setup> (SSR) or in a React render body; .client. files exempt
+    three-load-outside-client-lifecycle heuristic  a loader's load() outside the client lifecycle
+    three-animation-loop-without-stop   confirmed/heuristic  a loop started with nothing in the file that stops it
+    three-owned-resource-without-dispose heuristic resources created in the lifecycle with no dispose, registry or cleanup
+                                                   stack in the file (never confirmed: ownership may live elsewhere)
+    three-context-loss-unhandled        info       a renderer with no webglcontextlost listener
+    three-unclamped-pixel-ratio         heuristic  setPixelRatio(devicePixelRatio) with no ceiling
+    three-material-recompile-in-frame-loop heuristic material.needsUpdate in a frame callback (a shader recompile)
+    three-uniform-object-in-frame-loop  heuristic  uniforms.x = { value } in a frame callback (write .value instead)
+    three-competing-animation-drivers   heuristic  a GSAP tween and a frame callback writing the same transform
 `
 
 export const RESOURCES = [
@@ -133,6 +149,102 @@ export function scanMotion(info, project) {
   return out
 }
 
+const THREE_CREATES = new Set(['renderer', 'renderTarget', 'geometry', 'material', 'texture', 'loader', 'composer', 'pass', 'object'])
+const THREE_GPU = new Set(['renderer', 'renderTarget', 'geometry', 'material', 'texture', 'composer', 'pass'])
+const DISPOSE_EVIDENCE_RE = /\b(?:registry|stack|cleanup)\.(?:own|track|add)\(|createSceneRuntime\(|createCleanupStack\(|disposeObject|disposeSceneGraph|disposeObject3D|\.dispose\(/
+const LOOP_STOP_RE = /setAnimationLoop\(\s*null|cancelAnimationFrame\(|\.stop\(\)|runtime\.dispose\(|loop\.stop\(/
+const UNMOUNT_HOOK_RE = /\b(?:onBeforeUnmount|onUnmounted|onScopeDispose)\b/
+const CONTEXT_LOSS_RE = /webglcontextlost|createSceneRuntime\(/
+const normalizeTarget = (t) => String(t ?? '').replace(/\s+/g, '').replace(/^\(|\)$/g, '')
+
+/** 3D rules (1.5): Three.js constructions and lifecycle calls judged with their AST context (frame loop, lifecycle, guard). */
+export function scanThree(info, project) {
+  const uses = info.semantic?.threeUses ?? []
+  if (!uses.length) return []
+  const clientOnly = /\.client\.[cm]?[jt]sx?$|\.client\.vue$/.test(info.rel)
+  const isReact = /\.[jt]sx$/.test(info.rel)
+  const ssrOff = project.nuxt ? project.nuxt.ssr === false : false
+  const text = info.stripped ?? ''
+  const has = (kind) => uses.some((u) => u.kind === kind)
+  const creates = uses.filter((u) => THREE_CREATES.has(u.kind))
+  const disposeEvidence = has('dispose') || DISPOSE_EVIDENCE_RE.test(text)
+  const loopStopEvidence = has('loop-stop') || LOOP_STOP_RE.test(text)
+  const out = []
+  const seen = new Set()
+  const push = (f) => {
+    const key = `${f.id}|${f.line}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(f)
+    }
+  }
+  // 1. allocation inside the frame loop
+  for (const u of creates) {
+    if (!u.inFrameLoop) continue
+    const gpu = THREE_GPU.has(u.kind) || u.kind === 'loader'
+    push({ id: 'three-resource-in-frame-loop', level: u.guardedBranch ? 'heuristic' : 'confirmed', severity: gpu ? 'high' : 'medium', line: u.line, message: u.guardedBranch ? `${u.name}() inside the frame loop (${u.frameCallee}) under a condition: a one-time lazy init if the condition flips once, a per-frame allocation if it does not` : `${u.name}() inside the frame loop (${u.frameCallee}): ${gpu ? 'a GPU resource allocated' : 'a scene object created'} every frame`, fix: 'create it once outside the loop (mount, effect, factory) and reuse it; update uniforms, attributes or transforms per frame instead' })
+  }
+  // 2. renderer or load outside the client lifecycle
+  for (const u of uses) {
+    if (!(u.kind === 'renderer' || u.kind === 'load') || u.inFrameLoop || clientOnly || u.guarded) continue
+    if (u.calls.some((c) => CLIENT_LIFECYCLE.has(c))) continue
+    const setupLevel = u.topLevel && info.isVue && info.setup
+    const moduleScope = u.topLevel && !setupLevel
+    const renderBody = isReact && u.inFunction && /^[A-Z]/.test(u.enclosingFunction ?? '') && !u.calls.length
+    if (!moduleScope && !setupLevel && !renderBody) continue
+    const where = moduleScope ? 'at module scope' : setupLevel ? 'at the top level of <script setup>' : `in the render body of ${u.enclosingFunction}`
+    if (u.kind === 'renderer') push({ id: 'three-renderer-outside-client-lifecycle', level: moduleScope || (setupLevel && project.framework === 'nuxt' && !ssrOff) ? 'confirmed' : 'heuristic', severity: ssrOff ? 'medium' : 'high', line: u.line, message: `${u.name}() ${where}: a renderer needs a canvas and a GL context, which do not exist during server rendering${moduleScope ? ', and one renderer is then shared by every instance' : ''}`, fix: 'create the renderer in onMounted / useEffect (or a runtime created there) and dispose it on unmount; .client.vue or a dynamic import with ssr: false for the whole module' })
+    else push({ id: 'three-load-outside-client-lifecycle', level: 'heuristic', severity: 'medium', line: u.line, message: `${u.name}() ${where}: the asset is requested during server rendering or on every render`, fix: 'load in the client lifecycle (onMounted, useEffect) or through the framework loader hooks (useLoader, useGLTF) that cache and dispose' })
+  }
+  // 3. a loop with nothing that stops it
+  const starts = uses.filter((u) => u.kind === 'loop-start')
+  if (starts.length && !loopStopEvidence) {
+    const first = starts[0]
+    let level = 'heuristic'
+    let reason = 'nothing in this file stops it'
+    if (isReact && first.effect && /^use(?:Layout|Insertion)?Effect$/.test(first.effect.hook) && first.effect.hasCleanupReturn === false) {
+      level = 'confirmed'
+      reason = `${first.effect.hook} returns no cleanup: the loop survives unmount and Strict Mode starts it twice`
+    } else if (info.isVue && !UNMOUNT_HOOK_RE.test(text)) {
+      level = 'confirmed'
+      reason = 'the component has no onBeforeUnmount / onUnmounted at all'
+    }
+    push({ id: 'three-animation-loop-without-stop', level, severity: level === 'confirmed' ? 'high' : 'medium', line: first.line, message: `${first.name} starts a frame loop and ${reason}`, fix: 'renderer.setAnimationLoop(null) or cancelAnimationFrame(id) in the unmount hook / effect cleanup; a runtime whose dispose() stops the loop' })
+  }
+  // 4. own resources with no disposal in sight (never confirmed)
+  const owned = creates.filter((u) => !u.inFrameLoop && THREE_GPU.has(u.kind) && (u.calls.some((c) => CLIENT_LIFECYCLE.has(c)) || (isReact && u.effect)))
+  if (owned.length && !disposeEvidence) {
+    const kinds = [...new Set(owned.map((u) => u.kind))].join(', ')
+    push({ id: 'three-owned-resource-without-dispose', level: 'heuristic', severity: 'medium', line: owned[0].line, message: `${owned.length} Three.js resource(s) (${kinds}) created in the component lifecycle with no dispose(), resource registry or cleanup stack in this file`, fix: 'register what you create (registry.own, stack.track) and dispose it on unmount; if another module owns these resources, say so where they are created' })
+  }
+  // 5. context loss
+  if (creates.some((u) => u.kind === 'renderer' && !u.inFrameLoop) && !has('context-lost-listener') && !CONTEXT_LOSS_RE.test(text)) {
+    const r = creates.find((u) => u.kind === 'renderer')
+    push({ id: 'three-context-loss-unhandled', level: 'info', severity: 'low', line: r.line, message: 'a renderer is created here and nothing listens for webglcontextlost: on a lost context the loop keeps rendering into nothing and GPU state is not rebuilt on restore', fix: 'canvas.addEventListener("webglcontextlost", e => { e.preventDefault(); stop() }) and rebuild on webglcontextrestored, or use a runtime that does' })
+  }
+  // 6. pixel ratio without a ceiling
+  for (const u of uses.filter((x) => x.kind === 'pixel-ratio')) {
+    const arg = u.arg ?? ''
+    if (/devicePixelRatio/.test(arg) && !/Math\.min|clamp|Math\.max\(\s*1|\?/.test(arg)) push({ id: 'three-unclamped-pixel-ratio', level: 'heuristic', severity: 'medium', line: u.line, message: `setPixelRatio(${arg}): a 3× phone renders nine times the pixels of 1×`, fix: 'Math.min(window.devicePixelRatio, 2) (1.5 with heavy post-processing), or a quality tier that sets it' })
+  }
+  // 7. recompiles and uniform objects per frame
+  for (const u of uses.filter((x) => x.kind === 'needs-update' && x.inFrameLoop && /material/i.test(x.object ?? ''))) push({ id: 'three-material-recompile-in-frame-loop', level: 'heuristic', severity: 'medium', line: u.line, message: `${u.name} true inside the frame loop (${u.frameCallee}): a material flagged for update recompiles its program`, fix: 'set needsUpdate once when defines or the shader change; animate through uniforms' })
+  for (const u of uses.filter((x) => x.kind === 'uniform-object' && x.inFrameLoop)) push({ id: 'three-uniform-object-in-frame-loop', level: 'heuristic', severity: 'low', line: u.line, message: `${u.name} inside the frame loop (${u.frameCallee}): a new box per frame instead of a value write`, fix: 'uniforms.x.value = …; the material keeps the box it was created with' })
+  // 8. a tween and the loop writing the same transform
+  const tweens = (info.semantic?.motionUses ?? []).filter((m) => m.kind === 'tween' && m.target)
+  const loopWrites = uses.filter((u) => u.kind === 'transform-write' && u.inFrameLoop)
+  const reported = new Set()
+  for (const t of tweens) {
+    const target = normalizeTarget(t.target)
+    if (!target || reported.has(target)) continue
+    const write = loopWrites.find((w) => { const o = normalizeTarget(w.object); return o === target || o.startsWith(`${target}.`) || target.startsWith(`${o}.`) })
+    if (!write) continue
+    reported.add(target)
+    push({ id: 'three-competing-animation-drivers', level: 'heuristic', severity: 'medium', line: write.line, message: `${target} is tweened by GSAP (line ${t.line}) and written by the frame loop (${write.name}, ${write.frameCallee}): two drivers for one property`, fix: 'one owner per property: let the tween write a proxy the loop reads, or stop the loop write while the tween runs (claim it on the update loop)' })
+  }
+  return out
+}
+
 export function run(argv) {
   const args = parseArgs(argv)
   if (args.help || !args._[0]) return usage(HELP)
@@ -149,6 +261,7 @@ export function run(argv) {
   const rows = []
   let scanned = 0
   let motionFindings = 0
+  let threeFindings = 0
   const byResource = {}
   let graph
   try {
@@ -165,6 +278,10 @@ export function run(argv) {
       motionFindings++
       addFinding(report, { ...f, file: info.rel })
     }
+    for (const f of scanThree(info, project)) {
+      threeFindings++
+      addFinding(report, { ...f, file: info.rel })
+    }
     for (const r of resources) {
       byResource[r.id] = (byResource[r.id] ?? 0) + r.creates
       rows.push({ file: info.rel, ...r, hasCleanupHook, cleanupSource })
@@ -175,7 +292,7 @@ export function run(argv) {
       }
     }
   }
-  report.summary = { filesScanned: scanned, filesWithResources: new Set(rows.map((r) => r.file)).size, resourcesByType: byResource, potentialLeaks: report.findings.length, motionFindings, motionRules: graph.analysis?.engine === 'semantic' ? 'active' : 'inactive (lexical engine)' }
+  report.summary = { filesScanned: scanned, filesWithResources: new Set(rows.map((r) => r.file)).size, resourcesByType: byResource, potentialLeaks: report.findings.length, motionFindings, motionRules: graph.analysis?.engine === 'semantic' ? 'active' : 'inactive (lexical engine)', threeFindings, threeRules: graph.analysis?.engine === 'semantic' ? 'active' : 'inactive (lexical engine)' }
   report.data = { rows }
   const sections = rows.length ? [{ title: 'Resources per file', table: { headers: ['file', 'resource', 'creates', 'cleanups', 'first line', 'unmount hook'], rows: rows.map((r) => [r.file, r.id, r.creates, r.cleanups, r.firstLine, r.hasCleanupHook ? 'yes' : 'no']) } }] : []
   return finish(report, args, { sections })

@@ -1,0 +1,16 @@
+{
+  "$comment": "Expected ids of the 1.5 3D rules per file (semantic engine). Motion rules are not part of this truth. Written before the rules ran.",
+  "files": {
+    "src/components/three/GoodEffectRuntime.tsx": { "must": [], "mustNot": ["three-resource-in-frame-loop", "three-renderer-outside-client-lifecycle", "three-animation-loop-without-stop", "three-owned-resource-without-dispose", "three-context-loss-unhandled", "three-unclamped-pixel-ratio"] },
+    "src/components/three/UseFrameAllocates.tsx": { "must": ["three-resource-in-frame-loop"], "mustNot": ["three-animation-loop-without-stop", "three-owned-resource-without-dispose"], "levels": { "three-resource-in-frame-loop": "confirmed" } },
+    "src/components/three/RenderBodyRenderer.tsx": { "must": ["three-renderer-outside-client-lifecycle", "three-context-loss-unhandled"], "mustNot": ["three-animation-loop-without-stop"], "levels": { "three-renderer-outside-client-lifecycle": "heuristic" } },
+    "src/components/three/EffectNoCleanupLoop.tsx": { "must": ["three-animation-loop-without-stop", "three-owned-resource-without-dispose", "three-context-loss-unhandled"], "mustNot": ["three-resource-in-frame-loop", "three-renderer-outside-client-lifecycle"], "levels": { "three-animation-loop-without-stop": "confirmed", "three-owned-resource-without-dispose": "heuristic" } },
+    "src/components/three/GoodR3F.tsx": { "must": [], "mustNot": ["three-resource-in-frame-loop", "three-animation-loop-without-stop", "three-owned-resource-without-dispose", "three-competing-animation-drivers"] },
+    "src/components/three/LoaderInRender.tsx": { "must": ["three-load-outside-client-lifecycle"], "mustNot": ["three-renderer-outside-client-lifecycle", "three-resource-in-frame-loop"], "levels": { "three-load-outside-client-lifecycle": "heuristic" } },
+    "src/components/three/UniformsRecreated.tsx": { "must": ["three-uniform-object-in-frame-loop", "three-material-recompile-in-frame-loop"], "mustNot": ["three-resource-in-frame-loop", "three-owned-resource-without-dispose"], "levels": { "three-uniform-object-in-frame-loop": "heuristic", "three-material-recompile-in-frame-loop": "heuristic" } },
+    "src/components/three/CompetingDrivers.tsx": { "must": ["three-competing-animation-drivers"], "mustNot": ["three-resource-in-frame-loop", "three-animation-loop-without-stop"], "levels": { "three-competing-animation-drivers": "heuristic" } },
+    "src/components/three/GoodDisposeViaStack.tsx": { "must": [], "mustNot": ["three-owned-resource-without-dispose", "three-animation-loop-without-stop", "three-context-loss-unhandled", "three-renderer-outside-client-lifecycle"] },
+    "src/lib/three/moduleRenderer.ts": { "must": ["three-renderer-outside-client-lifecycle", "three-context-loss-unhandled"], "mustNot": [], "levels": { "three-renderer-outside-client-lifecycle": "confirmed" } },
+    "src/lib/lifecycle/cleanup-stack.ts": { "must": [], "mustNot": ["three-owned-resource-without-dispose"] }
+  }
+}
