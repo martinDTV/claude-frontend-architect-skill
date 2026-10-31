@@ -59,6 +59,14 @@ export function createScene(canvas: HTMLCanvasElement, onFrame: (delta: number) 
 
   const onVisibility = () => renderer.setAnimationLoop(document.hidden ? null : loop)
   document.addEventListener('visibilitychange', onVisibility)
+  // a lost context stops the loop (rendering into nothing); the browser restores it and the loop resumes
+  const onContextLost = (event: Event) => {
+    event.preventDefault()
+    renderer.setAnimationLoop(null)
+  }
+  const onContextRestored = () => renderer.setAnimationLoop(loop)
+  canvas.addEventListener('webglcontextlost', onContextLost)
+  canvas.addEventListener('webglcontextrestored', onContextRestored)
 
   return {
     scene,
@@ -66,6 +74,8 @@ export function createScene(canvas: HTMLCanvasElement, onFrame: (delta: number) 
     renderer,
     dispose: () => {
       document.removeEventListener('visibilitychange', onVisibility)
+      canvas.removeEventListener('webglcontextlost', onContextLost)
+      canvas.removeEventListener('webglcontextrestored', onContextRestored)
       observer.disconnect()
       renderer.setAnimationLoop(null)
       disposeObject(scene)
