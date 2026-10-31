@@ -68,23 +68,23 @@
   "files": {
     "atelier.glb": {
       "bytes": 55516,
-      "sha256": "c84aba557b8b8ec52e7af566e439dabdf4ad500e5d8e704421fb480ff32fa1e8"
+      "sha256": "90e4903516c1392898940c5ff2d059e8b1450e9e9b3f59119a04c7fdd4413b2d"
     },
     "atelier.draco.glb": {
       "bytes": 16476,
-      "sha256": "8f616c686d3118d8db47cda3e7091d07deb4ff6b0d7ef58d4da00ca774c5ff72"
+      "sha256": "58eb13f115dac3af6e3c33d9d412709c4ba6f3cb630cda4eea14f3dc868534b4"
     },
     "atelier.meshopt.glb": {
       "bytes": 35340,
-      "sha256": "3548169463c402604d006c9ab7aae4edf9b1eda183e52d70a61fc126ef6e5e22"
+      "sha256": "0182b6142c705e7dc19922d1bc04ece6e7fb83facb7602455d6b3c7bb2aa8fb4"
     },
     "atelier.ktx2.glb": {
-      "bytes": 71868,
-      "sha256": "6655acda2c380a04dad7722a3c2b29cc3eb284142d86ce9f44b6d165ae959ad3"
+      "bytes": 71872,
+      "sha256": "c2b29ea7e4919a8241c31e38360c21896f4c35802446c4a56775b06da4ff7ebb"
     },
     "atelier.untextured.glb": {
       "bytes": 54872,
-      "sha256": "35d9554a5cbb576daffff9a4ba235a6d97e0fc7f9bb8e233081ea4d64530b8e3"
+      "sha256": "bda3dfdadaa2737c6fe55fd3711f4446e5cd08dc44bb4322140b826fca066f09"
     },
     "label.ktx2": {
       "bytes": 16608,
@@ -96,7 +96,7 @@
     },
     "atelier.truncated.glb": {
       "bytes": 33309,
-      "sha256": "6f54c23585ab741bad5ee02b6e6a4766948afbcf3071a705dfffad2c88133dcc"
+      "sha256": "c46db398f93e51e5f71d5d293e4195424ffb2a3790d4c73d9cb2c7d159e7742a"
     }
   }
 }

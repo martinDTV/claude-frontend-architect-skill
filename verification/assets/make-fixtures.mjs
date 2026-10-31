@@ -40,7 +40,7 @@ const materials = {
   paint: { name: 'paint', baseColorFactor: [0.12, 0.14, 0.18, 1], metallicFactor: 0.9, roughnessFactor: 0.35 },
   grille: { name: 'grille', baseColorFactor: [0.75, 0.72, 0.68, 1], metallicFactor: 1, roughnessFactor: 0.5 },
   brass: { name: 'brass', baseColorFactor: [0.85, 0.6, 0.25, 1], metallicFactor: 1, roughnessFactor: 0.3 },
-  cap: { name: 'cap', baseColorFactor: [0.9, 0.9, 0.92, 1], metallicFactor: 0.2, roughnessFactor: 0.25 },
+  cap: { name: 'cap', baseColorFactor: [0.8, 0.78, 0.74, 1], metallicFactor: 0.05, roughnessFactor: 0.55 }, // warm off-white ceramic: a 0.9 albedo plate blew out to white under the key
   label: { name: 'label', baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 0.6, textured: true },
 }
 const materialOrder = Object.keys(materials)
