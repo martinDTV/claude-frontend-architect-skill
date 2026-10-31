@@ -17,7 +17,7 @@ const PLUGINS = {
 }
 
 /** Builds a fake ~/.claude and a project directory; returns their paths. */
-function makeEnv({ plugins = [], skills = [], userSettings = {}, projectSettings = null, localSettings = null, marketplaces = [] } = {}) {
+function makeEnv({ plugins = [], skills = [], userSettings = {}, projectSettings = null, localSettings = null, marketplaces = [], projectDeps = null } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'fa-cap-home-'))
   const project = mkdtempSync(join(tmpdir(), 'fa-cap-project-'))
   const configDir = join(home, '.claude')
@@ -53,6 +53,7 @@ function makeEnv({ plugins = [], skills = [], userSettings = {}, projectSettings
     }
   }
   writeFileSync(join(configDir, 'settings.json'), JSON.stringify({ enabledPlugins: enabled, ...userSettings }, null, 2))
+  if (projectDeps) writeFileSync(join(project, 'package.json'), JSON.stringify({ name: 'fixture', private: true, dependencies: Object.fromEntries(projectDeps.map((d) => [d, '*'])) }))
   if (projectSettings) {
     mkdirSync(join(project, '.claude'), { recursive: true })
     writeFileSync(join(project, '.claude', 'settings.json'), JSON.stringify(projectSettings, null, 2))
@@ -236,12 +237,17 @@ test('unknown and lookalike skills: a name is not availability', () => {
 
 test('technical requests never get a design collaborator, even when every integration is available', () => {
   const env = makeEnv({ plugins: [{ key: 'frontend-design' }, { key: 'ui-ux-pro-max' }], skills: [{ name: 'impeccable', source: 'user' }] })
-  for (const task of ['Fix a technical defect without changing the design', 'Refactor components keeping their contracts', 'Audit the accessibility of the app', 'Implement a GSAP scroll animation']) {
+  for (const task of ['Fix a technical defect without changing the design', 'Refactor components keeping their contracts', 'Audit the accessibility of the app']) {
     const report = plan(env, task)
     assert.equal(report.summary.selected, 'none', task)
     assert.equal(byId(report, 'no-external-collaboration').length, 1, task)
     assert.equal(byId(report, 'collaboration-selected').length, 0, task)
   }
+  // motion with GSAP named but no GSAP skill installed: the owner continues, nothing selected, no design skill
+  const motion = plan(env, 'Implement a GSAP scroll animation')
+  assert.equal(motion.summary.selected, 'none')
+  assert.equal(byId(motion, 'collaboration-selected').length, 0)
+  assert.equal(byId(motion, 'external-fallback').length, 1)
   // a 3D-led experience keeps design collaborators out: creative-frontend leads
   const three = plan(env, 'Design a Three.js experience for the hero')
   assert.equal(three.summary.selected, 'none')
@@ -274,4 +280,53 @@ test('deterministic: equivalent tasks and repeated runs produce the same plan; t
   assert.deepEqual(a.data.plan, c.data.plan)
   assert.deepEqual(a.findings.map((f) => `${f.id}|${f.message}`), c.findings.map((f) => `${f.id}|${f.message}`))
   assert.deepEqual([...listing(env.home), ...listing(env.project)], before, 'no file created in the home or the project')
+})
+
+const GSAP_SKILLS = ['gsap-core', 'gsap-timeline', 'gsap-scrolltrigger', 'gsap-react', 'gsap-frameworks', 'gsap-performance', 'gsap-plugins', 'gsap-utils'].map((name) => ({ name, source: 'user' }))
+
+test('GSAP skills: gated behind the task naming GSAP or the project depending on it; chosen by sub-capability, one group per plan', () => {
+  const env = makeEnv({ skills: GSAP_SKILLS })
+  // motion without GSAP named and without the dependency: internal owner, gate reported, nothing selected
+  const plain = plan(env, 'Animate the hero on load')
+  assert.equal(plain.summary.selected, 'none')
+  assert.match(row(plain, 'motion-design').fallback, /skills are not consulted/)
+  assert.equal(byId(plain, 'external-gated').length, 1)
+  assert.equal(byId(plain, 'collaboration-selected').length, 0)
+  // GSAP named: the scroll skill, alone, with the reason
+  const scroll = plan(env, 'Implement a GSAP scroll animation')
+  assert.equal(scroll.summary.selected, 'gsap-scrolltrigger')
+  assert.deepEqual(scroll.data.plan.selectedGroups, ['gsap'])
+  assert.match(row(scroll, 'motion-design').selectionReason, /sub-capability match/)
+  assert.ok(row(scroll, 'motion-design').alternatives.includes('gsap-core'))
+  assert.equal(byId(scroll, 'collaboration-selected').length, 1)
+  // a timeline in React: two skills of the same group count as one external integration
+  const react = plan(env, 'Build a GSAP timeline sequence for a React component')
+  assert.equal(react.summary.selected, 'gsap-timeline,gsap-react')
+  assert.equal(row(react, 'motion-design').coCollaborators.length, 1)
+  assert.equal(byId(react, 'collaboration-selected').length, 2)
+  // the project framework adds the framework skill even when the task does not name it
+  const nuxt = makeEnv({ skills: GSAP_SKILLS, projectDeps: ['nuxt', 'vue', 'gsap'] })
+  const dep = plan(nuxt, 'Animate the hero with a scroll-linked reveal')
+  assert.equal(dep.summary.selected, 'gsap-scrolltrigger,gsap-frameworks', 'gsap is a dependency: the gate opens without naming it; scroll and the Vue/Nuxt skill')
+  // nothing specific named with the dependency present: the core skill only
+  const core = plan(makeEnv({ skills: GSAP_SKILLS, projectDeps: ['gsap'] }), 'Animate the hero on load')
+  assert.equal(core.summary.selected, 'gsap-core')
+  const coreReact = plan(makeEnv({ skills: GSAP_SKILLS, projectDeps: ['gsap', 'react', 'next'] }), 'Animate the hero on load')
+  assert.equal(coreReact.summary.selected, 'gsap-core,gsap-react', 'nothing specific named, React project: core plus the React skill')
+  assert.match(row(core, 'motion-design').selectionReason, /core skill/)
+  // GSAP skills never cover design capabilities, and design skills never cover motion
+  const mixed = makeEnv({ skills: [...GSAP_SKILLS, { name: 'impeccable', source: 'user' }], plugins: [{ key: 'ui-ux-pro-max' }] })
+  const landing = plan(mixed, 'Design a premium landing page with GSAP scroll animations')
+  assert.equal(landing.summary.selected, 'ui-ux-pro-max', 'one external group by default: the design plugin wins the slot, GSAP is deferred')
+  assert.deepEqual(row(landing, 'motion-design').deferred, ['gsap-scrolltrigger'])
+  const both = plan(mixed, 'Design a premium landing page with GSAP scroll animations', ['--max-external', '2'])
+  assert.equal(both.summary.selected, 'ui-ux-pro-max,gsap-scrolltrigger')
+  assert.equal(row(both, 'visual-direction').collaborator.id, 'ui-ux-pro-max')
+  assert.equal(row(both, 'motion-design').collaborator.id, 'gsap-scrolltrigger')
+  // a GSAP skill that is disabled or missing is not selected; the owner continues
+  const off = makeEnv({ skills: GSAP_SKILLS, userSettings: { skillOverrides: { 'gsap-scrolltrigger': 'off' } } })
+  const noScroll = plan(off, 'Implement a GSAP scroll animation')
+  assert.equal(noScroll.summary.selected, 'gsap-core', 'the specific skill is disabled: the core skill stands in')
+  assertNoInventedExecution(scroll)
+  assertNoInventedExecution(both)
 })

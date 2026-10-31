@@ -213,7 +213,7 @@ export function detectIntegrations(registry, { configDir, projectDir }) {
   const skills = [...listSkills(join(configDir, 'skills'), 'user'), ...listSkills(join(projectDir, '.claude', 'skills'), 'project')]
   const scopeRank = { local: 3, project: 2, user: 1 }
   const integrations = registry.integrations.map((entry) => {
-    const base = { id: entry.id, kind: entry.kind, invoke: entry.invoke, capabilities: entry.capabilities, license: entry.license, risk: entry.risk, runs: entry.runs, writes: entry.writes, preconditions: entry.preconditions ?? [], state: 'not-installed', version: null, scope: null, enabledBy: null, path: null, reasons: [], execution: 'not-run' }
+    const base = { id: entry.id, kind: entry.kind, group: entry.group ?? null, subcapability: entry.subcapability ?? null, invoke: entry.invoke, capabilities: entry.capabilities, license: entry.license, risk: entry.risk, runs: entry.runs, writes: entry.writes, preconditions: entry.preconditions ?? [], state: 'not-installed', version: null, scope: null, enabledBy: null, path: null, reasons: [], execution: 'not-run' }
     if (entry.match.pluginId) {
       const id = entry.match.pluginId
       const matching = records.filter((r) => r.id === id)
@@ -282,42 +282,94 @@ export function detectIntegrations(registry, { configDir, projectDir }) {
     if (entry.match.pluginId) lookalikes.push({ name: s.name, source: s.source, path: s.dir, note: `a ${s.source} skill named like the ${entry.match.pluginId} plugin; a name is not that plugin, so it is ignored` })
     else if (s.isPluginDir) lookalikes.push({ name: s.name, source: s.source, path: s.dir, note: 'a plugin directory inside a skills folder, not the standalone skill the registry describes; ignored' })
   }
+  const pkg = readJsonSafe(join(projectDir, 'package.json'))
+  const projectDeps = Object.keys({ ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) })
   const known = new Set(integrations.filter((i) => i.path).map((i) => realOrSelf(i.path)))
   const unlisted = skills.filter((s) => !known.has(realOrSelf(s.dir)) && !lookalikes.some((l) => l.path === s.dir)).map((s) => ({ name: s.name, source: s.source }))
-  return { integrations, lookalikes, unlisted, settingsRead: chain.filter((s) => s.data).map((s) => s.scope), recordsRead: Boolean(installed), notRead: ['managed settings', '--settings and --plugin-dir of the running session', 'skills synced from claude.ai'] }
+  return { integrations, lookalikes, unlisted, projectDeps, settingsRead: chain.filter((s) => s.data).map((s) => s.scope), recordsRead: Boolean(installed), notRead: ['managed settings', '--settings and --plugin-dir of the running session', 'skills synced from claude.ai'] }
 }
 
 // ---------------------------------------------------------------- plan
-export function buildPlan(registry, needed, detection, { maxExternal = registry.policy?.maxExternalDefault ?? 1 } = {}) {
+const GSAP_GATE_RE = /\bgsap\b|scrolltrigger|scroll trigger|greensock/i
+
+export function buildPlan(registry, needed, detection, { maxExternal = registry.policy?.maxExternalDefault ?? 1, task = '', projectDeps = detection?.projectDeps ?? [] } = {}) {
   const caps = registry.capabilities.filter((c) => needed.includes(c.id))
   const available = (detection?.integrations ?? []).filter((i) => i.state === 'available')
   const coverage = (i) => i.capabilities.filter((c) => needed.includes(c)).length
   const order = new Map(registry.integrations.map((e, idx) => [e.id, idx]))
+  const entryOf = new Map(registry.integrations.map((e) => [e.id, e]))
   const rank = (a, b) => coverage(b) - coverage(a) || order.get(a.id) - order.get(b.id)
+  const text = String(task ?? '').toLowerCase()
+  const chosenGroups = new Set() // an integration without a group is its own group
+  const groupOf = (i) => i.group ?? i.id
   const chosen = new Set()
   const threeDLed = needed.includes('3d-experience')
+  const collaboratorOf = (c) => ({ id: c.id, invoke: c.invoke, version: c.version, scope: c.scope, risk: c.risk, preconditions: c.preconditions, subcapability: c.subcapability ?? null, execution: 'not-run', evidenceRequired: `a Skill tool invocation of "${c.invoke}" in this session and its result` })
   const rows = caps.map((cap) => {
-    const row = { capability: cap.id, owner: cap.owner, coOwner: cap.coOwner ?? null, externalAllowed: Boolean(cap.externalAllowed), collaborator: null, alternatives: [], deferred: [], fallback: `${cap.owner}${cap.coOwner ? ` with ${cap.coOwner}` : ''} (internal, always applies)` }
+    const row = { capability: cap.id, owner: cap.owner, coOwner: cap.coOwner ?? null, externalAllowed: Boolean(cap.externalAllowed), collaborator: null, coCollaborators: [], alternatives: [], deferred: [], fallback: `${cap.owner}${cap.coOwner ? ` with ${cap.coOwner}` : ''} (internal, always applies)` }
     if (!cap.externalAllowed) return row
     if (threeDLed) {
       row.externalAllowed = false
       row.fallback = `${row.fallback}; 3D-led experience: creative-frontend leads and the registry's design skills are not 3D-aware`
       return row
     }
-    const candidates = available.filter((i) => i.capabilities.includes(cap.id)).sort(rank)
+    if (cap.externalGroup) {
+      // a gated group (GSAP): only when the task names it or the project already depends on it
+      const group = registry.groups?.[cap.externalGroup]
+      const gateOpen = GSAP_GATE_RE.test(text) || projectDeps.includes('gsap') || projectDeps.includes('@gsap/react')
+      if (!gateOpen) {
+        row.externalAllowed = false
+        row.fallback = `${row.fallback}; ${cap.externalGroup} skills are not consulted: the task does not name it and the project does not depend on it (CSS, View Transitions or Motion first)`
+        return row
+      }
+      const members = available.filter((i) => i.group === cap.externalGroup && i.capabilities.includes(cap.id))
+      const hits = (i) => {
+        const when = entryOf.get(i.id)?.when ?? []
+        let n = when.filter((w) => hasWord(text, w)).length
+        if (i.id === 'gsap-react' && projectDeps.some((d) => /^(react|next)$/.test(d))) n++
+        if (i.id === 'gsap-frameworks' && projectDeps.some((d) => /^(vue|nuxt|svelte|@sveltejs\/kit)$/.test(d))) n++
+        return n
+      }
+      // one topic skill (scroll, timeline, performance, plugins, utils; the core skill when nothing is named) plus the
+      // framework skill when the task or the project names the framework: lifecycle and cleanup live there
+      const FRAMEWORK_SKILLS = new Set(['gsap-react', 'gsap-frameworks'])
+      const byHits = (a, b) => hits(b) - hits(a) || order.get(a.id) - order.get(b.id)
+      const topics = members.filter((i) => !FRAMEWORK_SKILLS.has(i.id) && hits(i) > 0).sort(byHits)
+      const frameworks = members.filter((i) => FRAMEWORK_SKILLS.has(i.id) && hits(i) > 0).sort(byHits)
+      const max = group?.maxPerPlan ?? 2
+      const picked = []
+      if (topics.length) picked.push(topics[0])
+      else picked.push(...members.filter((i) => entryOf.get(i.id)?.fallback).slice(0, 1))
+      if (frameworks.length && picked.length < max) picked.push(frameworks[0])
+      for (const t of topics.slice(1)) if (picked.length < max) picked.push(t)
+      const specific = [...topics, ...frameworks]
+      const rest = members.filter((i) => !picked.includes(i))
+      if (!picked.length) return row
+      if (chosenGroups.has(cap.externalGroup) || chosenGroups.size < maxExternal) {
+        chosenGroups.add(cap.externalGroup)
+        for (const c of picked) chosen.add(c.id)
+        row.collaborator = collaboratorOf(picked[0])
+        row.coCollaborators = picked.slice(1).map(collaboratorOf)
+        row.alternatives = rest.map((i) => i.id)
+        row.selectionReason = topics.length || frameworks.length ? `sub-capability match (${picked.map((i) => `${i.id}: ${i.subcapability}`).join('; ')})` : 'nothing specific named: the core skill'
+      } else row.deferred = picked.map((i) => i.id)
+      return row
+    }
+    const candidates = available.filter((i) => i.capabilities.includes(cap.id) && !i.group).sort(rank)
     for (const c of candidates) {
       if (row.collaborator) {
         row.alternatives.push(c.id)
         continue
       }
-      if (chosen.has(c.id) || chosen.size < maxExternal) {
+      if (chosenGroups.has(groupOf(c)) || chosenGroups.size < maxExternal) {
+        chosenGroups.add(groupOf(c))
         chosen.add(c.id)
-        row.collaborator = { id: c.id, invoke: c.invoke, version: c.version, scope: c.scope, risk: c.risk, preconditions: c.preconditions, execution: 'not-run', evidenceRequired: `a Skill tool invocation of "${c.invoke}" in this session and its result` }
+        row.collaborator = collaboratorOf(c)
       } else row.deferred.push(c.id)
     }
     return row
   })
-  return { needed, rows, selectedIntegrations: [...chosen], maxExternal, executionPolicy: registry.policy?.evidence ?? 'recommended, never run by this tool', precedence: registry.policy?.precedence ?? null }
+  return { needed, rows, selectedIntegrations: [...chosen], selectedGroups: [...chosenGroups], maxExternal, executionPolicy: registry.policy?.evidence ?? 'recommended, never run by this tool', precedence: registry.policy?.precedence ?? null }
 }
 
 // ---------------------------------------------------------------- CLI
@@ -349,21 +401,22 @@ export async function run(argv) {
     needed = inference.needed
   }
   const detection = args['no-detect'] ? null : detectIntegrations(registry, { configDir, projectDir })
-  const plan = buildPlan(registry, needed, detection, { maxExternal })
+  const plan = buildPlan(registry, needed, detection, { maxExternal, task: args.task ? String(args.task) : '', projectDeps: detection?.projectDeps ?? [] })
 
   const report = createReport('capabilities', { root: projectDir, framework: 'any', config: null, notes: [] })
   report.analysis = { engine: args['no-detect'] ? 'registry' : 'registry+settings', mode: args['no-detect'] ? 'plan-only' : 'plan+detect', configDir, projectDir, registry: { file: REGISTRY_FILE, version: registry.version, integrations: registry.integrations.map((e) => e.id) }, settingsRead: detection?.settingsRead ?? [], installRecordsRead: detection?.recordsRead ?? false, notRead: detection?.notRead ?? ['environment (--no-detect)'] }
-  report.data = { task: args.task ? String(args.task) : null, explicit: args.needs ? String(args.needs) : null, inference, plan, integrations: detection?.integrations ?? [], lookalikes: detection?.lookalikes ?? [], unlisted: detection?.unlisted ?? [] }
+  report.data = { task: args.task ? String(args.task) : null, explicit: args.needs ? String(args.needs) : null, inference, plan, integrations: detection?.integrations ?? [], lookalikes: detection?.lookalikes ?? [], unlisted: detection?.unlisted ?? [], projectDeps: (detection?.projectDeps ?? []).filter((d) => /gsap|vue|nuxt|react|next|svelte|three|lenis|motion/.test(d)) }
   const emit = (f) => addFinding(report, { level: 'info', severity: 'info', ...f })
 
   if (!needed.length) emit({ id: 'no-capability-recognised', message: 'no capability was recognised in the task text; pass --needs with the capabilities you mean', fix: 'example: --needs ui-implementation,accessibility-review' })
   for (const row of plan.rows) {
-    if (row.collaborator) emit({ id: 'collaboration-selected', message: `${row.capability}: ${row.collaborator.id} (${row.collaborator.invoke}${row.collaborator.version ? ` ${row.collaborator.version}` : ''}, ${row.collaborator.scope} scope, risk ${row.collaborator.risk}) is available and recommended alongside ${row.owner}; it has not been run${row.collaborator.preconditions.length ? `; before invoking it: ${row.collaborator.preconditions.join('; ')}` : ''}`, fix: `invoke it with the Skill tool only if it appears in this session's skill list; keep the tool result as the evidence that it ran; the user's instructions and the project's conventions override its output` })
+    for (const c of row.collaborator ? [row.collaborator, ...row.coCollaborators] : []) emit({ id: 'collaboration-selected', message: `${row.capability}: ${c.id} (${c.invoke}${c.version ? ` ${c.version}` : ''}, ${c.scope} scope, risk ${c.risk}${c.subcapability ? `, ${c.subcapability}` : ''}) is available and recommended alongside ${row.owner}; it has not been run${c.preconditions.length ? `; before invoking it: ${c.preconditions.join('; ')}` : ''}${row.selectionReason ? `; chosen by ${row.selectionReason}` : ''}`, fix: `invoke it with the Skill tool only if it appears in this session's skill list; keep the tool result as the evidence that it ran; the user's instructions and the project's conventions override its output` })
     if (row.alternatives.length) emit({ id: 'collaboration-overlap', message: `${row.capability}: ${row.alternatives.join(', ')} also cover it; ${row.collaborator?.id ?? 'the owner'} was chosen by coverage of the needed capabilities, then registry order (increasing risk)`, fix: 'pick the alternative explicitly if the user prefers it; never run both for the same capability' })
     if (row.deferred.length) emit({ id: 'collaboration-deferred', message: `${row.capability}: ${row.deferred.join(', ')} available but not selected (at most ${plan.maxExternal} external integration(s) per plan); ${row.owner} covers it`, fix: 'raise --max-external only when the user wants more than one collaborator' })
     if (row.externalAllowed && !row.collaborator && !row.deferred.length) emit({ id: 'external-fallback', message: `${row.capability}: no available external collaborator; ${row.fallback}`, fix: 'nothing to install is required; the internal skill is the owner' })
+    if (!row.externalAllowed && /skills are not consulted/.test(row.fallback)) emit({ id: 'external-gated', message: `${row.capability}: ${row.fallback}`, fix: 'name the library in the task, or add it to the project first, if GSAP is really the right tool' })
   }
-  if (needed.length && plan.rows.every((r) => !r.externalAllowed)) emit({ id: 'no-external-collaboration', message: `the task needs ${needed.join(', ')} only: internal owners, no visual collaborator considered`, fix: 'keep the plan technical; do not add design skills to a technical change' })
+  if (needed.length && plan.rows.every((r) => !r.externalAllowed) && !plan.rows.some((r) => /skills are not consulted/.test(r.fallback))) emit({ id: 'no-external-collaboration', message: `the task needs ${needed.join(', ')} only: internal owners, no visual collaborator considered`, fix: 'keep the plan technical; do not add design skills to a technical change' })
   for (const i of detection?.integrations ?? []) {
     const relevant = i.capabilities.some((c) => needed.includes(c))
     if (i.state === 'disabled') emit({ id: 'integration-disabled', message: `${i.id} is installed but disabled for this project (${i.reasons.join('; ')}); it is not available and must not be invoked`, fix: 'leave it disabled unless the user enables it; a disabled skill is not a fallback' })
@@ -379,7 +432,7 @@ export async function run(argv) {
   if (inference?.notes.length) report.notes.push(...inference.notes.map((n) => `inference: ${n}`))
   return finish(report, args, {
     sections: [
-      { title: 'Plan', table: { headers: ['capability', 'owner', 'external', 'collaborator', 'state'], rows: plan.rows.map((r) => [r.capability, r.owner + (r.coOwner ? ` + ${r.coOwner}` : ''), r.externalAllowed ? 'allowed' : 'internal only', r.collaborator ? `${r.collaborator.id} (${r.collaborator.invoke})` : r.deferred.length ? `deferred: ${r.deferred.join(', ')}` : '-', r.collaborator ? 'available, not run' : 'internal owner']) } },
+      { title: 'Plan', table: { headers: ['capability', 'owner', 'external', 'collaborator', 'state'], rows: plan.rows.map((r) => [r.capability, r.owner + (r.coOwner ? ` + ${r.coOwner}` : ''), r.externalAllowed ? 'allowed' : 'internal only', r.collaborator ? [r.collaborator, ...(r.coCollaborators ?? [])].map((c) => `${c.id} (${c.invoke})`).join(', ') : r.deferred.length ? `deferred: ${r.deferred.join(', ')}` : '-', r.collaborator ? 'available, not run' : 'internal owner']) } },
       { title: 'Integrations', table: { headers: ['integration', 'kind', 'state', 'version', 'scope', 'risk'], rows: (detection?.integrations ?? []).map((i) => [i.id, i.kind, i.state, i.version ?? '-', i.scope ?? '-', i.risk]) } },
     ],
   })

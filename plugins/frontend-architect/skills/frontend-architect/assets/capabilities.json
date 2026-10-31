@@ -2,25 +2,88 @@
   "$comment": "Capability registry of Frontend Architect (1.5, increment 1). Capabilities name what a frontend task needs; every capability has an internal owner (a skill or agent of this plugin) that always applies. External integrations are optional collaborators: the registry says how each one is recognised on disk, which capabilities it can help with, what it runs and what it needs. Nothing in this file is executed; scripts/capabilities.mjs reads it and the skill text explains how to use the result. Order matters: integrations are listed by increasing risk, and that order breaks ties.",
   "version": 1,
   "capabilities": [
-    { "id": "visual-direction", "owner": "creative-frontend", "externalAllowed": true, "what": "art direction, typography, colour, composition, the look and feel that fits product, user and context" },
-    { "id": "design-system", "owner": "frontend-architect", "coOwner": "creative-frontend", "externalAllowed": true, "what": "tokens, theming, component conventions, density modes, UI states" },
-    { "id": "ui-implementation", "owner": "frontend-architect", "externalAllowed": true, "what": "building screens, forms, tables and components with the project's library and conventions" },
-    { "id": "visual-critique", "owner": "creative-frontend", "externalAllowed": true, "what": "reviewing an existing interface: hierarchy, spacing, typography, colour, consistency, anti-patterns" },
-    { "id": "ui-polish", "owner": "creative-frontend", "externalAllowed": true, "what": "refining details, micro-interactions and states without changing the structure" },
-    { "id": "responsive-design", "owner": "frontend-architect", "coOwner": "creative-frontend", "externalAllowed": false, "what": "layout across viewports, text scale and density; verified with browser-audit" },
-    { "id": "accessibility-review", "owner": "frontend-reviewer", "externalAllowed": false, "what": "names, roles, keyboard, focus, contrast, forms; static ui-audit and opt-in browser-audit evidence" },
-    { "id": "motion-design", "owner": "creative-frontend", "externalAllowed": false, "what": "animation and scroll choreography with lifecycle, reduced-motion and performance rules (external GSAP skills: increment 2)" },
-    { "id": "3d-experience", "owner": "creative-frontend", "externalAllowed": false, "what": "Three.js, TresJS, React Three Fiber, shaders, WebGL/WebGPU with fallbacks and disposal" },
-    { "id": "frontend-architecture", "owner": "frontend-architect", "externalAllowed": false, "what": "stage, structure, state, API layer, contracts, SSR safety, security, performance budgets" },
-    { "id": "browser-verification", "owner": "frontend-reviewer", "externalAllowed": false, "what": "rendered-page evidence: axe-core, keyboard, dialogs, forms, responsive, visual regression (opt-in, authorised URL)" }
+    {
+      "id": "visual-direction",
+      "owner": "creative-frontend",
+      "externalAllowed": true,
+      "what": "art direction, typography, colour, composition, the look and feel that fits product, user and context"
+    },
+    {
+      "id": "design-system",
+      "owner": "frontend-architect",
+      "coOwner": "creative-frontend",
+      "externalAllowed": true,
+      "what": "tokens, theming, component conventions, density modes, UI states"
+    },
+    {
+      "id": "ui-implementation",
+      "owner": "frontend-architect",
+      "externalAllowed": true,
+      "what": "building screens, forms, tables and components with the project's library and conventions"
+    },
+    {
+      "id": "visual-critique",
+      "owner": "creative-frontend",
+      "externalAllowed": true,
+      "what": "reviewing an existing interface: hierarchy, spacing, typography, colour, consistency, anti-patterns"
+    },
+    {
+      "id": "ui-polish",
+      "owner": "creative-frontend",
+      "externalAllowed": true,
+      "what": "refining details, micro-interactions and states without changing the structure"
+    },
+    {
+      "id": "responsive-design",
+      "owner": "frontend-architect",
+      "coOwner": "creative-frontend",
+      "externalAllowed": false,
+      "what": "layout across viewports, text scale and density; verified with browser-audit"
+    },
+    {
+      "id": "accessibility-review",
+      "owner": "frontend-reviewer",
+      "externalAllowed": false,
+      "what": "names, roles, keyboard, focus, contrast, forms; static ui-audit and opt-in browser-audit evidence"
+    },
+    {
+      "id": "motion-design",
+      "owner": "creative-frontend",
+      "externalAllowed": true,
+      "what": "animation and scroll choreography with lifecycle, reduced-motion and performance rules; the official GSAP skills may collaborate when GSAP is named or already a dependency",
+      "externalGroup": "gsap"
+    },
+    {
+      "id": "3d-experience",
+      "owner": "creative-frontend",
+      "externalAllowed": false,
+      "what": "Three.js, TresJS, React Three Fiber, shaders, WebGL/WebGPU with fallbacks and disposal"
+    },
+    {
+      "id": "frontend-architecture",
+      "owner": "frontend-architect",
+      "externalAllowed": false,
+      "what": "stage, structure, state, API layer, contracts, SSR safety, security, performance budgets"
+    },
+    {
+      "id": "browser-verification",
+      "owner": "frontend-reviewer",
+      "externalAllowed": false,
+      "what": "rendered-page evidence: axe-core, keyboard, dialogs, forms, responsive, visual regression (opt-in, authorised URL)"
+    }
   ],
   "integrations": [
     {
       "id": "frontend-design",
       "kind": "plugin",
-      "match": { "pluginId": "frontend-design@claude-plugins-official" },
+      "match": {
+        "pluginId": "frontend-design@claude-plugins-official"
+      },
       "invoke": "frontend-design:frontend-design",
-      "capabilities": ["visual-direction", "visual-critique"],
+      "capabilities": [
+        "visual-direction",
+        "visual-critique"
+      ],
       "license": "Apache-2.0",
       "minVersion": "1.0.0",
       "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
@@ -31,37 +94,295 @@
     {
       "id": "impeccable",
       "kind": "skill",
-      "match": { "skillName": "impeccable" },
+      "match": {
+        "skillName": "impeccable"
+      },
       "invoke": "impeccable",
-      "capabilities": ["visual-critique", "ui-polish", "visual-direction"],
+      "capabilities": [
+        "visual-critique",
+        "ui-polish",
+        "visual-direction"
+      ],
       "license": "Apache-2.0 (derived from Anthropic's frontend-design)",
       "minVersion": null,
       "runs": "npx impeccable <command>: downloads and executes a package; a live browser server for the live command; its frontmatter grants Bash(npx impeccable *) without a permission prompt for the turn",
       "writes": "PRODUCT.md, DESIGN.md, .impeccable/ and .impeccable-live* inside the project",
       "risk": "medium",
-      "preconditions": ["the user accepts that npx runs a package from the network", "the user accepts files written into the project"],
+      "preconditions": [
+        "the user accepts that npx runs a package from the network",
+        "the user accepts files written into the project"
+      ],
       "source": "pbakaus/impeccable (standalone skill under ~/.claude/skills or .claude/skills)"
     },
     {
       "id": "ui-ux-pro-max",
       "kind": "plugin",
-      "match": { "pluginId": "ui-ux-pro-max@ui-ux-pro-max-skill" },
+      "match": {
+        "pluginId": "ui-ux-pro-max@ui-ux-pro-max-skill"
+      },
       "invoke": "ui-ux-pro-max:ui-ux-pro-max",
-      "alsoProvides": ["ui-ux-pro-max:design-system", "ui-ux-pro-max:ui-styling"],
-      "capabilities": ["visual-direction", "design-system", "ui-implementation"],
+      "alsoProvides": [
+        "ui-ux-pro-max:design-system",
+        "ui-ux-pro-max:ui-styling"
+      ],
+      "capabilities": [
+        "visual-direction",
+        "design-system",
+        "ui-implementation"
+      ],
       "license": "MIT",
       "minVersion": "2.0.0",
       "runs": "python3 scripts that search bundled CSV data; image-generation features need GEMINI_API_KEY (network, paid API)",
       "writes": "design-system files it generates in the project when asked",
       "risk": "medium",
-      "preconditions": ["python3 on PATH for its search scripts", "never set or share API keys on its behalf; image generation is out of scope"],
+      "preconditions": [
+        "python3 on PATH for its search scripts",
+        "never set or share API keys on its behalf; image generation is out of scope"
+      ],
       "source": "nextlevelbuilder/ui-ux-pro-max-skill (marketplace ui-ux-pro-max-skill)"
+    },
+    {
+      "id": "gsap-core",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-core"
+      },
+      "invoke": "gsap-core",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "core API: to/from/fromTo, easing, stagger, matchMedia",
+      "when": [
+        "tween",
+        "tweens",
+        "easing",
+        "ease",
+        "stagger"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)",
+      "fallback": true
+    },
+    {
+      "id": "gsap-timeline",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-timeline"
+      },
+      "invoke": "gsap-timeline",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "timelines and sequencing",
+      "when": [
+        "timeline",
+        "timelines",
+        "sequence",
+        "sequenced",
+        "sequencing",
+        "choreography",
+        "secuencia",
+        "secuenciar"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)"
+    },
+    {
+      "id": "gsap-scrolltrigger",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-scrolltrigger"
+      },
+      "invoke": "gsap-scrolltrigger",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "ScrollTrigger: scroll-linked, pinning, scrub",
+      "when": [
+        "scrolltrigger",
+        "scroll",
+        "scrolling",
+        "pin",
+        "pinned",
+        "pinning",
+        "scrub",
+        "parallax",
+        "scroll-driven",
+        "storytelling"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)"
+    },
+    {
+      "id": "gsap-react",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-react"
+      },
+      "invoke": "gsap-react",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "React and Next.js: useGSAP, refs, cleanup",
+      "when": [
+        "react",
+        "next",
+        "next.js",
+        "nextjs",
+        "usegsap"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)"
+    },
+    {
+      "id": "gsap-frameworks",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-frameworks"
+      },
+      "invoke": "gsap-frameworks",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "Vue, Nuxt, Svelte: lifecycle and cleanup",
+      "when": [
+        "vue",
+        "nuxt",
+        "svelte",
+        "sveltekit",
+        "angular",
+        "onmounted"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)"
+    },
+    {
+      "id": "gsap-performance",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-performance"
+      },
+      "invoke": "gsap-performance",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "performance: transforms, layout thrash, fps",
+      "when": [
+        "performance",
+        "jank",
+        "janky",
+        "fps",
+        "60fps",
+        "rendimiento",
+        "fluidez"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)"
+    },
+    {
+      "id": "gsap-plugins",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-plugins"
+      },
+      "invoke": "gsap-plugins",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "plugins: SplitText, Flip, Draggable, SVG, ScrollTo",
+      "when": [
+        "plugin",
+        "plugins",
+        "splittext",
+        "split text",
+        "flip",
+        "draggable",
+        "drawsvg",
+        "morphsvg",
+        "svg",
+        "scrollto",
+        "scrollsmoother"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)"
+    },
+    {
+      "id": "gsap-utils",
+      "kind": "skill",
+      "group": "gsap",
+      "match": {
+        "skillName": "gsap-utils"
+      },
+      "invoke": "gsap-utils",
+      "capabilities": [
+        "motion-design"
+      ],
+      "subcapability": "gsap.utils helpers",
+      "when": [
+        "gsap.utils",
+        "utils",
+        "clamp",
+        "maprange",
+        "snap",
+        "interpolate",
+        "wrap"
+      ],
+      "license": "MIT",
+      "minVersion": null,
+      "runs": "prose only: one SKILL.md, no scripts, no tools, no network",
+      "writes": "nothing",
+      "risk": "low",
+      "source": "greensock/gsap-skills (official GSAP skills; skills CLI into ~/.claude/skills or the greensock/gsap-skills marketplace)"
     }
   ],
   "policy": {
     "maxExternalDefault": 1,
     "selection": "for each needed capability that allows external help, the available integration covering the most needed capabilities wins; ties go to registry order; at most maxExternal distinct integrations per plan, the rest are listed as alternatives or deferred",
     "evidence": "a collaborator is recommended, never run, by this tool; execution exists only when the session shows a Skill tool invocation of that skill and its result",
-    "precedence": "the user's instructions and the project's conventions override any collaborator; the internal owner arbitrates conflicts; collaborators produce suggestions, not decisions"
+    "precedence": "the user's instructions and the project's conventions override any collaborator; the internal owner arbitrates conflicts; collaborators produce suggestions, not decisions",
+    "groups": "integrations with the same group count as one toward maxExternal; a group may contribute several skills up to its maxPerPlan"
+  },
+  "groups": {
+    "gsap": {
+      "label": "official GSAP skills (greensock/gsap-skills, MIT, prose only)",
+      "gate": "the task names GSAP, ScrollTrigger or GreenSock, or the project depends on gsap; otherwise motion stays internal (CSS, View Transitions, Motion first)",
+      "maxPerPlan": 2,
+      "selection": "skills whose sub-capability keywords match the task, most matches first, then registry order; gsap-core only when nothing specific matches; the project framework adds gsap-react (react/next) or gsap-frameworks (vue/nuxt/svelte)"
+    }
   }
 }
