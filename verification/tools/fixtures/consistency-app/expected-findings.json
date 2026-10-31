@@ -1,0 +1,300 @@
+{
+ "findings": [
+  {
+   "file": "app/components/Art.tsx",
+   "line": 4,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#123456"
+  },
+  {
+   "file": "app/components/Art.tsx",
+   "line": 4,
+   "id": "off-grid-size",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "p-[5px]"
+  },
+  {
+   "file": "app/components/Art.tsx",
+   "line": 4,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#654321"
+  },
+  {
+   "file": "app/components/Art.tsx",
+   "line": 4,
+   "id": "off-grid-size",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "9px"
+  },
+  {
+   "file": "app/components/Art.tsx",
+   "line": 4,
+   "id": "literal-font-family",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "Inter, sans-serif"
+  },
+  {
+   "file": "app/components/Art.tsx",
+   "line": 7,
+   "id": "imagery-literal-color",
+   "class": "imagery",
+   "level": "info",
+   "evidence": "#ffffff"
+  },
+  {
+   "file": "app/components/Clean.vue",
+   "line": 7,
+   "id": "allowed-literal-color",
+   "class": "allowed",
+   "level": "info",
+   "evidence": "#f3efe8"
+  },
+  {
+   "file": "app/components/Clean.vue",
+   "line": 12,
+   "id": "imagery-literal-color",
+   "class": "imagery",
+   "level": "info",
+   "evidence": "#336699"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#ff0000"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "rgb(10,20,30)"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "off-grid-size",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "p-[13px]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "literal-font-family",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "font-[Comic_Sans]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "literal-shadow",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "literal-duration",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "duration-[350ms]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "z-index-literal",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "z-[999]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 8,
+   "id": "off-grid-size",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "text-[17px]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 8,
+   "id": "arbitrary-size",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "gap-[8px]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 10,
+   "id": "arbitrary-size",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "px-[16px]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 10,
+   "id": "arbitrary-size",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "py-[12px]"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 7,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#00ff00"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 9,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#333333"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 9,
+   "id": "off-grid-size",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "7px"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 9,
+   "id": "literal-font-family",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "Georgia, serif"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#222"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "rgb(250, 250, 250)"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "px-font-size",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "14px"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "rgba(0, 0, 0, 0.2)"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "literal-shadow",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "0 1px 2px rgba(0, 0, 0, 0.2)"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "literal-duration",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "opacity 250ms ease"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "z-index-literal",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "120"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 16,
+   "id": "off-grid-size",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "padding: 10px"
+  },
+  {
+   "file": "app/components/Drift.vue",
+   "line": 17,
+   "id": "local-token-definition",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "--local-tint: #abcdef"
+  },
+  {
+   "file": "app/assets/css/main.css",
+   "line": 4,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#ffeeaa"
+  },
+  {
+   "file": "app/assets/css/main.css",
+   "line": 4,
+   "id": "literal-color",
+   "class": "defect",
+   "level": "confirmed",
+   "evidence": "#cc9900"
+  },
+  {
+   "file": "app/assets/css/main.css",
+   "line": 4,
+   "id": "px-font-size",
+   "class": "heuristic",
+   "level": "heuristic",
+   "evidence": "13px"
+  },
+  {
+   "file": null,
+   "line": null,
+   "id": "design-recommendation",
+   "class": "recommendation",
+   "level": "info",
+   "evidence": "#123456, #654321, #ff0000, rgb(10,20,30), #00ff00, #333333, #222, rgb(250, 250, 250)"
+  }
+ ],
+ "byClass": {
+  "defect": 20,
+  "imagery": 2,
+  "allowed": 1,
+  "heuristic": 12,
+  "recommendation": 1
+ },
+ "distinctLiteralColors": 11
+}

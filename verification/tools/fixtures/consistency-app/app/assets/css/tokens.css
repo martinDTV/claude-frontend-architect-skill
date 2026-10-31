@@ -1,0 +1,10 @@
+/* generated token layer (the fixture's design contract) */
+@theme {
+  --color-accent-500: #345d94;
+  --font-serif: "Fraunces Variable", Georgia, serif;
+  --space-16: 1rem;
+  --duration-fast: 120ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+:root { --accent: #345d94; --accent-fg: #ffffff; --fg: #1a1a1a; --fg-muted: #555; --surface: #fff; --border: #ddd; }

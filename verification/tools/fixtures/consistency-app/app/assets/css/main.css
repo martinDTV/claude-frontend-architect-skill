@@ -1,0 +1,4 @@
+@import "tailwindcss";
+@import "./tokens.css";
+body { background: var(--surface); color: var(--fg); }
+.legacy-banner { background: #ffeeaa; border: 1px solid #cc9900; font-size: 13px; }
