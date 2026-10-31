@@ -75,6 +75,8 @@ export interface AtelierExperienceOptions {
 }
 
 export interface AtelierDiagnostics {
+  /** part-state subscribers alive: a double mount must not double them */
+  listeners: number
   loaded: boolean
   model: { url: string; bytes: number; parts: string[]; triangles: number; fetchMs: number; parseMs: number } | null
   progress: number
@@ -120,6 +122,8 @@ export interface AtelierExperience {
   /** advance the simulation by fixed steps (tests, warm start) */
   advance(seconds: number): void
   diagnostics(): AtelierDiagnostics
+  /** opens a fresh frame-timing window (the gpu harness measures from here) */
+  resetTiming(options?: { gpu?: boolean }): void
   dispose(): DisposalReport | null
 }
 
@@ -133,7 +137,7 @@ export function createAtelierExperience(options: AtelierExperienceOptions): Atel
   const restoreGsap = driveGsapFromLoop(loop, options.gsap)
 
   // studio
-  const environment = createGradientEnvironment(renderer, registry, { top: '#1d2436', horizon: '#cdbca4', bottom: '#0e0e12', sun: { direction: new THREE.Vector3(0.45, 0.65, 0.5), intensity: 4.5, size: 0.05 } })
+  const environment = createGradientEnvironment(renderer, registry, { top: '#1d2436', horizon: '#cdbca4', bottom: '#0e0e12', sun: { direction: new THREE.Vector3(0.45, 0.65, 0.5), intensity: 2.5, size: 0.05 } })
   applyEnvironment(scene, environment.texture, { intensity: 0.65, rotationY: 0.5 })
   scene.background = new THREE.Color('#0d0e13')
   const key = new THREE.DirectionalLight('#fff0dc', 2.4)
@@ -226,13 +230,13 @@ export function createAtelierExperience(options: AtelierExperienceOptions): Atel
   // camera and cues
   const shots: Shot[] = [
     orbit(centre, 4.6, 0.5, 0.18, { name: 'hero', fov: 34 }),
-    orbit({ x: 0, y: 1.05, z: 0 }, 6.6, 1.1, 0.36, { name: 'exploded', fov: 40 }),
+    orbit({ x: 0, y: 1.35, z: 0 }, 7.4, 1.1, 0.46, { name: 'exploded', fov: 40 }), // the lifted stack: base to knob inside a 16:10 frame
     orbit({ x: 0, y: 0.75, z: 0 }, 3.4, -0.6, 0.12, { name: 'dust', fov: 32 }),
     orbit(centre, 4.2, 2.9, 0.22, { name: 'choose', fov: 36 }),
   ]
   const rig = createCameraRig(camera, loop)
   const sequence = createShotSequence(rig, [{ shot: shots[0]!, hold: 0.9 }, { shot: shots[1]!, weight: 0.5, hold: 0.9 }, { shot: shots[2]!, weight: 0.5, hold: 1 }, { shot: shots[3]!, weight: 0.5, hold: 0.6 }])
-  const post = createPostPipeline(runtime, { quality: tier.post, bloom: { strength: 0.22, threshold: 1 }, dof: { focus: 4.6, aperture: 0.00025, maxblur: 0.008 }, grain: { amount: 0.03, vignette: 0.3 } })
+  const post = createPostPipeline(runtime, { quality: tier.post, bloom: { strength: 0.15, threshold: 1.05 }, dof: { focus: 4.6, aperture: 0.00025, maxblur: 0.008 }, grain: { amount: 0.03, vignette: 0.3 } })
   const navigator = createChapterNavigator(ATELIER_CHAPTERS)
   const cues = createCueSheet()
   const state = { progress: 0, explode: 0, dissolveProgress: 0, fovScale: 1, turntable: 0 }
@@ -336,6 +340,9 @@ export function createAtelierExperience(options: AtelierExperienceOptions): Atel
     // chapter 2 explodes by local progress; the dust chapter brings the parts back as it releases them; later chapters are assembled
     state.explode = index === 1 ? smoothstep(0, 0.85, local) : index === 2 ? 1 - smoothstep(0.55, 1, local) : 0
     explodeTimeline?.progress(state.explode)
+    // the base explodes downward and the floor sits at its resting level: the whole stack rises while exploded so the
+    // base reads as its own part instead of sinking through the floor
+    stage.position.y = state.explode * 0.65
     applyDust(index === 2 ? local : index > 2 ? 1 : 0)
     camera.fov = camera.fov * state.fovScale
     camera.updateProjectionMatrix()
@@ -361,6 +368,7 @@ export function createAtelierExperience(options: AtelierExperienceOptions): Atel
       positions,
       hovered: parts.hovered,
       selected: parts.selected,
+      listeners: parts.listeners(),
       selection: configurator.selection,
       paintColor: `#${paint.color.getHexString()}`,
       exploring: bridge?.exploring ?? false,
@@ -414,6 +422,7 @@ export function createAtelierExperience(options: AtelierExperienceOptions): Atel
       for (let i = 0; i < steps; i++) simulation?.compute(1 / 60)
     },
     diagnostics,
+    resetTiming: (options) => runtime.resetTiming(options),
     dispose() {
       cues.reset()
       options.controlsElement.removeEventListener('click', onClick)
@@ -444,7 +453,7 @@ export function createAtelierExperience(options: AtelierExperienceOptions): Atel
 
 ## 3. What the browser checks prove
 
-`atelier` in `lab-checks.mjs`, both apps: the model arrives through the Draco variant (url, bytes and six parts in the diagnostics); at 0.1 the hero shot and caption; at 0.5 the exploded view at progress 1 with the parts displaced by the documented offsets; at 0.6 the dissolve above 0.9 while the particles are visible with morph near 1 and a read-back mean distance to the sampled surface under 0.25 after a few seconds of simulation; at 0.78 the parts are back and solid, dissolve 0; at 0.95 the choose chapter, a finish change recolours the body through a tween and the grille option changes its material; hover over the projected cap through the page's pointer and a click selects it; explore mode pauses the scrub and hands the camera over; keys and buttons move chapters with one announced change per travel; portrait raises the fov scale; the usual tail (scroll scrub, screenshots with caption contrast, disposal to the baseline including the cache, re-entry counts, reduced motion with cuts and no turntable).
+`atelier` in `lab-checks.mjs`, both apps: the model arrives through the Draco variant (url, bytes and six parts in the diagnostics); at 0.1 the hero shot and caption; at 0.5 the exploded view at progress 1 with the parts displaced by the documented offsets; at 0.6 the dissolve above 0.9 while the particles are visible with morph near 1 and a read-back mean distance to the sampled surface under 0.25 after a few seconds of simulation; at 0.78 the parts are back and solid, dissolve 0; at 0.95 the choose chapter, a finish change recolours the body through a tween and the grille option changes its material; hover over the projected cap through the page's pointer and a click selects it; explore mode pauses the scrub and hands the camera over; keys and buttons move chapters with one announced change per travel; portrait raises the fov scale; the usual tail (scroll scrub, screenshots and the legibility grading of every text in each state, disposal to the baseline including the cache, re-entry counts, reduced motion with cuts and no turntable). The `a11y` check adds the states around the scene: `unsupported` with the chapters listed in the DOM when WebGL is missing, `error` with the failed model named and the lifecycle counters balanced, Tab reach and order, the `<select data-part>` as the pointer-free selection, reflow at 320 px and 200% text (`creative-quality-rubric.md`, sections 3 and 7).
 
 ## 4. Decisions worth copying
 

@@ -33,7 +33,7 @@ export const ATELIER_PARTS = ['base', 'body', 'grille', 'cap', 'knob', 'label'] 
 export type AtelierPart = (typeof ATELIER_PARTS)[number]
 export const PART_LABELS: Record<AtelierPart, string> = { base: 'Rubber base', body: 'Painted body', grille: 'Woven grille', cap: 'Top plate', knob: 'Brass knob', label: 'Label' }
 /** local-space displacement of each part in the exploded view (the knob is a child of the cap, the label of the body) */
-export const EXPLODE_OFFSETS: Record<AtelierPart, [number, number, number]> = { base: [0, -0.38, 0], body: [0, 0, 0], grille: [0, 0, 0.6], cap: [0, 0.65, 0], knob: [0.22, 0.32, 0], label: [0, -0.08, 0.42] }
+export const EXPLODE_OFFSETS: Record<AtelierPart, [number, number, number]> = { base: [0, -0.45, 0], body: [0, 0, 0], grille: [0.55, 0, 0.25], cap: [0, 0.65, 0], knob: [0.22, 0.32, 0], label: [0, -0.08, 0.42] }
 export const HIGHLIGHT = { hover: '#ffd27a', selected: '#5ee7ff' } as const
 
 export type PartsMap = Map<string, THREE.Object3D>
@@ -96,6 +96,8 @@ export interface PartsState {
   /** the highlight a part should show now */
   stateOf(part: AtelierPart): HighlightState
   subscribe(listener: (state: { hovered: AtelierPart | null; selected: AtelierPart | null }) => void): () => void
+  /** subscribers alive: what a Strict Mode double mount must not double */
+  listeners(): number
 }
 
 export const isAtelierPart = (name: string): name is AtelierPart => (ATELIER_PARTS as readonly string[]).includes(name)
@@ -112,6 +114,7 @@ export function createPartsState(): PartsState {
     select(part) { selected = part === selected ? null : part; emit() },
     stateOf: (part) => (part === selected ? 'selected' : part === hovered ? 'hover' : 'none'),
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
+    listeners: () => listeners.size,
   }
 }
 ```
@@ -394,6 +397,7 @@ export interface AtelierR3FProps {
   onSelect?: (part: AtelierPart | null) => void
   /** receives the api the page and the checks drive */
   onApi?: (api: AtelierApi) => void
+  onApiGone?: (api: AtelierApi) => void
 }
 export interface AtelierApi {
   explode(on: boolean): void
@@ -403,6 +407,9 @@ export interface AtelierApi {
   diagnostics(): AtelierDiagnostics
 }
 export interface AtelierDiagnostics {
+  /** subscribers and GSAP children alive: a Strict Mode double mount must not double them */
+  listeners: number
+  gsapChildren: number
   loaded: boolean
   parts: string[]
   hovered: string | null
@@ -486,7 +493,7 @@ function Turntable({ enabled, children }: { enabled: boolean; children: React.Re
 }
 
 /** Publishes the api from inside the Canvas: R3F mounts its children in its own root after the renderer exists, so the page learns about the api from here. */
-function LabBridge({ state, exploded, setExploded, reducedMotion, instanceRef, onApi }: { state: PartsState; exploded: boolean; setExploded: (on: boolean) => void; reducedMotion: boolean; instanceRef: React.MutableRefObject<{ instance: ModelInstance | null; timeline: TimelineLike | null }>; onApi?: (api: AtelierApi) => void }) {
+function LabBridge({ state, exploded, setExploded, reducedMotion, instanceRef, onApi, onApiGone }: { state: PartsState; exploded: boolean; setExploded: (on: boolean) => void; reducedMotion: boolean; instanceRef: React.MutableRefObject<{ instance: ModelInstance | null; timeline: TimelineLike | null }>; onApi?: (api: AtelierApi) => void; onApiGone?: (api: AtelierApi) => void }) {
   const gl = useThree((s) => s.gl)
   const camera = useThree((s) => s.camera)
   const frames = useRef(0)
@@ -510,15 +517,18 @@ function LabBridge({ state, exploded, setExploded, reducedMotion, instanceRef, o
         const instance = instanceRef.current.instance
         const positions: AtelierDiagnostics['positions'] = {}
         if (instance) for (const [name, mesh] of instance.parts) positions[name] = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z }
-        return { loaded: Boolean(instance), parts: instance ? [...instance.parts.keys()] : [], hovered: state.hovered, selected: state.selected, exploded: exploredRef.current, explodeProgress: Number(instanceRef.current.timeline?.progress() ?? 0), positions, reducedMotion, frames: frames.current, info: { geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, calls: gl.info.render.calls, triangles: gl.info.render.triangles } }
+        return { loaded: Boolean(instance), parts: instance ? [...instance.parts.keys()] : [], hovered: state.hovered, selected: state.selected, listeners: state.listeners(), gsapChildren: gsap.globalTimeline.getChildren(true, true, true).length, exploded: exploredRef.current, explodeProgress: Number(instanceRef.current.timeline?.progress() ?? 0), positions, reducedMotion, frames: frames.current, info: { geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, calls: gl.info.render.calls, triangles: gl.info.render.triangles } }
       },
     }
     onApi?.(api)
-  }, [gl, camera, state, setExploded, reducedMotion, instanceRef, onApi])
+    // under Strict Mode the first root's bridge can mount after the second root's: the api must be retracted on
+    // unmount, or the page would keep reading a disposed renderer
+    return () => onApiGone?.(api)
+  }, [gl, camera, state, setExploded, reducedMotion, instanceRef, onApi, onApiGone])
   return null
 }
 
-export function AtelierR3F({ url = '/models/atelier.draco.glb', exploded, reducedMotion, onSelect, onApi }: AtelierR3FProps) {
+export function AtelierR3F({ url = '/models/atelier.draco.glb', exploded, reducedMotion, onSelect, onApi, onApiGone }: AtelierR3FProps) {
   const state = useMemo(() => createPartsState(), [])
   const [explodedState, setExploded] = useState(exploded)
   useEffect(() => setExploded(exploded), [exploded])
@@ -535,7 +545,7 @@ export function AtelierR3F({ url = '/models/atelier.draco.glb', exploded, reduce
             <Speaker url={url} exploded={explodedState} reducedMotion={reducedMotion} state={state} onInstance={onInstance} />
           </Suspense>
         </Turntable>
-        <LabBridge state={state} exploded={explodedState} setExploded={setExploded} reducedMotion={reducedMotion} instanceRef={instanceRef} onApi={onApi} />
+        <LabBridge state={state} exploded={explodedState} setExploded={setExploded} reducedMotion={reducedMotion} instanceRef={instanceRef} onApi={onApi} onApiGone={onApiGone} />
       </CacheBoundary>
     </Canvas>
   )
@@ -564,25 +574,72 @@ export default function Page() {
 // @verify next:app/lab/atelier-r3f/AtelierPage.tsx
 'use client'
 import dynamic from 'next/dynamic'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { PART_LABELS, type AtelierPart } from '@/lib/lab/experiences/atelier-parts'
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { PART_LABELS, isAtelierPart, type AtelierPart } from '@/lib/lab/experiences/atelier-parts'
 import type { AtelierApi } from '@/features/atelier/AtelierR3F'
 
 // the Canvas and the loaders exist only in the browser: no server render of the 3D module
 const AtelierR3F = dynamic(() => import('@/features/atelier/AtelierR3F').then((m) => m.AtelierR3F), { ssr: false })
+
+/** Errors thrown inside the Canvas (no WebGL context, a failed load) are re-thrown by R3F to the DOM tree: this boundary names them. */
+class SceneBoundary extends Component<{ onError: (error: Error) => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  componentDidCatch(error: Error) {
+    this.props.onError(error)
+  }
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
+}
+
+const PARTS = Object.keys(PART_LABELS) as AtelierPart[]
 
 export function AtelierPage() {
   const [exploded, setExploded] = useState(false)
   const [selected, setSelected] = useState<AtelierPart | null>(null)
   const [reducedMotion, setReducedMotion] = useState(false)
   const [status, setStatus] = useState('loading')
+  const [problem, setProblem] = useState<string | null>(null)
+  // the apis of the live Canvas roots: under Strict Mode two roots exist for a moment and the first can publish last,
+  // so the lab always reads the latest api that has not been retracted
+  const liveApis = useRef<AtelierApi[]>([])
   const apiRef = useRef<AtelierApi | null>(null)
+  const current = () => liveApis.current[liveApis.current.length - 1] ?? null
   useEffect(() => setReducedMotion(window.matchMedia('(prefers-reduced-motion: reduce)').matches), [])
-  const onApi = useCallback((api: AtelierApi) => {
-    apiRef.current = api
+  const onError = useCallback((error: Error) => {
+    setStatus(error.name === 'WebGLUnavailable' || /webgl/i.test(error.message) ? 'unsupported' : 'error')
+    setProblem(error.message)
+  }, [])
+  const publish = useCallback(() => {
     const lifecycle = ((window as unknown as { __labLifecycle?: { mounts: number; disposes: number } }).__labLifecycle ??= { mounts: 0, disposes: 0 })
-    ;(window as unknown as { __lab?: unknown }).__lab = { kind: 'r3f', get ready() { return api.diagnostics().loaded }, api: { ...api, explode: (on: boolean) => { setExploded(on); api.explode(on) } }, diagnostics: () => api.diagnostics(), lifecycle, disposed: false }
+    ;(window as unknown as { __lab?: unknown }).__lab = {
+      kind: 'r3f',
+      get ready() { return Boolean(current()?.diagnostics().loaded) },
+      api: {
+        explode: (on: boolean) => { setExploded(on); current()?.explode(on) },
+        select: (part: AtelierPart | null) => current()?.select(part),
+        hover: (part: AtelierPart | null) => current()?.hover(part),
+        screenPositionOf: (part: AtelierPart) => current()?.screenPositionOf(part) ?? null,
+        diagnostics: () => current()?.diagnostics() ?? null,
+      },
+      diagnostics: () => current()?.diagnostics() ?? null,
+      lifecycle,
+      disposed: false,
+      afterDispose: null as unknown,
+    }
+  }, [])
+  const onApi = useCallback((api: AtelierApi) => {
+    liveApis.current = [...liveApis.current.filter((a) => a !== api), api]
+    apiRef.current = api
+    publish()
     setStatus('ready')
+  }, [publish])
+  const onApiGone = useCallback((api: AtelierApi) => {
+    liveApis.current = liveApis.current.filter((a) => a !== api)
+    if (apiRef.current === api) apiRef.current = current()
   }, [])
   useEffect(() => {
     const lifecycle = ((window as unknown as { __labLifecycle?: { mounts: number; disposes: number } }).__labLifecycle ??= { mounts: 0, disposes: 0 })
@@ -596,17 +653,32 @@ export function AtelierPage() {
       }
     }
   }, [])
+  const choosePart = (value: string) => {
+    if (value === (selected ?? '')) return
+    apiRef.current?.select(isAtelierPart(value) ? value : null)
+  }
   return (
     <main style={{ padding: '1rem' }}>
       <h1>Atelier, React Three Fiber</h1>
       <p data-status>{status}</p>
-      <div style={{ position: 'relative', width: '100%', maxWidth: 720, aspectRatio: '16 / 10', background: '#111218' }}>
-        <AtelierR3F exploded={exploded} reducedMotion={reducedMotion} onSelect={setSelected} onApi={onApi} />
-      </div>
-      <p>
+      {problem && <p role="alert" data-problem>{status === 'unsupported' ? 'This browser cannot show the 3D scene. The parts are listed below.' : `The scene could not be loaded: ${problem}`}</p>}
+      {status !== 'unsupported' && <div style={{ position: 'relative', width: '100%', maxWidth: 720, aspectRatio: '16 / 10', background: '#111218' }}>
+        <SceneBoundary onError={onError}>
+          <AtelierR3F exploded={exploded} reducedMotion={reducedMotion} onSelect={setSelected} onApi={onApi} onApiGone={onApiGone} />
+        </SceneBoundary>
+      </div>}
+      {status !== 'unsupported' && <p>
         <button type="button" data-explode aria-pressed={exploded} onClick={() => setExploded((e) => !e)}>{exploded ? 'Assemble' : 'Explode'}</button>{' '}
+        <label>
+          Part{' '}
+          <select data-part value={selected ?? ''} onChange={(e) => choosePart(e.target.value)}>
+            <option value="">None</option>
+            {PARTS.map((p) => <option key={p} value={p}>{PART_LABELS[p]}</option>)}
+          </select>
+        </label>{' '}
         <span data-selected>{selected ? PART_LABELS[selected] : 'Nothing selected'}</span>
-      </p>
+      </p>}
+      {status === 'unsupported' && <ul data-fallback>{PARTS.map((p) => <li key={p}>{PART_LABELS[p]}</li>)}</ul>}
     </main>
   )
 }
@@ -644,7 +716,13 @@ import { applyColorPipeline, COLOR_PRESETS } from '~/lib/lab/rendering/color'
 import { applyEnvironment, createStudioEnvironment, type EnvironmentHandle } from '~/lib/lab/rendering/environment'
 import type { PartsState } from '~/lib/lab/experiences/atelier-parts'
 
-const props = defineProps<{ url: string; exploded: boolean; reducedMotion: boolean; state: PartsState }>()
+const props = defineProps<{ url: string; exploded: boolean; reducedMotion: boolean; state: PartsState; onError?: (error: Error) => void }>()
+// the slot of TresCanvas runs in TresJS's own app: a boundary in the page never sees a failed load, this one does and
+// hands it out through the prop
+onErrorCaptured((error) => {
+  props.onError?.(error as Error)
+  return false
+})
 const { renderer, scene } = useTres()
 // useTres() hands out the renderer instance itself (WebGL or WebGPU); the loaders and the environment need WebGL
 const gl = isWebGLRenderer(renderer) ? renderer : null
@@ -777,17 +855,20 @@ export function useAtelierLab() {
 <!-- @verify nuxt:components/atelier/AtelierTres.vue -->
 <script setup lang="ts">
 // The canvas with the scene inside the page's <Suspense>; publishes window.__lab for the browser checks.
+import gsap from 'gsap'
 import * as THREE from 'three'
 import { TresCanvas } from '@tresjs/core'
 import { createPartsState, type AtelierPart } from '~/lib/lab/experiences/atelier-parts'
 
 const props = defineProps<{ exploded: boolean; reducedMotion: boolean }>()
-const emit = defineEmits<{ select: [part: AtelierPart | null]; explode: [on: boolean] }>()
+const emit = defineEmits<{ select: [part: AtelierPart | null]; explode: [on: boolean]; ready: []; error: [error: Error] }>()
 const state = createPartsState()
 state.subscribe((s) => emit('select', s.selected))
 const canvas = shallowRef<InstanceType<typeof TresCanvas> | null>(null)
 const atelierLab = useAtelierLab()
 const frames = { count: 0 }
+// the pointer-free path: the page's <select data-part> calls this
+defineExpose({ select: (part: AtelierPart | null) => state.select(part) })
 
 onMounted(() => {
   const lifecycle = (window.__labLifecycle ??= { mounts: 0, disposes: 0 })
@@ -813,14 +894,15 @@ onMounted(() => {
     diagnostics() {
       const ctx = context()
       const gl = ctx?.renderer.instance
-      return { loaded: Boolean(atelierLab.instance), parts: atelierLab.instance ? [...atelierLab.instance.parts.keys()] : [], hovered: state.hovered, selected: state.selected, exploded: props.exploded, explodeProgress: Number(atelierLab.timeline?.progress() ?? 0), positions: atelierLab.positions(), reducedMotion: props.reducedMotion, frames: frames.count, info: gl ? { geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, calls: gl.info.render.calls, triangles: gl.info.render.triangles } : null }
+      return { loaded: Boolean(atelierLab.instance), parts: atelierLab.instance ? [...atelierLab.instance.parts.keys()] : [], hovered: state.hovered, selected: state.selected, listeners: state.listeners(), gsapChildren: gsap.globalTimeline.getChildren(true, true, true).length, exploded: props.exploded, explodeProgress: Number(atelierLab.timeline?.progress() ?? 0), positions: atelierLab.positions(), reducedMotion: props.reducedMotion, frames: frames.count, info: gl ? { geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, calls: gl.info.render.calls, triangles: gl.info.render.triangles } : null }
     },
     lifecycle,
     disposed: false,
     afterDispose: null as unknown,
   }
   window.__lab = lab
-  const tick = () => { frames.count++; raf = requestAnimationFrame(tick) }
+  let announced = false
+  const tick = () => { frames.count++; if (!announced && atelierLab.instance) { announced = true; emit('ready') }; raf = requestAnimationFrame(tick) }
   let raf = requestAnimationFrame(tick)
   onBeforeUnmount(() => {
     cancelAnimationFrame(raf)
@@ -834,7 +916,7 @@ onMounted(() => {
 <template>
   <TresCanvas ref="canvas" clear-color="#111218" :dpr="[1, 1.5]" render-mode="always" @pointermissed="state.hover(null)">
     <TresPerspectiveCamera :position="[2.9, 1.9, 3.3]" :fov="42" :look-at="[0, 0.8, 0]" />
-    <AtelierScene url="/models/atelier.draco.glb" :exploded="exploded" :reduced-motion="reducedMotion" :state="state" />
+    <AtelierScene url="/models/atelier.draco.glb" :exploded="exploded" :reduced-motion="reducedMotion" :state="state" :on-error="(e: Error) => emit('error', e)" />
   </TresCanvas>
 </template>
 ```
@@ -843,26 +925,49 @@ onMounted(() => {
 <!-- @verify nuxt:pages/lab/atelier-tres.vue -->
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
-import { PART_LABELS, type AtelierPart } from '~/lib/lab/experiences/atelier-parts'
+import { PART_LABELS, isAtelierPart, type AtelierPart } from '~/lib/lab/experiences/atelier-parts'
 
 const exploded = ref(false)
 const selected = ref<AtelierPart | null>(null)
+const status = ref('loading')
+const problem = ref<string | null>(null)
+const atelier = ref<{ select: (part: AtelierPart | null) => void } | null>(null)
 const preferred = usePreferredReducedMotion()
 const reducedMotion = computed(() => preferred.value === 'reduce')
+const parts = Object.keys(PART_LABELS) as AtelierPart[]
+// errors are named here instead of reaching Nuxt's error page: a missing WebGL context fails in this app (the
+// TresCanvas mounts here), a failed load fails inside TresJS's app and arrives through the component's error event
+const onSceneError = (error: Error) => {
+  status.value = error.name === 'WebGLUnavailable' || /webgl/i.test(error.message) ? 'unsupported' : 'error'
+  problem.value = error.message
+}
+onErrorCaptured((error) => {
+  onSceneError(error as Error)
+  return false
+})
+const choosePart = (event: Event) => {
+  const value = (event.target as HTMLSelectElement).value
+  if (value === (selected.value ?? '')) return
+  atelier.value?.select(isAtelierPart(value) ? value : null)
+}
 </script>
 
 <template>
   <main class="lab">
     <h1>Atelier, TresJS</h1>
-    <div class="stage">
+    <p data-status>{{ status }}</p>
+    <p v-if="problem" role="alert" data-problem>{{ status === 'unsupported' ? 'This browser cannot show the 3D scene. The parts are listed below.' : 'The scene could not be loaded: ' + problem }}</p>
+    <div v-if="status !== 'unsupported'" class="stage">
       <ClientOnly>
-        <AtelierTres :exploded="exploded" :reduced-motion="reducedMotion" @select="selected = $event" @explode="exploded = $event" />
+        <AtelierTres ref="atelier" :exploded="exploded" :reduced-motion="reducedMotion" @select="selected = $event" @explode="exploded = $event" @ready="status = 'ready'" @error="onSceneError" />
       </ClientOnly>
     </div>
-    <p>
+    <p v-if="status !== 'unsupported'">
       <button type="button" data-explode :aria-pressed="exploded" @click="exploded = !exploded">{{ exploded ? 'Assemble' : 'Explode' }}</button>
+      <label>Part <select data-part :value="selected ?? ''" @change="choosePart"><option value="">None</option><option v-for="p in parts" :key="p" :value="p">{{ PART_LABELS[p] }}</option></select></label>
       <span data-selected>{{ selected ? PART_LABELS[selected] : 'Nothing selected' }}</span>
     </p>
+    <ul v-if="status === 'unsupported'" data-fallback><li v-for="p in parts" :key="p">{{ PART_LABELS[p] }}</li></ul>
   </main>
 </template>
 
@@ -875,7 +980,7 @@ const reducedMotion = computed(() => preferred.value === 'reduce')
 
 ## 5. What the browser checks prove
 
-`lab-checks.mjs` (`r3f` on the Next app, `tres` on the Nuxt app): the model loads through the cache with the Draco decoder (six parts); the pointer moved over the projected position of the cap turns `hovered` into `cap` through the framework's own event path and a click selects it, which the DOM label reflects; `explode(true)` moves the parts by the documented offsets within the timeline's duration and `explode(false)` restores the assembled pose to 1e-3; under reduced motion the exploded view is a cut (progress 1 at once) and the turntable does not spin; a route change disposes to the renderer's baseline and re-entry recreates with equal counts; no console errors.
+`lab-checks.mjs` (`r3f` on the Next app, `tres` on the Nuxt app): the model loads through the cache with the Draco decoder (six parts); the pointer moved over the projected position of the cap turns `hovered` into `cap` through the framework's own event path and a click selects it, which the DOM label reflects; `explode(true)` moves the parts by the documented offsets within the timeline's duration and `explode(false)` restores the assembled pose to 1e-3; under reduced motion the exploded view is a cut (progress 1 at once) and the turntable does not spin; a route change disposes to the renderer's baseline and re-entry recreates with equal counts; no console errors. Since 1.5 increment 4B the `a11y` check adds the states around the scene: with every WebGL context request failing the page reports `unsupported` through a `role="alert"` and lists the parts in the DOM with no control left that would drive a scene that is not there (R3F re-throws the renderer's error to the DOM tree, where `SceneBoundary` names it; in Vue `onErrorCaptured` on the page does the same); with the model request aborted it reports `error` and says what could not be loaded; every control is reachable with Tab in DOM order and named, none is covered by the canvas, and the `<select data-part>` selects a part without a pointer. `check-strict.mjs` (Next only: Vue has no Strict Mode) runs the same page on the dev server, where React mounts, unmounts and mounts every effect again, and counts what must not double: live WebGL contexts, GSAP tweens and timelines, part-state listeners, model requests, lifecycle mounts and disposes, then leaves and re-enters.
 
 ## 6. Measured: where the line between shared and specific lands
 

@@ -8,7 +8,7 @@ import { createProductExperience, PRODUCT_COLORS, type ProductExperience } from 
 import { createParticleExperience, type ParticleExperience } from '../experiences/particle-experience'
 import { createStoryExperience, STORY_CHAPTERS, type StoryExperience } from '../experiences/story-experience'
 import { createAtelierExperience, ATELIER_CHAPTERS, type AtelierExperience } from '../experiences/atelier-experience'
-import { PART_LABELS, isAtelierPart } from '../experiences/atelier-parts'
+import { PART_LABELS, isAtelierPart, type AtelierPart } from '../experiences/atelier-parts'
 import { meanDistance } from '../particles/formations'
 import { detectInitialTier, readDeviceSignals, QUALITY_TIERS } from '../rendering/quality'
 import { bindScrollExperience, type ScrollBinding } from './bind-scroll'
@@ -29,6 +29,14 @@ export interface PageOptions {
 }
 
 const lifecycle = () => (window.__labLifecycle ??= { mounts: 0, disposes: 0 })
+/** What GSAP holds right now, named: the Strict Mode check compares counts and reads this when they differ. */
+const describeGsapChildren = () =>
+  gsap.globalTimeline.getChildren(true, true, true).map((child) => {
+    const tween = child as gsap.core.Tween & { targets?: () => unknown[]; vars: Record<string, unknown> }
+    const targets = typeof tween.targets === 'function' ? tween.targets() : []
+    const describe = (t: unknown) => (t instanceof Element ? `<${t.tagName.toLowerCase()}>` : t && typeof t === 'object' ? (t as { constructor?: { name?: string } }).constructor?.name ?? 'object' : typeof t)
+    return { kind: 'timeline' in child.vars || (child as { getChildren?: unknown }).getChildren ? 'timeline' : 'tween', id: String(child.vars.id ?? ''), targets: targets.slice(0, 3).map(describe), paused: child.paused(), progress: Number(child.progress().toFixed(2)), duration: Number(child.duration().toFixed(2)), delay: Number(child.delay().toFixed(2)), startTime: Number(child.startTime().toFixed(2)), globalTime: Number(gsap.globalTimeline.time().toFixed(2)), delayedCall: Boolean((tween.vars as { onComplete?: unknown }).onComplete && targets.length === 0 && child.duration() === 0) }
+  })
 const captureErrors = () => {
   const errors: string[] = []
   const original = console.error
@@ -37,6 +45,15 @@ const captureErrors = () => {
     original.apply(console, args)
   }
   return { errors, restore: () => { console.error = original } }
+}
+/** Creates the experience; when creation throws (no WebGL context) the console hook is restored before the page sees the error. */
+const createOrRestore = <T,>(restore: () => void, create: () => T): T => {
+  try {
+    return create()
+  } catch (error) {
+    restore()
+    throw error
+  }
 }
 const tierFor = (canvas: HTMLCanvasElement) => {
   // the lab runs on a software renderer: the heuristic would pick "minimal"; the pages pin a mid tier so the checks
@@ -50,7 +67,7 @@ const tierFor = (canvas: HTMLCanvasElement) => {
 export async function mountProductPage(options: PageOptions): Promise<() => void> {
   const { errors, restore } = captureErrors()
   const tiers = tierFor(options.canvas)
-  const experience: ProductExperience = createProductExperience({ canvas: options.canvas, controlsElement: options.controls, reducedMotion: options.reducedMotion, tier: tiers.pinned, gsap, onCaption: options.onCaption })
+  const experience: ProductExperience = createOrRestore(restore, () => createProductExperience({ canvas: options.canvas, controlsElement: options.controls, reducedMotion: options.reducedMotion, tier: tiers.pinned, gsap, onCaption: options.onCaption }))
   const binding: ScrollBinding = bindScrollExperience(options.container, experience, { reducedMotion: options.reducedMotion })
   // DOM controls: <select data-option="finish|color"> and <button data-explore>
   const selects = [...options.container.querySelectorAll<HTMLSelectElement>('select[data-option]')]
@@ -88,9 +105,11 @@ export async function mountProductPage(options: PageOptions): Promise<() => void
       explore: () => { binding.pause(); experience.explore(); return experience.diagnostics() },
       resume: () => { experience.resume(); binding.resume(); return experience.diagnostics() },
       scrollProgress: () => binding.progress,
+      resetTiming: (gpu?: boolean) => experience.resetTiming({ gpu }),
       scrubPaused: () => binding.paused,
     },
-    diagnostics: () => experience.diagnostics(),
+    // gsapChildren: every tween and timeline GSAP holds, for the Strict Mode and re-entry comparisons
+    diagnostics: () => ({ ...experience.diagnostics(), gsapChildren: gsap.globalTimeline.getChildren(true, true, true).length, gsapDetails: describeGsapChildren() }),
     lifecycle: lifecycle(),
     disposed: false,
     afterDispose: null as null | { geometries: number; textures: number },
@@ -112,7 +131,7 @@ export async function mountProductPage(options: PageOptions): Promise<() => void
 export async function mountFieldPage(options: PageOptions): Promise<() => void> {
   const { errors, restore } = captureErrors()
   const tiers = tierFor(options.canvas)
-  const experience: ParticleExperience = createParticleExperience({ canvas: options.canvas, pointerElement: options.controls, reducedMotion: options.reducedMotion, tier: tiers.pinned, adaptive: false })
+  const experience: ParticleExperience = createOrRestore(restore, () => createParticleExperience({ canvas: options.canvas, pointerElement: options.controls, reducedMotion: options.reducedMotion, tier: tiers.pinned, adaptive: false }))
   const binding = bindScrollExperience(options.container, experience, { reducedMotion: options.reducedMotion })
   const range = options.container.querySelector<HTMLInputElement>('input[data-density]')
   const onDensity = () => experience.setDensity(Number(range!.value) / 100)
@@ -140,8 +159,10 @@ export async function mountFieldPage(options: PageOptions): Promise<() => void> 
         return { mean: meanDistance(positions, target, d.drawn, 4, 3), near: count, drawn: d.drawn }
       },
       scrollProgress: () => binding.progress,
+      resetTiming: (gpu?: boolean) => experience.resetTiming({ gpu }),
     },
-    diagnostics: () => experience.diagnostics(),
+    // gsapChildren: every tween and timeline GSAP holds, for the Strict Mode and re-entry comparisons
+    diagnostics: () => ({ ...experience.diagnostics(), gsapChildren: gsap.globalTimeline.getChildren(true, true, true).length, gsapDetails: describeGsapChildren() }),
     lifecycle: lifecycle(),
     disposed: false,
     afterDispose: null as null | { geometries: number; textures: number },
@@ -163,7 +184,7 @@ export async function mountFieldPage(options: PageOptions): Promise<() => void> 
 export async function mountStoryPage(options: PageOptions): Promise<() => void> {
   const { errors, restore } = captureErrors()
   const tiers = tierFor(options.canvas)
-  const experience: StoryExperience = createStoryExperience({ canvas: options.canvas, reducedMotion: options.reducedMotion, tier: tiers.pinned, onCaption: options.onCaption })
+  const experience: StoryExperience = createOrRestore(restore, () => createStoryExperience({ canvas: options.canvas, reducedMotion: options.reducedMotion, tier: tiers.pinned, onCaption: options.onCaption }))
   const binding = bindScrollExperience(options.container, experience, { reducedMotion: options.reducedMotion })
   const buttons = [...options.container.querySelectorAll<HTMLButtonElement>('button[data-chapter]')]
   const syncButtons = () => {
@@ -202,8 +223,10 @@ export async function mountStoryPage(options: PageOptions): Promise<() => void> 
       goTo: (i: number) => experience.goTo(i),
       checkpoint: (space: number, local: number) => experience.checkpoint(space, local),
       scrollProgress: () => binding.progress,
+      resetTiming: (gpu?: boolean) => experience.resetTiming({ gpu }),
     },
-    diagnostics: () => experience.diagnostics(),
+    // gsapChildren: every tween and timeline GSAP holds, for the Strict Mode and re-entry comparisons
+    diagnostics: () => ({ ...experience.diagnostics(), gsapChildren: gsap.globalTimeline.getChildren(true, true, true).length, gsapDetails: describeGsapChildren() }),
     lifecycle: lifecycle(),
     disposed: false,
     afterDispose: null as null | { geometries: number; textures: number },
@@ -226,7 +249,7 @@ export async function mountStoryPage(options: PageOptions): Promise<() => void> 
 export async function mountAtelierPage(options: PageOptions): Promise<() => void> {
   const { errors, restore } = captureErrors()
   const tiers = tierFor(options.canvas)
-  const experience: AtelierExperience = createAtelierExperience({ canvas: options.canvas, controlsElement: options.controls, reducedMotion: options.reducedMotion, tier: tiers.pinned, gsap, onCaption: options.onCaption })
+  const experience: AtelierExperience = createOrRestore(restore, () => createAtelierExperience({ canvas: options.canvas, controlsElement: options.controls, reducedMotion: options.reducedMotion, tier: tiers.pinned, gsap, onCaption: options.onCaption }))
   const binding = bindScrollExperience(options.container, experience, { reducedMotion: options.reducedMotion })
   const selects = [...options.container.querySelectorAll<HTMLSelectElement>('select[data-option]')]
   for (const select of selects) {
@@ -258,9 +281,48 @@ export async function mountAtelierPage(options: PageOptions): Promise<() => void
   const unsubscribe = experience.navigator.subscribe(syncButtons)
   syncButtons()
   const selectedLabel = options.container.querySelector('[data-selected]')
-  const unsubscribeParts = (() => { const update = () => { const d = experience.diagnostics(); if (selectedLabel) selectedLabel.textContent = d.selected && isAtelierPart(d.selected) ? PART_LABELS[d.selected] : 'Nothing selected' }; options.controls.addEventListener('click', update); return () => options.controls.removeEventListener('click', update) })()
+  // the pointer-free path to part selection: a <select data-part> mirrors and drives the selection
+  const partSelect = options.container.querySelector<HTMLSelectElement>('select[data-part]')
+  if (partSelect) {
+    partSelect.innerHTML = '<option value="">None</option>' + (Object.keys(PART_LABELS) as AtelierPart[]).map((p) => `<option value="${p}">${PART_LABELS[p]}</option>`).join('')
+    partSelect.value = ''
+  }
+  // the DOM mirror of the selection: the label and the select follow whichever path selected (a click on the canvas,
+  // the select, the api)
+  const syncSelection = () => {
+    const d = experience.diagnostics()
+    const part = d.selected && isAtelierPart(d.selected) ? d.selected : null
+    if (selectedLabel) selectedLabel.textContent = part ? PART_LABELS[part] : 'Nothing selected'
+    if (partSelect) partSelect.value = part ?? ''
+  }
+  const onPartChange = () => {
+    const value = partSelect?.value ?? ''
+    const current = experience.diagnostics().selected ?? ''
+    if (value !== current) experience.select(isAtelierPart(value) ? value : null)
+    syncSelection()
+  }
+  partSelect?.addEventListener('change', onPartChange)
+  const unsubscribeParts = (() => { options.controls.addEventListener('click', syncSelection); return () => options.controls.removeEventListener('click', syncSelection) })()
   lifecycle().mounts++
-  await experience.ready
+  try {
+    await experience.ready
+  } catch (error) {
+    // a failed load (network, decoder, damaged file) leaves nothing behind: listeners, GSAP, GPU resources and the
+    // lifecycle counters are back where they were, and the page reports the typed error
+    binding.dispose()
+    exploreButton?.removeEventListener('click', onExplore)
+    partSelect?.removeEventListener('change', onPartChange)
+    buttons.forEach((b, i) => b.removeEventListener('click', handlers[i]!))
+    unsubscribe()
+    unsubscribeParts()
+    experience.dispose()
+    lifecycle().disposes++
+    restore()
+    const kind = (error as { kind?: string }).kind
+    const failure = new Error(`the model could not be loaded${kind ? ` (${kind})` : ''}: ${error instanceof Error ? error.message : String(error)}`)
+    failure.name = 'AssetLoadError'
+    throw failure
+  }
   const lab = {
     kind: 'atelier',
     ready: true,
@@ -275,15 +337,17 @@ export async function mountAtelierPage(options: PageOptions): Promise<() => void
       explore: () => { binding.pause(); experience.explore(); return experience.diagnostics() },
       resume: () => { experience.resume(); binding.resume(); return experience.diagnostics() },
       hover: (part: string | null) => { experience.hover(isAtelierPart(part ?? '') ? (part as never) : null); return experience.diagnostics() },
-      select: (part: string | null) => { experience.select(isAtelierPart(part ?? '') ? (part as never) : null); return experience.diagnostics() },
+      select: (part: string | null) => { experience.select(isAtelierPart(part ?? '') ? (part as never) : null); syncSelection(); return experience.diagnostics() },
       screenPositionOf: (part: string) => (isAtelierPart(part) ? experience.screenPositionOf(part) : null),
       advance: (seconds: number) => { experience.advance(seconds); return experience.diagnostics() },
       surfaceDistance: () => experience.particleDistanceToSurface(),
       scrollProgress: () => binding.progress,
+      resetTiming: (gpu?: boolean) => experience.resetTiming({ gpu }),
       scrubPaused: () => binding.paused,
     },
     subscribeChanges: (listener: (change: { previous: number; index: number; source: string }) => void) => experience.navigator.subscribe(listener),
-    diagnostics: () => experience.diagnostics(),
+    // gsapChildren: every tween and timeline GSAP holds, for the Strict Mode and re-entry comparisons
+    diagnostics: () => ({ ...experience.diagnostics(), gsapChildren: gsap.globalTimeline.getChildren(true, true, true).length, gsapDetails: describeGsapChildren() }),
     lifecycle: lifecycle(),
     disposed: false,
     afterDispose: null as null | { geometries: number; textures: number },
@@ -293,6 +357,7 @@ export async function mountAtelierPage(options: PageOptions): Promise<() => void
   return () => {
     binding.dispose()
     exploreButton?.removeEventListener('click', onExplore)
+    partSelect?.removeEventListener('change', onPartChange)
     buttons.forEach((b, i) => b.removeEventListener('click', handlers[i]!))
     unsubscribe()
     unsubscribeParts()
