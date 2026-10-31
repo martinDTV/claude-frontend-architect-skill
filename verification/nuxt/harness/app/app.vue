@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// the enterprise application (/app) owns the viewport through its own layout (layouts/app.vue); the harness navigation
-// shows on every other page
+// the enterprise application (/app) and the shop (/shop) own their frame through their layouts (layouts/app.vue,
+// layouts/shop.vue); the harness navigation shows on every other page
 const route = useRoute()
-const isApp = computed(() => route.path === '/app' || route.path.startsWith('/app/'))
+const isApp = computed(() => ['/app', '/shop'].some((base) => route.path === base || route.path.startsWith(`${base}/`)))
 </script>
 
 <template>
@@ -14,6 +14,7 @@ const isApp = computed(() => route.path === '/app' || route.path.startsWith('/ap
       <NuxtLink to="/motion-second">Second</NuxtLink>
       <NuxtLink to="/design">Design</NuxtLink>
       <NuxtLink to="/app">Atlas app</NuxtLink>
+      <NuxtLink to="/shop">Ember shop</NuxtLink>
       <NuxtLink to="/lab/shaders">Shader lab</NuxtLink>
       <NuxtLink to="/lab/particles">Particle lab</NuxtLink>
       <NuxtLink to="/lab/product">Product</NuxtLink>
