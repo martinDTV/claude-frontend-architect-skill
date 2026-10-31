@@ -111,7 +111,7 @@ test('emitters: CSS variables for ramps and roles per theme; Tailwind theme with
   const forNuxtUi = emit(atlas, 'tailwind', { nuxtUiNeutralAlias: 'contract-neutral' })
   assert.match(forNuxtUi, /@theme static \{[\s\S]*--color-contract-neutral-500: #/)
   assert.match(emit(atlas, 'nuxt-ui'), /neutral: 'contract-neutral'/)
-  assert.match(emit(atlas, 'nuxt-ui'), /--ui-error: var\(--danger\);[\s\S]*--ui-success: var\(--success\);/)
+  assert.match(emit(atlas, 'nuxt-ui'), /--ui-success: var\(--success\);[\s\S]*--ui-error: var\(--danger\);/)
   assert.match(tw, /@theme inline \{[\s\S]*--color-fg: var\(--fg\);[\s\S]*--color-border-strong: var\(--border-strong\);/)
   assert.match(tw, /@custom-variant dark/)
   assert.match(tw, /--breakpoint-md: 48rem;/)
