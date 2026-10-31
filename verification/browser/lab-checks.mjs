@@ -158,7 +158,9 @@ const describeText = (r) => `${r.selector.split(' > ').slice(-2).join(' > ')} "$
  * reported, never accepted as proof for the lab pages), and no interactive control is caught mid-fade.
  */
 export function gradeLegibility(measured, where) {
-  const graded = measured.results.filter((r) => !r.transitional)
+  // disabled controls are recorded (counted below), not graded: inactive components are exempt from the ratio
+  const graded = measured.results.filter((r) => !r.transitional && !r.disabled)
+  const disabled = measured.results.filter((r) => r.disabled).length
   const failing = graded.filter((r) => !r.passes || r.method === 'estimate')
   expect(failing.length === 0, `${where}: text below its WCAG ratio or proven only by a capture: ${failing.slice(0, 4).map(describeText).join(' | ')}`)
   const fadingControls = measured.results.filter((r) => r.transitional && r.interactive)
@@ -166,7 +168,7 @@ export function gradeLegibility(measured, where) {
   const by = { css: 0, bound: 0, estimate: 0 }
   for (const r of graded) by[r.method] = (by[r.method] ?? 0) + 1
   const worst = graded.reduce((w, r) => (r.ratio !== null && (w === null || r.ratio / r.required < w.ratio / w.required) ? r : w), null)
-  return { texts: graded.length, transitional: measured.results.length - graded.length, by, worst: worst ? { text: worst.text.slice(0, 28), ratio: worst.ratio, required: worst.required, method: worst.method, observed: worst.observed?.p05 ?? null } : null }
+  return { texts: graded.length, transitional: measured.results.length - graded.length - disabled, disabled, by, worst: worst ? { text: worst.text.slice(0, 28), ratio: worst.ratio, required: worst.required, method: worst.method, observed: worst.observed?.p05 ?? null } : null }
 }
 
 /**

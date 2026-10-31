@@ -229,3 +229,12 @@ test('fixture page: every case lands on the documented method and verdict', { sk
     server.close()
   }
 })
+
+test('a disabled control at the disabled opacity is recorded as disabled, not as a fade, and keeps its interactive flag', () => {
+  const faded = evaluateText({ color: 'rgb(30, 30, 30)', fontSize: 14, fontWeight: 400, opacity: 0.75, interactive: true, disabled: true, stack: [{ color: 'rgb(255, 255, 255)', image: null }] })
+  assert.equal(faded.disabled, true)
+  assert.equal(faded.transitional, false)
+  assert.equal(faded.interactive, true)
+  const fading = evaluateText({ color: 'rgb(30, 30, 30)', fontSize: 14, fontWeight: 400, opacity: 0.75, interactive: true, stack: [{ color: 'rgb(255, 255, 255)', image: null }] })
+  assert.equal(fading.transitional, true, 'the same opacity without the disabled state is still a fade')
+})

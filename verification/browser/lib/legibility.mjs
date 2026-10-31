@@ -222,8 +222,11 @@ export function evaluateText(record, pixels = null) {
   const layers = (record.stack ?? []).map((l) => ({ color: typeof l.color === 'string' ? parseColor(l.color) : l.color, image: l.image }))
   const required = requiredRatio({ kind: record.kind ?? 'text', fontSizePx: record.fontSize, fontWeight: record.fontWeight })
   const large = isLargeText(record.fontSize ?? 16, record.fontWeight ?? 400)
-  const transitional = (record.opacity ?? 1) < 0.99
-  const base = { required, large, transitional, text: record.text, selector: record.selector, fontSize: record.fontSize, fontWeight: record.fontWeight, interactive: Boolean(record.interactive) }
+  // a disabled control (its own disabled state, aria-disabled, or a disabled fieldset) sits at the contract's disabled
+  // opacity by design: WCAG 1.4.3 exempts inactive components, and it is a state, not a fade caught mid-way
+  const disabled = Boolean(record.disabled)
+  const transitional = !disabled && (record.opacity ?? 1) < 0.99
+  const base = { required, large, transitional, disabled, text: record.text, selector: record.selector, fontSize: record.fontSize, fontWeight: record.fontWeight, interactive: Boolean(record.interactive) }
   if (!text) return { ...base, method: 'css', ratio: null, passes: false, note: 'unparsed colour' }
   // what one captured frame showed under the text, reported next to the proof whichever method proves it
   const observed = pixels ? estimateFromPixels(text, pixels) : null
@@ -330,7 +333,9 @@ export function collectTextRecords(rootSelector) {
     }
     const text = control ? (el.value || el.getAttribute('aria-label') || '') : (el.textContent || '').trim()
     const interactive = ['a', 'button', 'select', 'input', 'textarea', 'summary'].includes(tag) || el.tabIndex >= 0 || el.getAttribute('role') === 'button'
+    const disabled = el.matches(':disabled, [aria-disabled="true"]') || Boolean(el.closest('[aria-disabled="true"], fieldset:disabled, button:disabled, a[aria-disabled="true"]'))
     records.push({
+      disabled,
       tag,
       text: text.replace(/\s+/g, ' ').slice(0, 60),
       selector: path(el),
