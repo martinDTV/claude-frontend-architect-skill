@@ -75,7 +75,15 @@ for (const [project, target] of [['nuxt', join('app', 'lib', 'ui')], ['next', jo
   mkdirSync(join(here, 'next', 'src', 'design'), { recursive: true })
   writeFileSync(join(here, 'nuxt', 'app', 'design', 'contract.json'), JSON.stringify(atlas, null, 2))
   writeFileSync(join(here, 'next', 'src', 'design', 'contract.json'), JSON.stringify(atlas, null, 2))
-  count += 5
+  // block D: a second contract per app, scoped to its own area (the launch page in Next, the shop in Nuxt); the host
+  // theme stays the enterprise contract's, the scoped variables take over under [data-contract]
+  const lumen = loadContract(join(here, 'design', 'contracts', 'lumen-notebook.json'))
+  const ember = loadContract(join(here, 'design', 'contracts', 'ember-store.json'))
+  writeFileSync(join(nextCss, 'tokens-lumen.css'), emitTailwind(lumen, { rolePrefix: 'dc-', scope: '[data-contract="lumen"]' }))
+  writeFileSync(join(nuxtCss, 'tokens-ember.css'), emitTailwind(ember, { scope: '[data-contract="ember"]' }))
+  writeFileSync(join(here, 'next', 'src', 'design', 'lumen.json'), JSON.stringify(lumen, null, 2))
+  writeFileSync(join(here, 'nuxt', 'app', 'design', 'ember.json'), JSON.stringify(ember, null, 2))
+  count += 9
 }
 // Harness-only files (layouts, pages, entry points) that are not documentation live in
 // <project>/harness and are copied on top, so builds can run end to end.

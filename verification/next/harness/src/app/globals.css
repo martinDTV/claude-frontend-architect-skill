@@ -4,6 +4,7 @@
    contract in both themes. The tokens file defines the dark variant (class or data-theme). */
 @import "tailwindcss";
 @import "./tokens.css";
+@import "./tokens-lumen.css"; /* the launch page's contract, scoped to [data-contract="lumen"] */
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/fraunces";
 @import "@fontsource-variable/jetbrains-mono";
@@ -46,8 +47,9 @@
   --color-background: var(--background);
 }
 
-/* shadcn's vocabulary, fed by the contract's roles (light values here, dark values switch with the roles) */
-:root {
+/* shadcn's vocabulary, fed by the contract's roles (light values here, dark values switch with the roles); re-declared on
+   a scoped contract's element so the aliases resolve against that contract's roles there */
+:root, [data-contract] {
   --background: var(--dc-canvas);
   --foreground: var(--dc-fg);
   --card: var(--dc-surface);
@@ -82,7 +84,7 @@
   --sidebar-ring: var(--dc-focus);
 }
 
-.dark, [data-theme="dark"] {
+.dark, [data-theme="dark"], .dark [data-contract], [data-theme="dark"] [data-contract] {
   --secondary: var(--color-neutral-800);
   --muted: var(--color-neutral-800);
   --accent: var(--color-neutral-800);
@@ -106,3 +108,11 @@
     *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
   }
 }
+
+/* the launch page's phone pre-order bar is fixed: controls keep a scroll margin above it, so a control scrolled or
+   focused into view is never under the bar (the breakpoint matches the bar's md:hidden, in rem so it scales with the text) */
+@media (max-width: 47.99rem) {
+  [data-contract="lumen"] :where(a, button, input, select, textarea, summary, [tabindex]) { scroll-margin-bottom: 7rem; }
+}
+/* the launch page's sticky header: the same margin above, at every width */
+[data-contract="lumen"] :where(a, button, input, select, textarea, summary, [tabindex]) { scroll-margin-top: 5rem; }

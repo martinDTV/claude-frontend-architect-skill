@@ -132,3 +132,18 @@ test('--emit prints tokens only (no report) and an unknown format exits 2', () =
   const bad = runTool('design-contract.mjs', [join(contractsDir, 'atlas-logistics.json'), '--emit', 'sass'], { parse: false })
   assert.equal(bad.code, 2)
 })
+
+test('--scope emits the same variables as overrides under one selector: no @theme, no variant, roles per theme inside the scope only', () => {
+  const contract = JSON.parse(readFileSync(join(contractsDir, 'lumen-notebook.json'), 'utf8'))
+  const css = emit(contract, 'tailwind', { rolePrefix: 'dc-', scope: '[data-contract="lumen"]' })
+  assert.ok(!css.includes('@theme') && !css.includes('@custom-variant'), 'nothing global')
+  assert.match(css, /^\[data-contract="lumen"\] \{$/m)
+  assert.match(css, /\[data-contract="lumen"\]\.dark, \.dark \[data-contract="lumen"\]/)
+  const scoped = css.split('\n').filter((l) => l.startsWith('  --'))
+  assert.ok(scoped.some((l) => l.startsWith('  --color-accent-500:')), 'ramps inside the scope')
+  assert.ok(scoped.some((l) => l.startsWith('  --dc-canvas:')), 'roles inside the scope with the prefix')
+  assert.ok(scoped.some((l) => l.startsWith('  --text-display:')), 'the contract\'s own sizes')
+  const canvasLines = scoped.filter((l) => l.startsWith('  --dc-canvas:'))
+  assert.equal(canvasLines.length, 2, 'light and dark canvas')
+  assert.notEqual(canvasLines[0], canvasLines[1])
+})

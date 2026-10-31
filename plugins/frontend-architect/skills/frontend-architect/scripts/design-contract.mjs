@@ -237,7 +237,9 @@ function cssLines(contract, { prefixRoles = true, rolePrefix = '' } = {}) {
   for (const [name, v] of Object.entries(t.lineHeights ?? {})) root.push(`--leading-${kebab(name)}: ${v};`)
   for (const [name, v] of Object.entries(t.weights ?? {})) root.push(`--font-weight-${kebab(name)}: ${v};`)
   if (t.tabularNumbers) root.push(`--font-numeric: tabular-nums;`)
-  root.push(`--spacing: ${remOf(spacing.base ?? 4)};`)
+  // the contract's base is not written to --spacing: Tailwind multiplies every spacing utility by that unit, so a
+  // contract on an 8px grid would double p-4 and gap-10 for the host library's components too (a 1280px page overflowed
+  // by 608px when the launch page's scoped tokens did); the base governs the --space-* tokens and the off-grid rule
   for (const v of spacing.scale ?? []) root.push(`--space-${v}: ${remOf(v)};`)
   for (const [name, px] of Object.entries(radius)) root.push(`--radius-${kebab(name)}: ${px >= 9999 ? '9999px' : remOf(px)};`)
   for (const level of levels) root.push(`--shadow-${kebab(level.name)}: ${shadowCss(level, contract.elevation?.color ?? '0 0 0')};`)
@@ -290,8 +292,10 @@ export function emitTailwind(contract, { rolePrefix = '', darkVariant = true, sc
 
 /** Nuxt UI 4: its --ui-* variables follow the roles; app.config maps its semantic colours onto the ramps. */
 export function emitNuxtUi(contract) {
+  // [data-contract] re-declares the mapping inside a scoped second contract (--scope), so Nuxt UI follows that contract's
+  // roles there: a custom property resolves its var() where it is declared, not where it is used
   const css = `/* design contract "${contract.name}": Nuxt UI variables follow the contract's roles (light and dark through the role variables) */
-:root, .dark {
+:root, .dark, [data-contract] {
   --ui-bg: var(--canvas);
   --ui-bg-muted: var(--surface);
   --ui-bg-elevated: var(--surface-raised);
