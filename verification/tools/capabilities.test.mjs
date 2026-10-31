@@ -330,3 +330,20 @@ test('GSAP skills: gated behind the task naming GSAP or the project depending on
   assertNoInventedExecution(scroll)
   assertNoInventedExecution(both)
 })
+
+test('creative direction (1.5 increment 4): a brief, a storyboard or a cinematic experience infer creative-direction; a technical fix does not; a 3D-led brief keeps design skills out', () => {
+  const brief = capabilitiesFor('Turn this creative brief into a storyboard and a cinematic 3D product experience', registry)
+  assert.ok(brief.needed.includes('creative-direction'))
+  assert.ok(brief.needed.includes('3d-experience'))
+  const spanish = capabilitiesFor('Convierte este brief creativo en un guion gráfico y una experiencia inmersiva', registry)
+  assert.ok(spanish.needed.includes('creative-direction'))
+  const technical = capabilitiesFor('Fix the module-level fetch client in the Nuxt composable', registry)
+  assert.ok(!technical.needed.includes('creative-direction'))
+  // with every design integration installed, a 3D-led brief still names no external collaborator for the 3D work
+  const env = makeEnv({ plugins: [{ key: 'frontend-design' }, { key: 'ui-ux-pro-max' }], skills: [{ name: 'impeccable', source: 'user' }] })
+  const report = plan(env, 'Turn this creative brief into a storyboard and a cinematic 3D product experience')
+  assert.equal(row(report, '3d-experience').collaborator, null)
+  assert.equal(row(report, 'creative-direction').collaborator, null, '3D-led: the registry design skills are not 3D-aware')
+  assert.match(row(report, 'creative-direction').fallback, /creative-frontend/)
+  assertNoInventedExecution(report)
+})

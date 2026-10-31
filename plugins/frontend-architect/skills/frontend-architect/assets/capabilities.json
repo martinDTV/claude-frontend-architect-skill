@@ -3,6 +3,12 @@
   "version": 1,
   "capabilities": [
     {
+      "id": "creative-direction",
+      "owner": "creative-frontend",
+      "externalAllowed": true,
+      "what": "turning a creative brief into a buildable plan: concept, authorised references, storyboard, scene and camera plans, budgets and the verification plan (creative-frontend's creative-direction.md); design skills may be recommended for references and storyboard critique"
+    },
+    {
       "id": "visual-direction",
       "owner": "creative-frontend",
       "externalAllowed": true,
@@ -375,7 +381,8 @@
     "selection": "for each needed capability that allows external help, the available integration covering the most needed capabilities wins; ties go to registry order; at most maxExternal distinct integrations per plan, the rest are listed as alternatives or deferred",
     "evidence": "a collaborator is recommended, never run, by this tool; execution exists only when the session shows a Skill tool invocation of that skill and its result",
     "precedence": "the user's instructions and the project's conventions override any collaborator; the internal owner arbitrates conflicts; collaborators produce suggestions, not decisions",
-    "groups": "integrations with the same group count as one toward maxExternal; a group may contribute several skills up to its maxPerPlan"
+    "groups": "integrations with the same group count as one toward maxExternal; a group may contribute several skills up to its maxPerPlan",
+    "unregistered": "skills found on a machine with no verifiable source are never registered: the threejs-* skills seen locally (symlinks without a lock record) stay out; 3d-experience has no external collaborator"
   },
   "groups": {
     "gsap": {
