@@ -12,13 +12,13 @@ const tone: Record<VehicleStatus, { color: 'success' | 'warning' | 'neutral'; la
 
 <template>
   <UDashboardPanel id="fleet">
-    <template #header>
-      <UDashboardNavbar title="Fleet">
+    <template #header><header>
+      <UDashboardNavbar title="Fleet" :toggle="NAV_TOGGLE" :ui="{ title: 'whitespace-normal' }">
         <template #right>
           <USelect v-model="filter" :items="options" value-key="value" aria-label="Filter vehicles by status" class="w-44" data-fleet-filter />
         </template>
       </UDashboardNavbar>
-    </template>
+    </header></template>
     <template #body>
       <main id="main" tabindex="-1">
         <h1 class="sr-only">Fleet</h1>

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LayoutDashboard, Package, PlusSquare, Search, Settings, Truck } from 'lucide-react'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/app/design/theme-toggle'
@@ -78,7 +78,9 @@ function Shell({ children }: { children: ReactNode }) {
         </header>
         {children}
       </SidebarInset>
+      {/* the copied CommandDialog renders the dialog only: the cmdk root that the input, list and items subscribe to is ours */}
       <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Shipments and pages">
+        <Command label="Search shipments and pages">
         <CommandInput placeholder="Search shipments, pages…" />
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
@@ -89,6 +91,7 @@ function Shell({ children }: { children: ReactNode }) {
             {DATASET.shipments.slice(0, 60).map((s) => <CommandItem key={s.id} value={`${s.reference} ${s.customer} ${s.lane}`} onSelect={() => go(`/app/shipments?q=${s.reference}`)}><Package aria-hidden="true" />{s.reference} · {s.customer}<span className="ml-auto text-xs text-muted-foreground">{s.lane} · {STATUS_LABEL[s.status]}</span></CommandItem>)}
           </CommandGroup>
         </CommandList>
+        </Command>
       </CommandDialog>
       <Toaster position="bottom-right" richColors closeButton />
     </SidebarProvider>

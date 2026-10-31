@@ -13,7 +13,7 @@ function onCreated(reference: string) {
 
 <template>
   <UDashboardPanel id="new-shipment">
-    <template #header><UDashboardNavbar title="New shipment" /></template>
+    <template #header><header><UDashboardNavbar title="New shipment" :toggle="NAV_TOGGLE" :ui="{ title: 'whitespace-normal' }" /></header></template>
     <template #body>
       <main id="main" tabindex="-1">
         <h1 class="sr-only">New shipment</h1>

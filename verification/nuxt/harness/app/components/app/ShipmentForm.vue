@@ -77,7 +77,7 @@ async function onError(event: { errors: { name?: string; message: string }[] }) 
       <UFormField label="Promised date" name="promised" required help="The slot the customer was given, UTC.">
         <div class="flex flex-wrap gap-2">
           <UInput id="field-promised" v-model="date" type="date" :min="minDate" class="w-44 max-w-full" aria-label="Promised date" />
-          <UInput v-model="time" type="time" class="w-32" aria-label="Promised time" />
+          <UInput id="field-promised-time" v-model="time" type="time" name="promisedTime" class="w-32" aria-label="Promised time" />
         </div>
       </UFormField>
       <UFormField label="Driver" name="driverId" help="Can be assigned later from the table.">

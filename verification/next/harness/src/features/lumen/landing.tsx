@@ -235,9 +235,9 @@ export function LumenLanding() {
         </div>
       </footer>
       {/* the pre-order bar on phones: the action in every section without shouting */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-dc-border bg-dc-canvas/95 px-5 md:px-(--gutter) py-3 backdrop-blur md:hidden" data-preorder-bar>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-dc-border bg-dc-canvas/95 px-5 md:px-(--gutter) py-3 backdrop-blur md:hidden" role="region" aria-label="Pre-order" data-preorder-bar>
         <div className="flex items-center justify-between gap-4">
-          <span className="min-w-0 truncate text-sm"><span className="font-serif">Lumen</span> · <span className="tabular-nums">249 €</span></span>
+          <span className="min-w-0 truncate text-sm"><span className="tabular-nums">249 €</span><span className="font-serif"> · Lumen</span></span>
           <Button asChild size="lg" className="h-auto min-h-11 shrink-0 whitespace-normal" style={{ borderRadius: 'var(--radius-sm)' }}><a href="#preorder">Pre-order</a></Button>
         </div>
       </div>

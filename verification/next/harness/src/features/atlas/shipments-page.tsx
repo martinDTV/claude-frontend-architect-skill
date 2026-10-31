@@ -137,7 +137,7 @@ export function ShipmentsPage() {
           }} />
         )}
         {result.total > 0 && (
-          <nav className="flex flex-wrap items-center justify-between gap-3" aria-label="Pagination">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Select value={String(tableState.pageSize)} onValueChange={(v) => setState({ ...tableState, pageSize: Number(v), page: 1 })}>
               <SelectTrigger className="w-40" aria-label="Rows per page" data-page-size><SelectValue /></SelectTrigger>
               <SelectContent>{PAGE_SIZES.map((n) => <SelectItem key={n} value={String(n)}>{n} per page</SelectItem>)}</SelectContent>
@@ -151,7 +151,7 @@ export function ShipmentsPage() {
                 <PaginationItem><PaginationNext href={hrefFor({ ...tableState, page: result.page + 1 })} aria-disabled={result.page >= result.pages} className={result.page >= result.pages ? 'pointer-events-none opacity-50' : ''} onClick={(e) => { e.preventDefault(); if (result.page < result.pages) setState({ ...tableState, page: result.page + 1 }) }} /></PaginationItem>
               </PaginationContent>
             </Pagination>
-          </nav>
+          </div>
         )}
       </StateBlock>
       <ShipmentDetails overlay={details} onOpenChange={(o) => setDetails((d) => ({ ...d, open: o }))} />

@@ -28,7 +28,7 @@ function save(patch: Parameters<typeof update>[0]) {
 
 <template>
   <UDashboardPanel id="settings">
-    <template #header><UDashboardNavbar title="Settings" /></template>
+    <template #header><header><UDashboardNavbar title="Settings" :toggle="NAV_TOGGLE" :ui="{ title: 'whitespace-normal' }" /></header></template>
     <template #body>
       <main id="main" class="max-w-2xl space-y-8" tabindex="-1">
         <h1 class="sr-only">Settings</h1>

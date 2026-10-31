@@ -274,6 +274,22 @@ export async function runSaasChecks(chromium, { url, label, evidence, playwright
       if (info && !reached.includes(info)) reached.push(info)
     }
     expect(reached.length >= 4, `Tab reaches the toolbar controls (${reached.join(' | ')})`)
+    // the search palette: the shortcut opens it, typing narrows it, Enter follows the item into the filtered table
+    // the shortcut is a page shortcut: it is not taken while an input has focus (Tab left focus in the toolbar)
+    await page.evaluate(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); document.body.focus() })
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k')
+    const paletteInput = page.locator('[role="dialog"] input, [cmdk-input]').first()
+    await paletteInput.waitFor({ state: 'visible', timeout: 5000 })
+    await paletteInput.fill('ATL-26012')
+    await page.waitForTimeout(300)
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => new URL(location.href).searchParams.get('q') === 'ATL-26012', null, { timeout: 8000 })
+    await waitRegion(page, 'shipments', 'ready')
+    await page.waitForSelector('[role="dialog"] input', { state: 'detached', timeout: 3000 }).catch(() => {})
+    expect((await count(page, '[data-shipments-table] tbody tr')) === 1 && (await page.locator('[role="dialog"] input').count()) === 0, `the palette narrows to the reference, Enter opens it in the table and the palette closes (${await count(page, '[data-shipments-table] tbody tr')} rows, ${await page.locator('[role="dialog"] input').count()} palette inputs)`)
+    expect(problems.length === 0, `console problems after the palette: ${problems.join(' | ')}`)
+    await page.goto(`${url}/app/shipments?status=late`, { waitUntil: 'load' })
+    await waitRegion(page, 'shipments', 'ready')
     await page.click('a[href="/app/fleet"]')
     await page.waitForSelector('[data-vehicles]')
     await page.goBack({ waitUntil: 'load' })
@@ -302,7 +318,7 @@ export async function runSaasChecks(chromium, { url, label, evidence, playwright
     const animated = await page.evaluate(() => [...document.querySelectorAll('*')].filter((e) => { const cs = getComputedStyle(e); return (cs.animationName !== 'none' && parseFloat(cs.animationDuration) > 0.01) || (cs.transitionProperty !== 'all' && cs.transitionProperty !== 'none' && parseFloat(cs.transitionDuration) > 0.01) }).length)
     expect(animated === 0, `reduced motion leaves no running animation or transition (${animated} elements)`)
     report.responsive = { toolbarReached: reached, mobile, mobileDash, reducedMotionAnimated: animated }
-    ok(`${label}: Tab reaches ${reached.length} toolbar controls, re-entry keeps state, 375 px cards and 320 px reflow, reduced motion cuts everything`)
+    ok(`${label}: Tab reaches ${reached.length} toolbar controls, the palette opens on the shortcut and lands in the table, re-entry keeps state, 375 px cards and 320 px reflow, reduced motion cuts everything`)
     await context.close()
 
     // ---- 7. the plugin's browser audit on four routes

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The dashboard (enterprise-ui-patterns.md): what needs attention above the fold, charts with one message each,
+// The dashboard (enterprise-application.md): what needs attention above the fold, charts with one message each,
 // the exceptions table below because the exceptions are the work. Every region has its five states.
 import { computeKpis, deliverySeries, fmtDateTime, fmtRelative, laneLoads, NOW, type Shipment } from '~/lib/ui/saas/data'
 import type { TableColumn } from '@nuxt/ui'
@@ -25,11 +25,11 @@ const DATASET_VEHICLES = DATASET.vehicles
 
 <template>
   <UDashboardPanel id="dashboard">
-    <template #header>
-      <UDashboardNavbar title="Dashboard">
+    <template #header><header>
+      <UDashboardNavbar title="Dashboard" :toggle="NAV_TOGGLE" :ui="{ title: 'whitespace-normal' }">
         <template #right><span class="text-xs text-fg-muted tabular-nums">Updated {{ fmtDateTime(NOW) }} UTC</span></template>
       </UDashboardNavbar>
-    </template>
+    </header></template>
     <template #body>
       <main id="main" class="space-y-6" tabindex="-1">
         <h1 class="sr-only">Dashboard</h1>

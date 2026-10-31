@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Atlas Logistics shell (enterprise-ui-patterns.md: navigation for many modules; layout-and-responsive.md): a 272px
+// Atlas Logistics shell (enterprise-application.md: navigation for many modules; layout-and-responsive.md): a 272px
 // sidebar that collapses to icons and becomes a drawer on small screens (Nuxt UI's dashboard components), a skip link,
 // the search palette on Cmd/Ctrl+K, the theme switch in the sidebar footer. The density preference lands on <html>.
 import { DATASET, STATUS_LABEL } from '~/lib/ui/saas/data'
@@ -13,8 +13,8 @@ const items = computed(() => [
   { label: 'Fleet', icon: 'i-lucide-truck', to: '/app/fleet', active: route.path === '/app/fleet' },
   { label: 'Settings', icon: 'i-lucide-settings', to: '/app/settings', active: route.path === '/app/settings' },
 ])
+// UDashboardSearch registers the meta_k shortcut itself; a second handler toggling the same model cancelled it out
 const searchOpen = ref(false)
-defineShortcuts({ meta_k: () => { searchOpen.value = !searchOpen.value } })
 const searchGroups = computed(() => [
   { id: 'pages', label: 'Pages', items: items.value.map((i) => ({ label: i.label, icon: i.icon, to: i.to })) },
   { id: 'shipments', label: 'Shipments', items: DATASET.shipments.slice(0, 60).map((s) => ({ label: `${s.reference} · ${s.customer}`, suffix: `${s.lane} · ${STATUS_LABEL[s.status]}`, icon: 'i-lucide-package', to: { path: '/app/shipments', query: { q: s.reference } } })) },
@@ -28,13 +28,13 @@ const searchGroups = computed(() => [
       <template #header="{ collapsed }">
         <NuxtLink to="/app" class="flex min-w-0 items-center gap-2 font-semibold tracking-tight">
           <span class="grid h-7 w-7 shrink-0 place-items-center rounded-sm bg-accent text-accent-fg text-xs font-bold" aria-hidden="true">A</span>
-          <span :class="collapsed ? 'sr-only' : 'truncate'">Atlas Logistics</span>
+          <span :class="collapsed ? 'sr-only' : 'leading-tight'">Atlas Logistics</span>
         </NuxtLink>
         <UDashboardSidebarCollapse v-if="!collapsed" class="ms-auto" aria-label="Collapse sidebar" data-sidebar-collapse />
       </template>
       <template #default="{ collapsed }">
         <UDashboardSearchButton :collapsed="collapsed" label="Search" />
-        <UNavigationMenu :collapsed="collapsed" :items="items" orientation="vertical" aria-label="Application" />
+        <UNavigationMenu :collapsed="collapsed" :items="items" orientation="vertical" aria-label="Application" :ui="{ linkLabel: 'whitespace-normal' }" />
       </template>
       <template #footer="{ collapsed }">
         <div class="flex items-center justify-between gap-2 px-1 py-1">

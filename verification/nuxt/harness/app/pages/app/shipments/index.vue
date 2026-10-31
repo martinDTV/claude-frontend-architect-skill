@@ -60,8 +60,8 @@ const createdRef = computed(() => String(route.query.created ?? ''))
 
 <template>
   <UDashboardPanel id="shipments">
-    <template #header>
-      <UDashboardNavbar title="Shipments">
+    <template #header><header>
+      <UDashboardNavbar title="Shipments" :toggle="NAV_TOGGLE" :ui="{ title: 'whitespace-normal' }">
         <template #right><UButton to="/app/shipments/new" icon="i-lucide-plus" label="New shipment" color="primary" /></template>
       </UDashboardNavbar>
       <UDashboardToolbar>
@@ -77,7 +77,7 @@ const createdRef = computed(() => String(route.query.created ?? ''))
           <UButton v-if="activeFilters.length" label="Clear filters" variant="ghost" color="neutral" icon="i-lucide-x" data-clear-filters @click="clearFilters" />
         </div>
       </UDashboardToolbar>
-    </template>
+    </header></template>
     <template #body>
       <main id="main" class="space-y-3" tabindex="-1">
         <h1 class="sr-only">Shipments</h1>

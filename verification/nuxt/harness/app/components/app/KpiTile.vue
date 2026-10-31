@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A number with its context (enterprise-ui-patterns.md: value in tabular figures, quieter label, delta with sign and
+// A number with its context (enterprise-application.md: value in tabular figures, quieter label, delta with sign and
 // a word, never colour alone), the whole tile a link to the breakdown.
 import type { Kpi } from '~/lib/ui/saas/data'
 import { fmtInt } from '~/lib/ui/saas/data'

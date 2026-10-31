@@ -1,4 +1,4 @@
-// The shipments data region (enterprise-ui-patterns.md: five states per data region). One composable owns loading,
+// The shipments data region (enterprise-application.md: five states per data region). One composable owns loading,
 // empty, error and success, cancels a request the page no longer wants, and takes its api mode from the URL so every
 // state can be reached without code changes (?api=fail|empty|slow).
 import { DATASET, type Shipment } from '~/lib/ui/saas/data'
