@@ -80,6 +80,7 @@ If installed, use the official **GreenSock `gsap-skills`** for exact GSAP API us
 | `references/motion-design.md` | Whether and how something should move: purpose test, durations, easings, choreography, microinteractions, reduced motion, motion tokens |
 | `references/animation-lifecycle.md` | Creating and disposing animation and 3D resources, KeepAlive and SSR pitfalls, feature detection, GPU budgets, leak detection and the tested cleanup helpers |
 | `references/gsap.md` | Timelines, ScrollTrigger, plugins, Vue and React integration |
+| `references/motion-engineering.md` | Shipping GSAP or ScrollTrigger in Vue/Nuxt or React/Next: lifecycle and cleanup patterns per framework, reduced motion, route changes, SSR safety, SVG, page transitions, the leak-patterns motion rules and the browser checks that prove the examples; the official GSAP skills and when they collaborate |
 | `references/motion-scroll.md` | Lenis, CSS scroll-driven animations, View Transitions, Motion, Vue transitions |
 | `references/threejs.md` | Renderer setup, loading models, performance, disposal |
 | `references/tresjs.md` | Three.js in Vue/Nuxt |

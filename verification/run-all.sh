@@ -18,9 +18,11 @@ node extract.mjs
 (cd vue && npx tsc --noEmit && npx vitest run)
 (cd react && npx tsc --noEmit)
 (cd creative && npx tsc --noEmit && npx vitest run)
-(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs)
+(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs && node check-motion.mjs)
 (cd nuxt && npx nuxt prepare && node check-layers.mjs && npx nuxt typecheck)
 ./ssr-test/run.sh
+# 1.5: the documented ScrollStory on the positive production build (mount, route change, re-entry, reduced motion, keyboard, 375 px)
+(cd nuxt && node check-motion.mjs)
 ./ssr-test/run.sh --negative
 (cd depcruise && ../vue/node_modules/.bin/depcruise src --config .dependency-cruiser.cjs > /tmp/depcruise.txt 2>&1 || true; grep -q "2 dependency violations" /tmp/depcruise.txt)
 if command -v nginx >/dev/null; then ./nginx-test.sh; fi

@@ -1,10 +1,10 @@
-<script setup lang="ts">
-import UserList from '~/features/users/components/UserList.vue'
-</script>
-
 <template>
   <div>
-    <LayerDemo />
-    <UserList />
+    <nav aria-label="Primary">
+      <NuxtLink to="/">Home</NuxtLink>
+      <NuxtLink to="/motion">Motion</NuxtLink>
+      <NuxtLink to="/motion-second">Second</NuxtLink>
+    </nav>
+    <NuxtPage />
   </div>
 </template>
