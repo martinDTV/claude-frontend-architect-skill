@@ -64,7 +64,7 @@ onBeforeUnmount(() => {
 .stage { position: absolute; inset: 0; }
 .stage-canvas { display: block; width: 100%; height: 100%; }
 .chapters { position: absolute; top: 1rem; right: 1.5rem; display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 3rem); gap: 0.5rem; padding: 0.4rem 0.5rem; border-radius: 6px; background: rgba(8, 8, 12, 0.9); }
-.chapters button { min-height: 32px; }
+.chapters button { min-height: 32px; padding: 0 0.75rem; border-radius: 4px; border: 1px solid transparent; background: #f4f1ea; color: #1c1c22; }
 .chapters button[aria-current='step'] { outline: 2px solid #ffd27a; }
 .captions { position: absolute; left: 1.5rem; bottom: 4rem; margin: 0; padding: 0; list-style: none; max-width: min(24rem, calc(100% - 3rem)); color: #f2efe6; }
 .captions li { opacity: 0; transition: opacity 0.4s; padding: 0.75rem 1rem; border-radius: 6px; background: rgba(8, 8, 12, 0.9); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }

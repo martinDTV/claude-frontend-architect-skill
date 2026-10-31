@@ -73,7 +73,7 @@ onBeforeUnmount(() => {
 .captions li[data-active='true'] { opacity: 1; }
 .captions li:not([data-active='true']) { position: absolute; }
 .configurator { position: absolute; right: 1.5rem; bottom: 1.5rem; display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 3rem); gap: 0.75rem; align-items: center; color: #f2efe6; padding: 0.5rem 0.75rem; border-radius: 6px; background: rgba(8, 8, 12, 0.9); }
-.configurator select, .configurator button { min-height: 32px; }
+.configurator select, .configurator button { min-height: 32px; padding: 0 0.6rem; border-radius: 4px; border: 1px solid transparent; background: #f4f1ea; color: #1c1c22; }
 .problem { margin: 0.5rem 1rem; color: #1c1c22; }
 /* no WebGL: the chapters stand in the flow as a readable list, the canvas and the controls that drive it are gone */
 .fallback { height: auto !important; }
