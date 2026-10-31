@@ -107,6 +107,7 @@ function fileRecord(project, f, host, fallbacks) {
       jsxElements: parsed.jsxElements ?? [],
       browserApiUses: parsed.browserApiUses ?? [],
       motionUses: parsed.motionUses ?? [],
+      threeUses: parsed.threeUses ?? [],
       elements: sfc?.elements ?? [],
       sfc: sfc ? { setup: sfc.setup, lang: sfc.lang, props: sfc.props, setupRefs: sfc.setupRefs, setupConsts: sfc.setupConsts, emits: sfc.emits, exposes: sfc.exposes, models: sfc.models, lifecycle: sfc.lifecycle, watchers: sfc.watchers, computed: sfc.computed, templateDepth: sfc.templateDepth, templateElements: sfc.templateElements, templateComponents: [...sfc.templateComponents.keys()], componentUses: sfc.componentUses ?? [], dynamicComponents: sfc.dynamicComponents ?? [], compileError: sfc.compileError } : null,
       clientBoundary: parsed.directives.includes('use client'),

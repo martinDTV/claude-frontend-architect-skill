@@ -64,7 +64,8 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
     jsxTags: new Map(),
     jsxElements: [], // { tag, line, attrs: { name: string|true|'{expr}' }, selfClosing, hasText, parents: [tags], depth }
     browserApiUses: [], // { name, line, topLevel, inFunction, calls: [enclosing callee names], guarded, guard }
-    motionUses: [], // 1.5: GSAP calls with their context { kind, name, line, flags, effect, ...context }
+    motionUses: [], // 1.5: GSAP calls with their context { kind, name, line, flags, target, effect, ...context }
+    threeUses: [], // 1.5: Three.js resource creations and lifecycle calls { kind, cls, name, line, inFrameLoop, frameCallee, guardedBranch, effect, ...context }
     parseDiagnostics: sf.parseDiagnostics?.length ?? 0,
   }
   const BROWSER_GLOBALS = new Set(['window', 'document', 'localStorage', 'sessionStorage', 'navigator', 'location', 'history', 'screen', 'matchMedia', 'requestAnimationFrame', 'IntersectionObserver', 'ResizeObserver', 'MutationObserver', 'customElements', 'indexedDB', 'Notification'])
@@ -229,6 +230,73 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
     return flags
   }
 
+  // 1.5: Three.js records (3D rules). Classes are recognised through the file's own imports from three (namespace or
+  // named), never by name alone; frame callbacks are functions passed to the known loop APIs or named in a
+  // requestAnimationFrame / setAnimationLoop call anywhere in the file (the recursive rAF pattern).
+  const THREE_SOURCE_RE = /^three(?:\/|$)/
+  const threeNamespaces = new Set()
+  const threeLocals = new Set()
+  for (const imp of out.imports) {
+    if (!THREE_SOURCE_RE.test(imp.source ?? '') || imp.typeOnly) continue
+    for (const n of imp.names ?? []) {
+      if (n.imported === '*') threeNamespaces.add(n.local)
+      else if (!n.typeOnly) threeLocals.add(n.local)
+    }
+  }
+  const THREE_KINDS = [
+    ['renderer', /^(?:WebGLRenderer|WebGL1Renderer|WebGPURenderer|CSS2DRenderer|CSS3DRenderer|SVGRenderer)$/],
+    ['renderTarget', /RenderTarget$/],
+    ['geometry', /Geometry$/],
+    ['material', /Material$/],
+    ['texture', /Texture$/],
+    ['loader', /Loader$/],
+    ['composer', /^(?:EffectComposer|PMREMGenerator|GPUComputationRenderer)$/],
+    ['pass', /Pass$/],
+    ['object', /^(?:Mesh|InstancedMesh|SkinnedMesh|Points|Line|LineSegments|LineLoop|Sprite|Group|Object3D|Scene|BatchedMesh)$/],
+  ]
+  const threeClassOf = (expr) => {
+    if (ts.isPropertyAccessExpression(expr) && ts.isIdentifier(expr.expression) && threeNamespaces.has(expr.expression.text)) return expr.name.text
+    if (ts.isIdentifier(expr) && threeLocals.has(expr.text)) return expr.text
+    return null
+  }
+  const FRAME_CALLEES = new Set(['useFrame', 'onBeforeRender', 'onRender', 'onAfterRender', 'onLoop', 'setAnimationLoop', 'requestAnimationFrame', 'useRafFn'])
+  const frameFunctions = new Set()
+  const collectFrameFunctions = (node) => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : null
+      const arg = node.arguments[0]
+      if ((name === 'requestAnimationFrame' || name === 'setAnimationLoop') && arg && ts.isIdentifier(arg)) frameFunctions.add(arg.text)
+    }
+    ts.forEachChild(node, collectFrameFunctions)
+  }
+  collectFrameFunctions(sf)
+  const functionName = (fn) => fn.name?.text ?? (fn.parent && ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name) ? fn.parent.name.text : null)
+  const frameContextOf = (node) => {
+    let n = node.parent
+    let guardedBranch = false
+    while (n && !ts.isSourceFile(n)) {
+      if (ts.isIfStatement(n) || ts.isConditionalExpression(n) || (ts.isBinaryExpression(n) && (n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken || n.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken || n.operatorToken.kind === ts.SyntaxKind.BarBarToken))) guardedBranch = true
+      if (ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n) || ts.isMethodDeclaration(n)) {
+        const name = functionName(n)
+        if (name && frameFunctions.has(name)) return { inFrameLoop: true, frameCallee: `${name}()`, guardedBranch }
+        const parent = n.parent
+        if (parent && ts.isCallExpression(parent) && parent.arguments.includes(n)) {
+          const callee = parent.expression
+          const calleeName = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : null
+          const calleeText = callee.getText(sf)
+          if ((calleeName && FRAME_CALLEES.has(calleeName)) || /(?:^|\.)(?:ticker|loop)\.add$/.test(calleeText)) return { inFrameLoop: true, frameCallee: calleeText.slice(0, 40), guardedBranch }
+        }
+      }
+      n = n.parent
+    }
+    return { inFrameLoop: false, frameCallee: null, guardedBranch: false }
+  }
+  const pushThree = (kind, cls, name, node, extra = {}) => {
+    out.threeUses.push({ kind, cls, name: name.slice(0, 80), line: lineOf(sf, node.getStart(sf)), ...frameContextOf(node), effect: effectInfoOf(node), ...contextOf(node), ...extra })
+  }
+  const argText = (node, i = 0) => (node.arguments[i] ? node.arguments[i].getText(sf).replace(/\s+/g, ' ').slice(0, 80) : null)
+
   const visit = (node) => {
     // declarations
     if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) bindingNames(ts, node.name, out.declared)
@@ -254,8 +322,50 @@ export function parseModule(ts, text, fileName, { lang } = {}) {
       if (ts.isIdentifier(callee) || ts.isPropertyAccessExpression(callee)) {
         const calleeText = callee.getText(sf)
         const kind = MOTION_CALLS.find(([, re]) => re.test(calleeText))?.[0] ?? (ts.isPropertyAccessExpression(callee) && /^(?:revert|kill)$/.test(callee.name.text) ? callee.name.text : null)
-        if (kind) out.motionUses.push({ kind, name: calleeText.slice(0, 80), line, flags: kind === 'tween' || kind === 'timeline' || kind === 'scrolltrigger' ? motionFlags(node) : null, effect: effectInfoOf(node), ...contextOf(node) })
+        if (kind) out.motionUses.push({ kind, name: calleeText.slice(0, 80), line, flags: kind === 'tween' || kind === 'timeline' || kind === 'scrolltrigger' ? motionFlags(node) : null, target: kind === 'tween' ? argText(node) : null, effect: effectInfoOf(node), ...contextOf(node) })
       }
+      // Three.js lifecycle calls (3D rules, 1.5)
+      if (ts.isPropertyAccessExpression(callee)) {
+        const object = callee.expression.getText(sf).replace(/\s+/g, ' ').slice(0, 60)
+        const member = callee.name.text
+        if (member === 'dispose') pushThree('dispose', null, `${object}.dispose`, node, { object })
+        else if (member === 'setAnimationLoop') pushThree(node.arguments[0] && node.arguments[0].kind === ts.SyntaxKind.NullKeyword ? 'loop-stop' : 'loop-start', null, `${object}.setAnimationLoop`, node, { object })
+        else if (member === 'setPixelRatio') pushThree('pixel-ratio', null, `${object}.setPixelRatio`, node, { object, arg: argText(node) })
+        else if ((member === 'load' || member === 'loadAsync') && /Loader|loader/.test(object)) pushThree('load', null, `${object}.${member}`, node, { object })
+        else if (node.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'webglcontextlost')) pushThree('context-lost-listener', null, `${object}.${member}`, node, { object })
+        else if (member === 'traverse') pushThree('traverse', null, `${object}.traverse`, node, { object })
+        else if (member === 'forceContextLoss') pushThree('force-context-loss', null, `${object}.forceContextLoss`, node, { object })
+      } else if (ts.isIdentifier(callee)) {
+        if (node.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'webglcontextlost')) pushThree('context-lost-listener', null, callee.text, node, { object: null })
+        else if (callee.text === 'requestAnimationFrame') pushThree('loop-start', null, 'requestAnimationFrame', node, { object: null })
+        else if (callee.text === 'cancelAnimationFrame') pushThree('loop-stop', null, 'cancelAnimationFrame', node, { object: null })
+        else if (/^(?:useLoader|useGLTF|useTexture|useFBX|useEnvironment)$/.test(callee.text)) pushThree('framework-load', null, callee.text, node, { object: null })
+        else if (/^(?:disposeObject|disposeSceneGraph|disposeObject3D)$/.test(callee.text)) pushThree('dispose', null, callee.text, node, { object: argText(node) })
+      }
+    }
+    // Three.js constructions (3D rules, 1.5): only classes imported from three
+    if (ts.isNewExpression(node)) {
+      const cls = threeClassOf(node.expression)
+      if (cls) {
+        const kind = THREE_KINDS.find(([, re]) => re.test(cls))?.[0] ?? null
+        if (kind) pushThree(kind, cls, `new ${cls}`, node, {})
+      }
+    }
+    // writes a frame loop or a tween may compete over (3D rules, 1.5)
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(node.left)) {
+      const left = node.left
+      const member = left.name.text
+      const object = left.expression.getText(sf).replace(/\s+/g, ' ').slice(0, 60)
+      if (member === 'needsUpdate') pushThree('needs-update', null, `${object}.needsUpdate =`, node, { object })
+      else if (/\.uniforms(?:\.|\[)|^uniforms(?:\.|\[)/.test(left.getText(sf)) && ts.isObjectLiteralExpression(node.right)) pushThree('uniform-object', null, `${left.getText(sf).slice(0, 60)} = {…}`, node, { object })
+      else if (/^[xyzw]$/.test(member) && /(?:position|rotation|scale|quaternion)$/.test(object)) pushThree('transform-write', null, `${object}.${member} =`, node, { object })
+    } else if (ts.isBinaryExpression(node) && [ts.SyntaxKind.PlusEqualsToken, ts.SyntaxKind.MinusEqualsToken].includes(node.operatorToken.kind) && ts.isPropertyAccessExpression(node.left)) {
+      const object = node.left.expression.getText(sf).replace(/\s+/g, ' ').slice(0, 60)
+      if (/^[xyzw]$/.test(node.left.name.text) && /(?:position|rotation|scale|quaternion)$/.test(object)) pushThree('transform-write', null, `${object}.${node.left.name.text} +=`, node, { object })
+    }
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && /^(?:set|copy|lerp|setScalar)$/.test(node.expression.name.text)) {
+      const object = node.expression.expression.getText(sf).replace(/\s+/g, ' ').slice(0, 60)
+      if (/(?:position|rotation|scale|quaternion)$/.test(object)) pushThree('transform-write', null, `${object}.${node.expression.name.text}()`, node, { object })
     }
     // JSX tags and elements (attributes kept for the UI audit)
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {

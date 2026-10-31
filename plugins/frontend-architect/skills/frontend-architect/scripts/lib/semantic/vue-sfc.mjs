@@ -76,7 +76,7 @@ export function parseSfc(sfcCompiler, ts, text, fileName) {
   }
   const blocks = [descriptor.scriptSetup, descriptor.script].filter(Boolean)
   const lang = blocks[0]?.lang ?? 'js'
-  const merged = { imports: [], exports: [], directives: [], declared: new Set(), valueIdentifiers: new Map(), typeIdentifiers: new Map(), calls: new Map(), memberCalls: [], jsxTags: new Map(), jsxElements: [], browserApiUses: [], motionUses: [], parseDiagnostics: 0 }
+  const merged = { imports: [], exports: [], directives: [], declared: new Set(), valueIdentifiers: new Map(), typeIdentifiers: new Map(), calls: new Map(), memberCalls: [], jsxTags: new Map(), jsxElements: [], browserApiUses: [], motionUses: [], threeUses: [], parseDiagnostics: 0 }
   let scriptStartLine = 0
   for (const block of blocks) {
     const offset = (block.loc?.start?.line ?? 1) - 1
@@ -99,6 +99,7 @@ export function parseSfc(sfcCompiler, ts, text, fileName) {
     merged.jsxElements.push(...(info.jsxElements ?? []).map(shift))
     merged.browserApiUses.push(...(info.browserApiUses ?? []).map(shift))
     merged.motionUses.push(...(info.motionUses ?? []).map(shift))
+    merged.threeUses.push(...(info.threeUses ?? []).map(shift))
     merged.parseDiagnostics += info.parseDiagnostics
   }
 
