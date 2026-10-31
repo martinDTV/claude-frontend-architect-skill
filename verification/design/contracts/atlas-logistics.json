@@ -1,0 +1,367 @@
+{
+  "$schema": "frontend-architect/design-contract/1",
+  "name": "atlas-logistics",
+  "version": 1,
+  "product": {
+    "kind": "operate",
+    "summary": "Back office of a regional freight operator: dispatchers plan routes, follow shipments and resolve exceptions all day.",
+    "frequency": "daily"
+  },
+  "audience": [
+    {
+      "who": "dispatchers",
+      "device": "desktop",
+      "environment": "two monitors, eight-hour shifts, interruptions by phone"
+    },
+    {
+      "who": "operations managers",
+      "device": "mixed",
+      "environment": "laptop in meetings, phone on the warehouse floor"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "R1",
+      "text": "A dispatcher sees what needs attention in the first screen without scrolling: late shipments, unassigned loads, vehicles off plan."
+    },
+    {
+      "id": "R2",
+      "text": "Shifts last eight hours: the interface must stay legible and calm, with no decoration that tires the eye."
+    },
+    {
+      "id": "R3",
+      "text": "Tables hold hundreds of rows; many columns are numbers, identifiers and times that must align and be scannable."
+    },
+    {
+      "id": "R4",
+      "text": "Status (on time, at risk, late, delivered) is the most important signal and must never rely on colour alone."
+    },
+    {
+      "id": "R5",
+      "text": "Managers open the same screens on a phone in the warehouse: the layout reflows to one column and the critical numbers stay first."
+    },
+    {
+      "id": "R6",
+      "text": "Night shifts work in dim rooms: a dark theme is part of the product, not a novelty."
+    },
+    {
+      "id": "R7",
+      "text": "Everything a dispatcher does hourly is reachable with the keyboard; focus is always visible."
+    },
+    {
+      "id": "R8",
+      "text": "Motion only confirms an action or explains a change of state; nothing moves on its own."
+    },
+    {
+      "id": "R9",
+      "text": "The brand is quiet, industrial and trustworthy: a deep blue the company already uses on its trucks, no gradients."
+    }
+  ],
+  "direction": {
+    "statement": "Quiet and dense. The data is the interface; chrome recedes to thin borders and one accent.\nColour appears only for status and for the single primary action on a screen.\nType is set for scanning: tabular numbers, short labels, generous line height in the rows that matter.",
+    "adjectives": [
+      "dense",
+      "calm",
+      "exact"
+    ],
+    "references": [
+      "the restraint of a well-set annual report",
+      "the density of a dispatch board without its colour noise",
+      "signage in a freight terminal: large numbers, few words"
+    ]
+  },
+  "decisions": [
+    {
+      "area": "typography",
+      "choice": "One sans family (Inter Variable with system fallbacks) at a 1.2 ratio; tabular numbers everywhere numbers appear; body 16px, table cells 14px with 1.45 line height; no display sizes above 2xl inside the application.",
+      "because": [
+        "R2",
+        "R3"
+      ]
+    },
+    {
+      "area": "color",
+      "choice": "Accent is the fleet blue #1f4e8c used only for the primary action and links; neutrals are a cool grey tinted from the same hue; four status colours (success, warning, danger, info) each paired with an icon and a word.",
+      "because": [
+        "R4",
+        "R9"
+      ]
+    },
+    {
+      "area": "spacing",
+      "choice": "4px base; rows and controls on 32px and 36px heights (compact density) with 8px and 12px gutters inside cards and 24px between regions.",
+      "because": [
+        "R2",
+        "R3"
+      ]
+    },
+    {
+      "area": "density",
+      "choice": "Compact by default with a comfortable toggle in preferences; the toggle changes row height and padding tokens only.",
+      "because": [
+        "R3",
+        "R5"
+      ]
+    },
+    {
+      "area": "layout",
+      "choice": "A 272px sidebar on desktop that collapses to icons at 1024px and to a drawer under 768px; a 12-column page grid with a 1440px maximum; KPI row, then charts, then the exception table.",
+      "because": [
+        "R1",
+        "R5"
+      ]
+    },
+    {
+      "area": "radius",
+      "choice": "Soft corners: 4px on controls, 6px on cards, never full rounding except avatars and status dots.",
+      "because": [
+        "R9"
+      ]
+    },
+    {
+      "area": "elevation",
+      "choice": "Flat: borders separate regions; a single shadow level for popovers, menus and dialogs, nothing else floats.",
+      "because": [
+        "R2",
+        "R9"
+      ]
+    },
+    {
+      "area": "motion",
+      "choice": "120ms for state changes, 200ms for panels and menus, 320ms for the drawer; standard easing; no auto-playing motion; reduced motion cuts.",
+      "because": [
+        "R8"
+      ]
+    },
+    {
+      "area": "imagery",
+      "choice": "No decorative imagery; maps and vehicle photos appear only where they carry information; icons from one outline set at 20px.",
+      "because": [
+        "R2",
+        "R9"
+      ]
+    },
+    {
+      "area": "states",
+      "choice": "Hover darkens by one ramp step; focus is a 2px accent ring with 2px offset on every control; disabled lowers opacity to 0.5 and keeps the label readable; selected rows use a tinted surface plus a left border.",
+      "because": [
+        "R7",
+        "R4"
+      ]
+    },
+    {
+      "area": "dark-mode",
+      "choice": "Dark theme ships with the product: surfaces step up in lightness as they rise, the accent moves one step lighter for text, status colours keep the same hues.",
+      "because": [
+        "R6"
+      ]
+    },
+    {
+      "area": "accessibility",
+      "choice": "Targets at least 24px (36px for the primary row actions on touch); every table has a caption and sortable headers announce their state; dialogs trap and restore focus.",
+      "because": [
+        "R7",
+        "R5"
+      ]
+    },
+    {
+      "area": "responsive",
+      "choice": "Breakpoints by content: 640, 768, 1024, 1280; tables become stacked cards under 768px with the status and identifier first; KPIs stay above the fold on a 375px phone.",
+      "because": [
+        "R5",
+        "R1"
+      ]
+    }
+  ],
+  "typography": {
+    "families": {
+      "sans": [
+        "Inter Variable",
+        "Inter",
+        "system-ui",
+        "sans-serif"
+      ],
+      "mono": [
+        "JetBrains Mono Variable",
+        "ui-monospace",
+        "SFMono-Regular",
+        "monospace"
+      ]
+    },
+    "ratio": 1.2,
+    "baseRem": 1,
+    "steps": {
+      "xs": -2,
+      "sm": -1,
+      "base": 0,
+      "lg": 1,
+      "xl": 2,
+      "2xl": 3
+    },
+    "lineHeights": {
+      "tight": 1.2,
+      "snug": 1.35,
+      "body": 1.5
+    },
+    "weights": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600
+    },
+    "tabularNumbers": true
+  },
+  "spacing": {
+    "base": 4,
+    "scale": [
+      0,
+      4,
+      8,
+      12,
+      16,
+      20,
+      24,
+      32,
+      40,
+      48,
+      64
+    ]
+  },
+  "layout": {
+    "container": 1440,
+    "gutter": 24,
+    "sidebar": 272,
+    "breakpoints": {
+      "sm": 640,
+      "md": 768,
+      "lg": 1024,
+      "xl": 1280
+    }
+  },
+  "radius": {
+    "policy": "soft",
+    "scale": {
+      "sm": 4,
+      "md": 6,
+      "lg": 10,
+      "full": 9999
+    }
+  },
+  "elevation": {
+    "policy": "flat",
+    "levels": [
+      {
+        "name": "popover",
+        "y": 4,
+        "blur": 12,
+        "spread": -2,
+        "alpha": 0.18
+      },
+      {
+        "name": "dialog",
+        "y": 12,
+        "blur": 32,
+        "spread": -8,
+        "alpha": 0.28
+      }
+    ]
+  },
+  "density": "compact",
+  "motion": {
+    "durations": {
+      "fast": 120,
+      "base": 200,
+      "slow": 320
+    },
+    "easings": {
+      "standard": [
+        0.2,
+        0,
+        0,
+        1
+      ],
+      "enter": [
+        0,
+        0,
+        0.2,
+        1
+      ],
+      "exit": [
+        0.4,
+        0,
+        1,
+        1
+      ]
+    },
+    "reducedMotion": "cut"
+  },
+  "color": {
+    "accent": "#1f4e8c",
+    "neutral": {
+      "seed": "#1f4e8c",
+      "chroma": 0.08
+    },
+    "status": {
+      "success": "#2f8a5b",
+      "warning": "#b8791f",
+      "danger": "#c23b3b",
+      "info": "#2b6fc9"
+    },
+    "roles": {
+      "light": {
+        "canvas": "{neutral.50}",
+        "surface": "#ffffff",
+        "surface-raised": "#ffffff",
+        "fg": "{neutral.900}",
+        "fg-muted": "{neutral.700}",
+        "border": "{neutral.300}",
+        "accent": "{accent.700}",
+        "accent-fg": "#ffffff",
+        "accent-hover": "{accent.800}",
+        "focus": "{accent.600}",
+        "success": "{success.700}",
+        "success-fg": "#ffffff",
+        "warning": "{warning.700}",
+        "warning-fg": "#ffffff",
+        "danger": "{danger.700}",
+        "danger-fg": "#ffffff",
+        "info": "{info.700}",
+        "info-fg": "#ffffff",
+        "border-strong": "{neutral.600}"
+      },
+      "dark": {
+        "canvas": "{neutral.950}",
+        "surface": "{neutral.900}",
+        "surface-raised": "{neutral.800}",
+        "fg": "{neutral.50}",
+        "fg-muted": "{neutral.300}",
+        "border": "{neutral.700}",
+        "accent": "{accent.300}",
+        "accent-fg": "{neutral.950}",
+        "accent-hover": "{accent.200}",
+        "focus": "{accent.300}",
+        "success": "{success.300}",
+        "success-fg": "{neutral.950}",
+        "warning": "{warning.300}",
+        "warning-fg": "{neutral.950}",
+        "danger": "{danger.300}",
+        "danger-fg": "{neutral.950}",
+        "info": "{info.300}",
+        "info-fg": "{neutral.950}",
+        "border-strong": "{neutral.500}"
+      }
+    }
+  },
+  "states": {
+    "focusRing": {
+      "width": 2,
+      "offset": 2
+    },
+    "minTarget": 24,
+    "disabledOpacity": 0.5,
+    "hover": "one ramp step darker (light) or lighter (dark)"
+  },
+  "darkMode": true,
+  "imagery": {
+    "policy": "informational only: maps, vehicle photos in detail views; no hero imagery, no illustrations"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "frontend-architect/design-contract/1",
+  "name": "lumen-notebook",
+  "version": 1,
+  "product": { "kind": "buy", "summary": "Launch page of Lumen, a fictional e-paper field notebook for people who think on paper and archive digitally: one product, three finishes, pre-orders.", "frequency": "occasional" },
+  "audience": [
+    { "who": "architects, researchers and journalists who still draft on paper", "device": "mixed", "environment": "reading on a phone in transit, deciding on a laptop at night" },
+    { "who": "press and early adopters", "device": "desktop", "environment": "quick scan, screenshots, sharing" }
+  ],
+  "requirements": [
+    { "id": "R1", "text": "The first screen says what the product is in one sentence and shows it; no carousel, no stock photo." },
+    { "id": "R2", "text": "The page reads like a long-form article: a reader can scroll it in two minutes and understand the three ideas (paper feel, archive, battery)." },
+    { "id": "R3", "text": "The brand is warm paper and ink: cream and graphite with one ink accent; editorial typography with a real serif for headlines." },
+    { "id": "R4", "text": "Pre-order is the one action; it is visible in every section without shouting." },
+    { "id": "R5", "text": "Motion explains the product (the page opens like a notebook, a stroke draws itself) and never decorates; it respects reduced motion." },
+    { "id": "R6", "text": "The page loads fast on a phone over mobile data: fonts self-hosted, images sized, no layout shift." },
+    { "id": "R7", "text": "Everything reads at 320px and at 200% zoom; headlines stay on one line per idea." },
+    { "id": "R8", "text": "Dark mode follows the system but the page is designed for light first (paper)." }
+  ],
+  "direction": {
+    "statement": "Editorial and spacious: paper, ink and air. One large image per idea, serif headlines set tight, a single ink accent.\nThe page is a notebook spread: margins carry the small type, the centre carries the product.\nNothing is centred by default; asymmetry comes from the grid, not from decoration.",
+    "adjectives": ["editorial", "tactile", "unhurried"],
+    "references": ["the typographic restraint of a well-made field guide", "the pacing of a long-form essay with photographs", "a stationer's catalogue: products shown flat, lit from one side"]
+  },
+  "decisions": [
+    { "area": "typography", "choice": "Fraunces Variable (serif, optical sizing) for headlines at a 1.25 ratio up to a fluid display size; Inter Variable for body at 18px with 1.6 line height; measure 62 characters.", "because": ["R2", "R3", "R7"] },
+    { "area": "color", "choice": "Cream canvas (#f6f1e8) and graphite ink (#1e1d1b) with one ink-blue accent (#1c4aa8) for links and the pre-order action; no gradients; status colours only in the form.", "because": ["R3", "R4"] },
+    { "area": "spacing", "choice": "8px base with generous section spacing (96px to 160px) and tight spacing inside text blocks; the grid gutter is 32px.", "because": ["R2", "R3"] },
+    { "area": "density", "choice": "Spacious: one idea per viewport on desktop, one per two viewports on a phone.", "because": ["R2"] },
+    { "area": "layout", "choice": "A 12-column grid with a 1280px measure; headlines start on column 2, images bleed to the right edge on alternate sections; the pre-order bar is a sticky footer on phones and a quiet header link on desktop.", "because": ["R1", "R4", "R7"] },
+    { "area": "radius", "choice": "Sharp: 2px on controls, 0 on images; the product's own corners are the only soft shapes.", "because": ["R3"] },
+    { "area": "elevation", "choice": "Flat: no shadows except the pre-order dialog; depth comes from the photographs' lighting.", "because": ["R3"] },
+    { "area": "motion", "choice": "A notebook-open reveal on load (480ms, once), ink strokes that draw along scroll in the archive section (GSAP ScrollTrigger scrub), 200ms for hover and focus; reduced motion shows the final frames.", "because": ["R5"] },
+    { "area": "imagery", "choice": "Rendered product shots on paper textures, one per idea, lit from the left; no people, no stock; images served in two sizes with fixed aspect boxes.", "because": ["R1", "R3", "R6"] },
+    { "area": "states", "choice": "Links underline on hover; the pre-order button darkens one step; focus is a 2px ink ring with 3px offset so it reads on cream; form errors sit under their fields.", "because": ["R4", "R7"] },
+    { "area": "dark-mode", "choice": "Follows the system: graphite canvas, cream text, accent lifted two steps; photographs keep their own tone.", "because": ["R8"] },
+    { "area": "accessibility", "choice": "Headings in order, one h1, landmark per section, the sticky bar never covers focused controls, targets 44px on the phone bar.", "because": ["R7", "R4"] },
+    { "area": "responsive", "choice": "Breakpoints at 640, 900 and 1200 chosen by the measure: the two-column spreads become single columns under 900 with images first.", "because": ["R7", "R2"] }
+  ],
+  "typography": {
+    "families": { "serif": ["Fraunces Variable", "Fraunces", "Georgia", "serif"], "sans": ["Inter Variable", "Inter", "system-ui", "sans-serif"] },
+    "ratio": 1.25,
+    "baseRem": 1.125,
+    "steps": { "xs": -2, "sm": -1, "base": 0, "lg": 1, "xl": 2, "2xl": 3, "3xl": 4, "display": 6 },
+    "fluid": { "minViewport": 360, "maxViewport": 1440, "fromStep": 2, "minRatio": 1.15 },
+    "lineHeights": { "tight": 1.05, "snug": 1.25, "body": 1.6 },
+    "weights": { "regular": 400, "medium": 500, "semibold": 600 },
+    "tabularNumbers": false
+  },
+  "spacing": { "base": 8, "scale": [0, 8, 16, 24, 32, 48, 64, 96, 128, 160] },
+  "layout": { "container": 1280, "gutter": 32, "breakpoints": { "sm": 640, "md": 900, "lg": 1200 } },
+  "radius": { "policy": "sharp", "scale": { "sm": 2, "md": 2, "lg": 4, "full": 9999 } },
+  "elevation": { "policy": "flat", "levels": [{ "name": "dialog", "y": 16, "blur": 40, "spread": -12, "alpha": 0.3 }] },
+  "density": "spacious",
+  "motion": { "durations": { "fast": 200, "base": 320, "slow": 480 }, "easings": { "standard": [0.2, 0, 0, 1], "enter": [0.16, 1, 0.3, 1], "exit": [0.4, 0, 1, 1] }, "reducedMotion": "cut" },
+  "color": {
+    "accent": "#1c4aa8",
+    "neutral": { "seed": "#8a7a5a", "chroma": 0.25 },
+    "status": { "success": "#2f7a4f", "warning": "#a86a12", "danger": "#b3332f", "info": "#1c4aa8" },
+    "roles": {
+      "light": {
+        "canvas": "#f6f1e8", "surface": "#fbf8f2", "surface-raised": "#ffffff",
+        "fg": "#1e1d1b", "fg-muted": "{neutral.800}", "border": "{neutral.300}", "border-strong": "{neutral.700}",
+        "accent": "{accent.700}", "accent-fg": "#ffffff", "accent-hover": "{accent.800}", "focus": "#1e1d1b",
+        "success": "{success.700}", "success-fg": "#ffffff", "warning": "{warning.800}", "warning-fg": "#ffffff",
+        "danger": "{danger.700}", "danger-fg": "#ffffff", "info": "{info.700}", "info-fg": "#ffffff"
+      },
+      "dark": {
+        "canvas": "#1e1d1b", "surface": "#262523", "surface-raised": "#302e2b",
+        "fg": "#f6f1e8", "fg-muted": "{neutral.300}", "border": "{neutral.800}", "border-strong": "{neutral.500}",
+        "accent": "{accent.300}", "accent-fg": "#1e1d1b", "accent-hover": "{accent.200}", "focus": "#f6f1e8",
+        "success": "{success.300}", "success-fg": "#1e1d1b", "warning": "{warning.300}", "warning-fg": "#1e1d1b",
+        "danger": "{danger.300}", "danger-fg": "#1e1d1b", "info": "{info.300}", "info-fg": "#1e1d1b"
+      }
+    }
+  },
+  "states": { "focusRing": { "width": 2, "offset": 3 }, "minTarget": 24, "disabledOpacity": 0.5, "hover": "underline links, darken the action one step" },
+  "darkMode": true,
+  "imagery": { "policy": "rendered product on paper, lit from the left, two sizes per image with fixed aspect ratio boxes; no people, no stock" }
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "frontend-architect/design-contract/1",
+  "name": "ember-store",
+  "version": 1,
+  "product": { "kind": "buy", "summary": "Ember & Ash, a fictional specialist shop for studio ceramics: a catalogue of a few hundred pieces by named makers, each in small runs with glaze variants and real stock limits.", "frequency": "occasional" },
+  "audience": [
+    { "who": "home cooks and collectors buying one or two pieces", "device": "phone", "environment": "evening browsing, comparing glazes, buying on impulse" },
+    { "who": "restaurants and gift buyers ordering sets", "device": "desktop", "environment": "filtering by maker, size and availability, ordering several" }
+  ],
+  "requirements": [
+    { "id": "R1", "text": "The pieces are the interface: photographs large and true to colour, chrome minimal and warm." },
+    { "id": "R2", "text": "Filtering by maker, form, glaze and availability is the main navigation and must work with a thumb and with a keyboard." },
+    { "id": "R3", "text": "Stock is real and small: availability (in stock, last few, sold out, made to order) is visible on every card and detail, never by colour alone." },
+    { "id": "R4", "text": "Variants (glaze, size) change the photograph, the price and the stock; the choice is never ambiguous." },
+    { "id": "R5", "text": "Adding to the bag confirms without leaving the page; the bag is reachable from anywhere and keyboard-operable." },
+    { "id": "R6", "text": "Brand: clay, ash glaze and ember; warm neutrals, a terracotta accent, serif headings for maker names, a sans for everything operational." },
+    { "id": "R7", "text": "Cards align on a strict grid so glazes can be compared across rows; prices in tabular figures." },
+    { "id": "R8", "text": "Motion is limited to feedback (bag count, variant change) and image loading; nothing animates while the user compares." },
+    { "id": "R9", "text": "A dark theme exists for evening browsing, with photographs untouched." }
+  ],
+  "direction": {
+    "statement": "Warm and exact. Photographs carry the page; the interface is a quiet frame of clay-toned neutrals with one ember accent for actions.\nMaker names in a serif, everything the shopper operates in a plain sans with tabular prices.\nA strict card grid so glazes read across rows like a shelf.",
+    "adjectives": ["warm", "exact", "unfussy"],
+    "references": ["a potter's shelf: pieces in rows, labels small and consistent", "a museum shop catalogue: one photograph per object, generous margins", "a market stall price card: the number first"]
+  },
+  "decisions": [
+    { "area": "typography", "choice": "Fraunces Variable for maker names and section titles at a 1.2 ratio; Inter Variable for product names, prices, filters and buttons; prices in tabular figures at 16px minimum.", "because": ["R6", "R7"] },
+    { "area": "color", "choice": "Warm neutrals tinted from clay (#9a7b63) on a warm off-white canvas; terracotta accent (#b4502e) only on add-to-bag, the bag badge and active filters; availability uses words plus a small shape, colour is secondary.", "because": ["R1", "R3", "R6"] },
+    { "area": "spacing", "choice": "4px base; 16px card padding, 24px grid gutter, 48px between catalogue sections; filters as 36px chips.", "because": ["R2", "R7"] },
+    { "area": "density", "choice": "Comfortable: cards with the photograph at 4:5, name, maker, price and availability in four short lines.", "because": ["R1", "R7"] },
+    { "area": "layout", "choice": "Catalogue: filter rail on the left at 1024px and above, a filter sheet on smaller screens; a 2/3/4-column card grid by width; product detail with the gallery on the left two thirds and a sticky purchase panel.", "because": ["R2", "R4", "R7"] },
+    { "area": "radius", "choice": "Soft: 6px on cards and controls, 9999 on chips and the bag badge.", "because": ["R6"] },
+    { "area": "elevation", "choice": "Flat cards with a 1px border; one shadow level for the bag drawer and menus; photographs never get shadows.", "because": ["R1", "R6"] },
+    { "area": "motion", "choice": "160ms for chips and buttons, 240ms for the bag drawer, a 320ms crossfade when a variant changes the photograph; the bag badge bumps once; reduced motion cuts.", "because": ["R8", "R4"] },
+    { "area": "imagery", "choice": "Studio photographs on a neutral surface, fixed 4:5 boxes with a placeholder of the piece's dominant colour so the grid never shifts; alt text names the piece, the maker and the glaze.", "because": ["R1", "R7", "R3"] },
+    { "area": "states", "choice": "Hover lifts nothing: cards gain a stronger border; the chosen variant has a 2px accent ring; sold-out cards keep full contrast with a 'Sold out' label; focus is a 2px ring in the foreground colour with 2px offset.", "because": ["R3", "R4", "R2"] },
+    { "area": "dark-mode", "choice": "Dark theme with clay-dark surfaces; photographs keep their white studio surface so colours stay true.", "because": ["R9", "R1"] },
+    { "area": "accessibility", "choice": "Filters are checkboxes and radios inside fieldsets with legends; variant swatches are radio buttons with visible labels; the bag is a dialog with focus trap and restore; targets 44px on the phone.", "because": ["R2", "R4", "R5"] },
+    { "area": "responsive", "choice": "Breakpoints 640, 768, 1024, 1280 by card count; the purchase panel becomes a sticky bottom bar under 768px with price and add-to-bag.", "because": ["R2", "R5"] }
+  ],
+  "typography": {
+    "families": { "serif": ["Fraunces Variable", "Fraunces", "Georgia", "serif"], "sans": ["Inter Variable", "Inter", "system-ui", "sans-serif"] },
+    "ratio": 1.2,
+    "baseRem": 1,
+    "steps": { "xs": -2, "sm": -1, "base": 0, "lg": 1, "xl": 2, "2xl": 3, "3xl": 4 },
+    "fluid": { "minViewport": 360, "maxViewport": 1440, "fromStep": 3, "minRatio": 1.15 },
+    "lineHeights": { "tight": 1.15, "snug": 1.3, "body": 1.5 },
+    "weights": { "regular": 400, "medium": 500, "semibold": 600 },
+    "tabularNumbers": true
+  },
+  "spacing": { "base": 4, "scale": [0, 4, 8, 12, 16, 24, 32, 48, 64, 96] },
+  "layout": { "container": 1360, "gutter": 24, "sidebar": 264, "breakpoints": { "sm": 640, "md": 768, "lg": 1024, "xl": 1280 } },
+  "radius": { "policy": "soft", "scale": { "sm": 4, "md": 6, "lg": 10, "full": 9999 } },
+  "elevation": { "policy": "flat", "levels": [{ "name": "menu", "y": 6, "blur": 16, "spread": -4, "alpha": 0.16 }, { "name": "drawer", "y": 0, "blur": 48, "spread": -8, "alpha": 0.3 }] },
+  "density": "comfortable",
+  "motion": { "durations": { "fast": 160, "base": 240, "slow": 320 }, "easings": { "standard": [0.2, 0, 0, 1], "enter": [0.16, 1, 0.3, 1], "exit": [0.4, 0, 1, 1] }, "reducedMotion": "cut" },
+  "color": {
+    "accent": "#b4502e",
+    "neutral": { "seed": "#9a7b63", "chroma": 0.3 },
+    "status": { "success": "#3a7d4e", "warning": "#a8691a", "danger": "#b33a33", "info": "#3f6a9c" },
+    "roles": {
+      "light": {
+        "canvas": "#faf6f1", "surface": "#ffffff", "surface-raised": "#ffffff",
+        "fg": "{neutral.950}", "fg-muted": "{neutral.700}", "border": "{neutral.200}", "border-strong": "{neutral.600}",
+        "accent": "{accent.700}", "accent-fg": "#ffffff", "accent-hover": "{accent.800}", "focus": "{neutral.950}",
+        "success": "{success.700}", "success-fg": "#ffffff", "warning": "{warning.800}", "warning-fg": "#ffffff",
+        "danger": "{danger.700}", "danger-fg": "#ffffff", "info": "{info.700}", "info-fg": "#ffffff"
+      },
+      "dark": {
+        "canvas": "{neutral.950}", "surface": "{neutral.900}", "surface-raised": "{neutral.800}",
+        "fg": "{neutral.50}", "fg-muted": "{neutral.300}", "border": "{neutral.800}", "border-strong": "{neutral.500}",
+        "accent": "{accent.300}", "accent-fg": "{neutral.950}", "accent-hover": "{accent.200}", "focus": "{neutral.50}",
+        "success": "{success.300}", "success-fg": "{neutral.950}", "warning": "{warning.300}", "warning-fg": "{neutral.950}",
+        "danger": "{danger.300}", "danger-fg": "{neutral.950}", "info": "{info.300}", "info-fg": "{neutral.950}"
+      }
+    }
+  },
+  "states": { "focusRing": { "width": 2, "offset": 2 }, "minTarget": 24, "disabledOpacity": 0.5, "hover": "stronger border on cards, one step darker on actions" },
+  "darkMode": true,
+  "imagery": { "policy": "studio photographs on a neutral surface in fixed 4:5 boxes with dominant-colour placeholders; alt names piece, maker and glaze" }
+}

@@ -24,7 +24,7 @@ Decide the direction once, in writing, and let every later choice answer to it.
 4. **Direction statement**, three lines maximum. Example for an ERP: "Quiet and dense. The data is the interface; chrome recedes. Color appears only to signal status or the one primary action." Example for a product launch site: "Editorial and spacious. One large image per section, strong serif headlines, a single accent."
 5. **References as words**, not screenshots to copy: "the restraint of a well-set annual report", "the density of a trading terminal without its color noise".
 
-Before any component, decide: type pairing and scale, spacing base, the color roles and one accent ramp, radius and elevation policy, icon set, density mode, and whether dark mode exists. These become tokens (`design-systems.md`); the decisions themselves are the design.
+Before any component, decide: type pairing and scale, spacing base, the color roles and one accent ramp, radius and elevation policy, icon set, density mode, and whether dark mode exists. Write them as a **design contract** (`frontend-architect`'s `design-contract.md`): requirements with ids, the statement, one decision per area citing the requirements it answers, the scales and the colour roles for light and dark; `scripts/design-contract.mjs` then proves the traceability, the grids and every WCAG pair, and emits the tokens (`design-systems.md`). The decisions themselves are the design; the contract is how they survive the first sprint.
 
 A direction is wrong when it serves the designer instead of the task: a dashboard that "looks premium" but needs a scroll to see the number the user came for.
 
