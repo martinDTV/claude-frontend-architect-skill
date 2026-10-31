@@ -759,7 +759,10 @@ async function checkKeyboard(page, path, emit, record) {
     const compositeKey = (e) => { const c = e.closest(COMPOSITE); return c ? `composite:${window.__fa.selector(c)}` : null }
     const radioKey = (e) => (e.matches('input[type="radio"][name]') ? `radio:${e.getAttribute('name')}` : null)
     const reachedGroups = new Set(all.filter((e) => set.has(e.getAttribute('data-fa-focusable'))).flatMap((e) => [compositeKey(e), radioKey(e)].filter(Boolean)))
-    const reachedByGroup = (e) => (radioKey(e) && reachedGroups.has(radioKey(e))) || (e.getAttribute('tabindex') === '-1' && compositeKey(e) && reachedGroups.has(compositeKey(e)))
+    // a composite is one Tab stop: once any member was reached, its other members (roving tabindex, whatever value they
+    // carried at scan time) and the container itself count as reached; the arrow keys take over from there
+    const containsReached = (e) => all.some((x) => x !== e && e.contains(x) && set.has(x.getAttribute('data-fa-focusable')))
+    const reachedByGroup = (e) => (radioKey(e) && reachedGroups.has(radioKey(e))) || (compositeKey(e) && reachedGroups.has(compositeKey(e))) || (e.matches(COMPOSITE) && containsReached(e))
     const hiddenFromAt = (e) => e.closest('[aria-hidden="true"], [inert]') !== null || (() => { const r = e.getBoundingClientRect(); return r.width <= 1 && r.height <= 1 })()
     return all
       .filter((e) => !set.has(e.getAttribute('data-fa-focusable')))

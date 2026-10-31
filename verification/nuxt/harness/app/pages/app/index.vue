@@ -31,19 +31,19 @@ const DATASET_VEHICLES = DATASET.vehicles
       </UDashboardNavbar>
     </header></template>
     <template #body>
-      <main id="main" class="space-y-6" tabindex="-1">
+      <main id="main" class="@container space-y-6" tabindex="-1">
         <h1 class="sr-only">Dashboard</h1>
         <AppStateBlock :state="state" region="kpis" title="Today's numbers" :rows="2" empty-title="No shipments yet" empty-text="The dashboard fills in as soon as the first shipment is planned. Create one to see late, at-risk and unassigned loads here." :empty-action="{ label: 'Plan the first shipment', to: '/app/shipments/new' }" :error="error" @retry="reload">
           <section aria-labelledby="kpis">
             <h2 id="kpis" class="sr-only">Key numbers</h2>
-            <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" data-kpis>
+            <ul class="grid grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:grid-cols-5" data-kpis>
               <li v-for="k in kpis" :key="k.id"><AppKpiTile :kpi="k" /></li>
             </ul>
           </section>
-          <section aria-labelledby="charts" class="mt-6 grid gap-4 lg:grid-cols-5">
+          <section aria-labelledby="charts" class="mt-6 grid grid-cols-1 gap-4 @4xl:grid-cols-5">
             <h2 id="charts" class="sr-only">Trends</h2>
-            <div class="lg:col-span-3"><AppDeliveriesChart :series="series" /></div>
-            <div class="lg:col-span-2"><AppLaneChart :lanes="lanes" /></div>
+            <div class="min-w-0 @4xl:col-span-3"><AppDeliveriesChart :series="series" /></div>
+            <div class="min-w-0 @4xl:col-span-2"><AppLaneChart :lanes="lanes" /></div>
           </section>
           <section aria-labelledby="exceptions" class="mt-6">
             <div class="mb-2 flex items-baseline justify-between gap-3">

@@ -34,7 +34,7 @@ const searchGroups = computed(() => [
       </template>
       <template #default="{ collapsed }">
         <UDashboardSearchButton :collapsed="collapsed" label="Search" />
-        <UNavigationMenu :collapsed="collapsed" :items="items" orientation="vertical" aria-label="Application" :ui="{ linkLabel: 'whitespace-normal' }" />
+        <UNavigationMenu :collapsed="collapsed" :items="items" orientation="vertical" aria-label="Application" :ui="{ linkLabel: 'whitespace-normal overflow-visible text-clip', link: 'h-auto' }" />
       </template>
       <template #footer="{ collapsed }">
         <div class="flex items-center justify-between gap-2 px-1 py-1">
