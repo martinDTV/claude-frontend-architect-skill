@@ -204,8 +204,8 @@ export async function runShopChecks(chromium, { url, label, evidence, playwright
     await page.goto(`${url}/shop`, { waitUntil: 'load' })
     await page.waitForSelector('[data-shelf]')
     await page.waitForFunction(() => document.documentElement.classList.contains('dark'), null, { timeout: 5000 })
-    const dark = await page.evaluate(() => ({ canvas: getComputedStyle(document.querySelector('[data-contract="ember"]')).backgroundColor, art: getComputedStyle(document.querySelector('[data-shelf] [data-piece] [data-art]').parentElement).backgroundColor, artRect: document.querySelector('[data-shelf] [data-piece] [data-art] rect')?.getAttribute('fill') }))
-    expect(dark.art === 'rgb(243, 239, 232)' && dark.artRect === '#f3efe8' && dark.canvas !== 'rgb(243, 239, 232)', `the dark theme leaves the photographs on their studio surface (${JSON.stringify(dark)})`)
+    const dark = await page.evaluate(() => { const rect = document.querySelector('[data-shelf] [data-piece] [data-art] rect'); return { canvas: getComputedStyle(document.querySelector('[data-contract="ember"]')).backgroundColor, artRect: rect?.getAttribute('fill'), artPainted: rect ? getComputedStyle(rect).fill : null } })
+    expect(dark.artRect === '#f3efe8' && dark.artPainted === 'rgb(243, 239, 232)' && dark.canvas !== 'rgb(243, 239, 232)', `the dark theme leaves the photographs on their studio surface (${JSON.stringify(dark)})`)
     report.themes = { dark }
     report.legibility.catalogueDark = gradeLegibility(await measureLegibility(page, 'shop catalogue dark'), `${label} shop catalogue dark`)
     await context.close()

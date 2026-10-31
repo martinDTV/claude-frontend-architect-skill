@@ -42,7 +42,7 @@ export function NotebookArt({ finish, caption }: { finish: FinishId; caption: st
         <rect x="396" y="128" width="8" height="396" rx="3" fill="#8a7f6a" transform="skewY(-3)" />
       </svg>
       {/* the cover: closed over the right page, it opens to the left on load (480 ms, once); reduced motion shows it open */}
-      <div className="lumen-cover absolute" style={{ left: '50%', top: '18%', width: '39%', height: '66%', transformOrigin: 'left center', transformStyle: 'preserve-3d', borderRadius: '2px 6px 6px 2px', background: f.hex, boxShadow: '8px 10px 30px -12px rgba(0,0,0,0.5)', color: f.ink }} data-cover aria-hidden="true">
+      <div className="lumen-cover absolute" style={{ left: '50%', top: '18%', width: '39%', height: '66%', transformOrigin: 'left center', transformStyle: 'preserve-3d', borderRadius: 'var(--radius-sm) var(--radius-lg) var(--radius-lg) var(--radius-sm)', background: f.hex, boxShadow: 'var(--shadow-dialog)', color: f.ink }} data-cover aria-hidden="true">
         <div className="flex h-full flex-col justify-between p-[6%] font-serif">
           <span className="text-[clamp(0.8rem,1.6vw,1.1rem)] tracking-[0.18em] uppercase opacity-80">Lumen</span>
           <span className="text-[clamp(0.6rem,1.2vw,0.85rem)] opacity-70">e-paper · 6.8″ · {f.label}</span>

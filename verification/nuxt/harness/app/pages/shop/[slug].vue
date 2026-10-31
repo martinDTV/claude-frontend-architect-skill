@@ -38,7 +38,7 @@ function add() {
     <nav aria-label="Breadcrumb" class="mb-4 text-sm text-fg-muted"><ol class="flex flex-wrap gap-1"><li><NuxtLink to="/shop" class="hover:underline">All pieces</NuxtLink></li><li aria-hidden="true">/</li><li><NuxtLink :to="`/shop?form=${piece.form}`" class="capitalize hover:underline">{{ piece.form }}s</NuxtLink></li><li aria-hidden="true">/</li><li aria-current="page">{{ piece.name }}</li></ol></nav>
     <div class="grid grid-cols-1 gap-8 md:grid-cols-[2fr_1fr]">
       <section aria-label="Photographs" data-gallery>
-        <div class="aspect-[4/5] overflow-hidden rounded-md bg-[#f3efe8]">
+        <div class="aspect-[4/5] overflow-hidden rounded-md">
           <Transition name="art" mode="out-in"><ShopPieceArt :key="variant.glazeId" :piece="piece" :variant="variant" size="hero" /></Transition>
         </div>
         <ul v-if="thumbs.length > 1" class="mt-3 flex flex-wrap gap-2" aria-label="Glazes">

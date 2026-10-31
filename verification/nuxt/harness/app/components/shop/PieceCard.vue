@@ -12,7 +12,7 @@ const availability = computed(() => pieceAvailability(props.piece))
 <template>
   <li class="group rounded-md border border-border bg-surface p-3 transition-colors hover:border-border-strong focus-within:border-border-strong" :data-piece="piece.id" :data-availability="availability">
     <NuxtLink :to="`/shop/${piece.slug}`" class="block focus-visible:outline-none">
-      <div class="aspect-[4/5] overflow-hidden rounded-md bg-[#f3efe8]"><ShopPieceArt :piece="piece" :variant="variant" size="card" /></div>
+      <div class="aspect-[4/5] overflow-hidden rounded-md"><ShopPieceArt :piece="piece" :variant="variant" size="card" /></div>
       <p class="mt-3 text-sm font-medium leading-snug">{{ piece.name }}<span v-if="piece.variants.length > 1" class="text-fg-muted"> · {{ piece.variants.length }} variants</span></p>
     </NuxtLink>
     <p class="font-serif text-sm text-fg-muted">{{ makerOf(piece).name }}</p>
