@@ -46,6 +46,7 @@ Every reference of the `frontend-architect` skill with the situation that justif
 |---|---|
 | `references/forms.md` | Building or reviewing forms: schema-first validation (UForm, vee-validate, React Hook Form, useActionState), server error mapping, wizards, async validation, uploads, form accessibility |
 | `references/data-tables.md` | Enterprise lists and tables: server pagination contract, URL state, a `useServerTable` design, TanStack Table or UTable, virtualization, selection and bulk actions, exports, table accessibility |
+| `references/enterprise-ui-patterns.md` | Building or reviewing an enterprise application: the shell, data regions with five reachable states, the URL as table state, row actions with undo and confirmations that name the consequence, forms that recover, preferences, search palette, density and theme, keyboard and focus, table-to-cards; the same behaviours in Nuxt UI and shadcn/ui, the `data-*` hooks one browser check drives, and what that check proves |
 | `references/charts.md` | Any chart or dashboard: library choice, chart type by question, encoding and color rules, accessibility, performance, realtime, S-curves and Gantt, testing |
 | `references/i18n.md` | Locales, routing strategies and SEO, SSR locale detection, ICU messages, Intl formatting and time zones per tenant, RTL, translation workflow |
 | `references/component-libraries.md` | Nuxt UI, shadcn/ui and alternatives |

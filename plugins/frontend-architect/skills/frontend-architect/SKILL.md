@@ -52,6 +52,7 @@ Load two or three files per task. The full catalog with one-line descriptions is
 | Next.js and React specifics | `nextjs.md`, `react.md` |
 | TypeScript strictness and modeling | `typescript.md` |
 | Forms, tables, charts, i18n | `forms.md`, `data-tables.md`, `charts.md`, `i18n.md` |
+| An enterprise application (shell, data regions and their states, URL table state, row actions and confirmations, forms that recover, preferences, palette, density, keyboard, table-to-cards) in Nuxt UI or shadcn/ui | `enterprise-ui-patterns.md` (reference apps under `verification/`) |
 | Auth, sessions, tenants, security | `auth-session-tenant.md`, `security.md` |
 | Tests, performance, observability, delivery | `testing.md`, `testing-scenarios.md`, `performance.md`, `observability.md`, `deployment.md` |
 | Legacy code and migrations | `legacy-modernization.md` |

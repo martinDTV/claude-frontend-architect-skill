@@ -19,13 +19,16 @@ node extract.mjs
 (cd react && npx tsc --noEmit)
 (cd react && npx vitest run)
 (cd creative && npx tsc --noEmit && npx vitest run)
-(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs && node check-motion.mjs && node check-lab.mjs && node check-strict.mjs)
+(cd next && npx tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 npx next build && node check-audit.mjs && node check-browser.mjs && node check-motion.mjs && node check-lab.mjs && node check-strict.mjs && node check-design.mjs && node check-saas.mjs)
 (cd nuxt && npx nuxt prepare && node check-layers.mjs && npx nuxt typecheck)
 ./ssr-test/run.sh
 # 1.5: the documented ScrollStory on the positive production build (mount, route change, re-entry, reduced motion, keyboard, 375 px)
 (cd nuxt && node check-motion.mjs)
 # 1.5 increment 3: the 3D labs and the three reference experiences in Chromium (shaders, particles, product, field, story)
 (cd nuxt && node check-lab.mjs)
+# 1.5 increment 5: the design contract applied through Nuxt UI (roles, pairs, focus, reduced motion, legibility) and the
+# enterprise reference application (states, table, actions, form, preferences, keyboard, responsive, browser-audit)
+(cd nuxt && node check-design.mjs && node check-saas.mjs)
 ./ssr-test/run.sh --negative
 (cd depcruise && ../vue/node_modules/.bin/depcruise src --config .dependency-cruiser.cjs > /tmp/depcruise.txt 2>&1 || true; grep -q "2 dependency violations" /tmp/depcruise.txt)
 if command -v nginx >/dev/null; then ./nginx-test.sh; fi
