@@ -3,7 +3,7 @@
 // submissions enabled. Uses the Playwright and axe-core pinned in verification/browser; when they are missing
 // the check is skipped with a message, or fails when FA_REQUIRE_BROWSER=1 (CI).
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -70,6 +70,15 @@ if (!ready) {
 
 const out = mkdtempSync(join(tmpdir(), 'fa-next-browser-'))
 const audit = spawnSync(process.execPath, [join(scripts, 'browser-audit.mjs'), url, '--playwright', browserDir, '--paths', '/users', '--checks', 'axe,forms', '--allow-submit', '--out', out, '--json', '--fail-on', 'none'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+// 1.6 increment 3: the interactions and hydration-cost checks against the real SSR + React-hydrated Atlas route.
+// Behaviour and availability, never exact milliseconds: Event Timing drives the metric, hydration cost reports proxies
+// and never invents an exact hydration time. A separate run so a failure here names which check.
+const stepsFile = join(out, 'steps.json')
+writeFileSync(stepsFile, JSON.stringify([
+  { label: 'toggle sidebar', selector: '[aria-label="Toggle sidebar"]', type: 'click' },
+  { label: 'focus search', selector: '[aria-label="Search shipments"]', type: 'click' },
+]))
+const perf = spawnSync(process.execPath, [join(scripts, 'browser-audit.mjs'), url, '--playwright', browserDir, '--paths', '/app/shipments', '--checks', 'interactions,hydration-cost', '--interactions-script', stepsFile, '--interactions-runs', '3', '--interactions-settle', '1200', '--hydration-runs', '3', '--hydration-settle', '1200', '--max-time', '150', '--out', out, '--json', '--fail-on', 'none'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
 stop()
 if (audit.status !== 0) {
   console.error(`check-browser: browser-audit exit ${audit.status}\n${audit.stderr.slice(0, 800)}`)
@@ -90,8 +99,26 @@ expect(!ids.includes('form-no-success-feedback/heuristic'), 'the server answer i
 expect(!ids.includes('form-skipped-credentials/info'), 'the rename form has no password field and must be tested')
 expect(!ids.some((i) => i.startsWith('axe-') && i.endsWith('/confirmed')), 'no serious or critical axe violation on the reference form')
 console.log(`check-browser: /users forms ${JSON.stringify(form)}; findings: ${ids.join(', ') || 'none'}`)
+// 1.6 increment 3: the interaction-latency and hydration-cost checks on the real Atlas SSR route. Behaviour and
+// availability only — never an exact-ms assertion, and never a confirmed finding without a budget.
+if (perf.status !== 0) {
+  console.error(`check-browser: interactions/hydration-cost exit ${perf.status}\n${perf.stderr.slice(0, 800)}`)
+  process.exit(1)
+}
+const perfReport = JSON.parse(perf.stdout)
+const page = perfReport.data.pages.find((p) => new URL(p.url).pathname === '/app/shipments')
+const ix = page?.checks?.interactions
+const hc = page?.checks?.hydrationCost
+expect(ix && ix.ran && ix.support.eventTiming === true, 'the interactions check ran with Event Timing supported')
+expect(ix && ix.steps.some((s) => s.available && s.latency && s.measuredBy === 'event-timing (native)'), 'at least one real interaction produced a native Event Timing latency')
+expect(ix && ix.steps.every((s) => s.available || /no Event Timing entry/.test(s.measuredBy)), 'an unmeasured step is reported unavailable, never fabricated')
+expect(hc && hc.bootProxies && hc.bootProxies.toLoad != null, 'hydration-cost recorded navigation-timing boot proxies')
+expect(hc && hc.hydrationMark && typeof hc.hydrationMark.available === 'boolean', 'hydration-cost reports whether an app hydration marker exists, without inventing a time')
+expect(!perfReport.findings.some((f) => f.level === 'confirmed'), 'no budget -> interactions/hydration-cost raise no confirmed finding')
+const measured = ix?.steps.filter((s) => s.available) ?? []
+console.log(`check-browser: interactions on /app/shipments — ${measured.length}/${ix?.steps.length ?? 0} steps measured natively (e.g. ${measured[0] ? `${measured[0].label} p75 ${measured[0].latency?.p75}ms` : 'n/a'}); hydration-cost toLoad ${hc?.bootProxies?.toLoad}ms, app marker ${hc?.hydrationMark?.available}`)
 if (failures.length) {
   console.error(`check-browser FAILED:\n- ${failures.join('\n- ')}`)
   process.exit(1)
 }
-console.log('check-browser: the documented RenameUserForm passes the forms check (pending lock, associated errors, feedback)')
+console.log('check-browser: the documented RenameUserForm passes the forms check (pending lock, associated errors, feedback); interaction latency and hydration cost measured on the Atlas route')

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Deferred hydration</title></head>
+<body>
+  <main id="app"><h1>Deferred hydration</h1><p>Server content now; the island hydrates when idle.</p><button id="go">Act</button></main>
+  <script>
+    performance.mark('boot-start');
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(() => cb({ timeRemaining: () => 0 }), 60));
+    idle(() => {
+      const end = performance.now() + 120;
+      while (performance.now() < end) { /* the deferred island's boot work, after load */ }
+      document.getElementById('go').addEventListener('click', () => { document.getElementById('app').dataset.acted = '1'; });
+      performance.mark('hydration-end');
+      performance.measure('hydration', 'boot-start', 'hydration-end');
+      document.getElementById('app').dataset.hydrated = '1';
+    });
+  </script>
+</body>
+</html>

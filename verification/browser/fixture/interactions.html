@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interaction latency fixture</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; }
+  button, [role=menuitem] { min-height: 44px; min-width: 44px; padding: .5rem 1rem; font-size: 1rem; }
+  #menu[hidden] { display: none; }
+  #grown { height: 0; background: #ddd; transition: none; }
+  output { display: block; margin-top: 1rem; }
+</style>
+</head>
+<body>
+  <h1>Interaction latency fixture</h1>
+
+  <!-- light handler: trivial work, latency dominated by presentation (one paint) -->
+  <button id="light" data-testid="light">Light</button>
+
+  <!-- slow handler: a deliberate ~120ms busy loop in the click handler (processing time) -->
+  <button id="slow" data-testid="slow">Slow handler</button>
+
+  <!-- input-delay: a long task is scheduled so the main thread is busy when the click lands -->
+  <button id="busy-then-click" data-testid="busy">Schedule main-thread work</button>
+  <button id="after-busy" data-testid="afterbusy">Click while busy</button>
+
+  <!-- presentation-delay: the handler is cheap but forces a large synchronous layout before paint -->
+  <button id="layout" data-testid="layout">Heavy layout</button>
+  <div id="grown"></div>
+
+  <!-- menu: a click that opens an overlay (dialog/menu semantics) -->
+  <button id="open-menu" data-testid="menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu">Open menu</button>
+  <ul id="menu" role="menu" hidden><li role="menuitem" tabindex="-1">One</li><li role="menuitem" tabindex="-1">Two</li></ul>
+
+  <!-- a plain text input for controlled typing -->
+  <label>Name <input id="field" data-testid="field" type="text"></label>
+
+  <output id="out">ready</output>
+
+<script>
+  const out = document.getElementById('out');
+  const busy = (ms) => { const end = performance.now() + ms; while (performance.now() < end) { /* block the main thread */ } };
+
+  document.getElementById('light').addEventListener('click', () => { out.textContent = 'light ' + Date.now(); });
+
+  document.getElementById('slow').addEventListener('click', () => { busy(120); out.textContent = 'slow done'; });
+
+  // schedule a long task slightly in the future; the test clicks "after-busy" right after, so the click's input delay rises
+  document.getElementById('busy-then-click').addEventListener('click', () => { setTimeout(() => busy(200), 0); out.textContent = 'scheduled'; });
+  document.getElementById('after-busy').addEventListener('click', () => { out.textContent = 'after-busy ' + Date.now(); });
+
+  // cheap handler, but mutate many nodes and force layout so presentation delay dominates
+  document.getElementById('layout').addEventListener('click', () => {
+    const host = document.getElementById('grown');
+    host.innerHTML = '';
+    for (let i = 0; i < 4000; i++) { const d = document.createElement('div'); d.textContent = 'row ' + i; host.appendChild(d); }
+    // force synchronous layout
+    void host.offsetHeight;
+    out.textContent = 'layout grown';
+  });
+
+  const menu = document.getElementById('menu');
+  document.getElementById('open-menu').addEventListener('click', (e) => {
+    const open = menu.hidden;
+    menu.hidden = !open;
+    e.currentTarget.setAttribute('aria-expanded', String(open));
+  });
+</script>
+</body>
+</html>

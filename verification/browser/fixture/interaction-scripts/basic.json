@@ -1,0 +1,8 @@
+[
+  { "label": "light click", "selector": "[data-testid=light]", "type": "click" },
+  { "label": "slow handler", "selector": "[data-testid=slow]", "type": "click" },
+  { "label": "heavy layout", "selector": "[data-testid=layout]", "type": "click" },
+  { "label": "open menu", "selector": "[data-testid=menu]", "type": "menu" },
+  { "label": "type name", "selector": "[data-testid=field]", "type": "type", "value": "Ada" },
+  { "label": "press enter in field", "selector": "[data-testid=field]", "type": "press", "value": "Enter" }
+]

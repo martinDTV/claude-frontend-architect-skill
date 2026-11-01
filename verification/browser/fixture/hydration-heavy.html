@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Heavy hydration</title></head>
+<body>
+  <main id="app"><h1>Heavy hydration</h1><p>Server-rendered content is here immediately.</p><button id="go">Act</button></main>
+  <script>
+    // simulate a heavy client boot: a synchronous busy loop during startup (a boot long task), then "hydrate"
+    performance.mark('boot-start');
+    const end = performance.now() + 180;
+    while (performance.now() < end) { /* block: expensive client framework boot */ }
+    document.getElementById('go').addEventListener('click', () => { document.getElementById('app').dataset.acted = '1'; });
+    performance.mark('hydration-end');
+    performance.measure('hydration', 'boot-start', 'hydration-end');
+    document.getElementById('app').dataset.hydrated = '1';
+  </script>
+</body>
+</html>
