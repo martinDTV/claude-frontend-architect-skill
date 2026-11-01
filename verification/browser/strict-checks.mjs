@@ -121,7 +121,14 @@ export async function runStrictChecks(chromium, { url, label, pages, evidence })
         expect(second.live === 1, `${name}: one live context after re-entry (created ${second.contexts}, lost ${second.lost})`)
         if (first.gsap !== null) expect(second.gsap === first.gsap, `${name}: GSAP holds the same tweens and timelines after re-entry as after the first double mount (${first.gsap} vs ${second.gsap})`)
         if (first.listeners !== null) expect(second.listeners === first.listeners, `${name}: the same number of part-state listeners after re-entry (${first.listeners} vs ${second.listeners})`)
-        if (first.geometries !== null) expect(second.geometries === first.geometries && Math.abs(second.textures - first.textures) <= 2, `${name}: equal GPU resource counts after re-entry (${second.geometries}g/${second.textures}t vs ${first.geometries}g/${first.textures}t)`)
+        // a page that loads a model must have its geometries on the GPU on both visits: equal counts alone is not
+        // enough, because a disposed instance reused across the Strict Mode remount renders an empty root and reads
+        // 0g/0g on both — an equality that passes vacuously. Requiring >0 for a loading page rejects that degenerate
+        // state instead of accepting it; a page with no GPU info (first.geometries === null) is exempt as before.
+        if (first.geometries !== null) {
+          if (spec.loads) expect(first.geometries > 0 && second.geometries > 0, `${name}: the loaded model's geometries are on the GPU on both visits, not an empty-root 0g read (${first.geometries}g first, ${second.geometries}g re-entry)`)
+          expect(second.geometries === first.geometries && Math.abs(second.textures - first.textures) <= 2, `${name}: equal GPU resource counts after re-entry (${second.geometries}g/${second.textures}t vs ${first.geometries}g/${first.textures}t)`)
+        }
         if (spec.loads) expect(second.modelRequests === 2, `${name}: one more model request for the new cache (${second.modelRequests} in total)`)
         // leave again
         await page.click('nav[aria-label="Primary"] >> text=Second')

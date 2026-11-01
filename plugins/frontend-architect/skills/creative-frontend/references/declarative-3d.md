@@ -447,12 +447,24 @@ function Studio() {
 
 function Speaker({ url, exploded, reducedMotion, state, onInstance }: { url: string; exploded: boolean; reducedMotion: boolean; state: PartsState; onInstance: (instance: ModelInstance | null, timeline: TimelineLike | null) => void }) {
   const handle = useAsset<ModelHandle>(url)
-  const instance = useMemo(() => handle.instantiate({ ownMaterials: true }), [handle])
-  useEffect(() => () => instance.dispose(), [instance])
+  // The instance owns GPU resources and `dispose()` empties its root, so its lifetime must be the mount's, not a
+  // memo's: `useMemo` is a cache React may keep across a Strict Mode unmount/remount, and reusing a disposed instance
+  // on the second mount renders an empty root (0 geometries, 0 draw calls) while `parts` still lists the detached
+  // meshes. Instantiating inside the effect gives every mount a live instance and every unmount disposes its own.
+  const [instance, setInstance] = useState<ModelInstance | null>(null)
+  useEffect(() => {
+    const live = handle.instantiate({ ownMaterials: true })
+    setInstance(live)
+    return () => {
+      setInstance((current) => (current === live ? null : current))
+      live.dispose()
+    }
+  }, [handle])
   const group = useRef<THREE.Group>(null)
   const timeline = useRef<TimelineLike | null>(null)
   // the exploded-view timeline lives in the GSAP context of this component and is reverted with it
   useGSAP(() => {
+    if (!instance) return
     const parts = new Map<string, THREE.Object3D>(instance.parts)
     const tl = buildExplodeTimeline(gsap, parts, { duration: 0.9 })
     timeline.current = tl
@@ -470,8 +482,12 @@ function Speaker({ url, exploded, reducedMotion, state, onInstance }: { url: str
     else if (exploded) tl.play()
     else tl.reverse()
   }, [exploded, reducedMotion, instance])
-  useEffect(() => state.subscribe(() => { for (const [name, mesh] of instance.parts) if (isAtelierPart(name)) applyHighlight(mesh, state.stateOf(name)) }), [state, instance])
+  useEffect(() => {
+    if (!instance) return
+    return state.subscribe(() => { for (const [name, mesh] of instance.parts) if (isAtelierPart(name)) applyHighlight(mesh, state.stateOf(name)) })
+  }, [state, instance])
   const partOf = (e: ThreeEvent<PointerEvent | MouseEvent>) => (isAtelierPart(e.object.name) ? e.object.name : null)
+  if (!instance) return null
   return (
     <group ref={group}>
       <primitive
