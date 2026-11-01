@@ -1,0 +1,6 @@
+{ "findings": [
+  { "file": "app/Positives.vue", "line": 3,  "id": "heavy-static-import",   "level": "heuristic" },
+  { "file": "app/Positives.vue", "line": 8,  "id": "computed-side-effect",  "level": "heuristic" },
+  { "file": "app/Positives.vue", "line": 10, "id": "reactive-deep-watch",   "level": "heuristic" },
+  { "file": "app/Positives.vue", "line": 12, "id": "reactive-deep-watch",   "level": "heuristic" }
+] }

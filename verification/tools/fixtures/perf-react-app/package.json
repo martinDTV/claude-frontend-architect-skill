@@ -1,0 +1,1 @@
+{ "name": "perf-react-app", "private": true, "dependencies": { "next": "16.4.0", "react": "19.3.0", "react-dom": "19.3.0", "three": "0.186.1", "moment": "2.30.1" } }

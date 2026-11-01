@@ -1,0 +1,7 @@
+{ "findings": [
+  { "file": "src/positives.tsx", "line": 3,  "id": "heavy-static-import",   "level": "heuristic" },
+  { "file": "src/positives.tsx", "line": 4,  "id": "heavy-static-import",   "level": "heuristic" },
+  { "file": "src/positives.tsx", "line": 10, "id": "provider-inline-value", "level": "heuristic" },
+  { "file": "src/positives.tsx", "line": 12, "id": "list-key-unstable",     "level": "heuristic" },
+  { "file": "src/positives.tsx", "line": 15, "id": "list-key-unstable",     "level": "confirmed" }
+] }

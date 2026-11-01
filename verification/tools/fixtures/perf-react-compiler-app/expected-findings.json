@@ -1,0 +1,3 @@
+{ "findings": [
+  { "file": "src/provider.tsx", "line": 5, "id": "provider-inline-value", "level": "info" }
+] }
