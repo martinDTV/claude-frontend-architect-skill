@@ -24,6 +24,8 @@ const expect = (cond, msg) => { if (!cond) throw new Error(msg) }
 const text = (page, sel) => page.evaluate((s) => document.querySelector(s)?.textContent?.replace(/\s+/g, ' ').trim() ?? null, sel)
 const count = (page, sel) => page.evaluate((s) => document.querySelectorAll(s).length, sel)
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+// when the page does overflow, name what sticks out (the message of a failed check must say where to look)
+const overflowCulprits = (page) => page.evaluate(() => { const vw = document.documentElement.clientWidth; return { scrollWidth: document.documentElement.scrollWidth, clientWidth: vw, culprits: [...document.querySelectorAll('body *')].filter((el) => el.getBoundingClientRect().right > vw + 1).slice(0, 5).map((el) => `${el.tagName.toLowerCase()}.${(el.getAttribute('class') ?? '').split(' ').slice(0, 3).join('.')}@${Math.round(el.getBoundingClientRect().right)}`) } })
 const lumen = (page) => page.evaluate(() => { const m = window.__lumen; return m ? { mounts: m.mounts, reverts: m.reverts, reduced: m.reduced, intro: m.intro, triggers: m.triggers(), tweens: m.tweens(), pinSpacers: document.querySelectorAll('.pin-spacer').length } : null })
 const strokes = (page) => page.evaluate(() => [...document.querySelectorAll('#archive [data-stroke]')].map((p) => parseFloat(getComputedStyle(p).strokeDashoffset)))
 const hex = (rgb) => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb); return m ? `#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}` : rgb }
@@ -144,12 +146,24 @@ export async function runLandingChecks(chromium, { url, label, evidence, playwri
     await page.waitForFunction(() => window.__lumen?.intro === 'done', null, { timeout: 8000 })
     const bar = await page.evaluate(() => { const a = document.querySelector('[data-preorder-bar] a'); const r = a.getBoundingClientRect(); const b = document.querySelector('[data-preorder-bar]').getBoundingClientRect(); return { h: r.height, w: r.width, atBottom: Math.abs(b.bottom - innerHeight) < 2, visible: r.width > 0 } })
     const art = await page.evaluate(() => { const r = document.querySelector('[data-art]').getBoundingClientRect(); return { ratio: r.width / r.height, w: r.width } })
-    expect(bar.visible && bar.h >= 44 && bar.w >= 44 && bar.atBottom && !(await overflow(page)), `the phone bar sits at the bottom with a 44 px pre-order action and nothing overflows (${JSON.stringify(bar)})`)
+    const phoneOverflow = await overflowCulprits(page)
+    expect(bar.visible && bar.h >= 44 && bar.w >= 44 && bar.atBottom && phoneOverflow.scrollWidth <= phoneOverflow.clientWidth + 1, `the phone bar sits at the bottom with a 44 px pre-order action and nothing overflows (${JSON.stringify(bar)}; ${JSON.stringify(phoneOverflow)})`)
     expect(Math.abs(art.ratio - 4 / 3) < 0.02, `the product box keeps its 4:3 aspect on a phone (${art.ratio.toFixed(3)})`)
+    // the bar repeats the one action: while the reservation form is in view it steps aside, and comes back
+    await page.evaluate(() => document.querySelector('#preorder').scrollIntoView({ block: 'start' }))
+    await page.waitForFunction(() => document.querySelector('[data-preorder-bar]')?.getBoundingClientRect().height === 0, null, { timeout: 3000 })
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.waitForFunction(() => document.querySelector('[data-preorder-bar]')?.getBoundingClientRect().height > 0, null, { timeout: 3000 })
+    // 200% text on a phone: nothing overflows and the battery figures stack
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+    await page.waitForTimeout(400)
+    const scaled = await page.evaluate(() => { const figures = [...document.querySelectorAll('[data-battery-figures] > div')].map((d) => Math.round(d.getBoundingClientRect().top)); return { overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, figureRows: new Set(figures).size } })
+    expect(!scaled.overflow && scaled.figureRows === 3, `at 200% text on a phone nothing overflows and the battery figures stack (${JSON.stringify(scaled)})`)
+    await page.evaluate(() => { document.documentElement.style.fontSize = '' })
     await page.setViewportSize({ width: 320, height: 640 })
     await page.waitForTimeout(300)
     expect(!(await overflow(page)), 'no horizontal overflow at 320 px')
-    report.responsive = { bar, art, cls375: await page.evaluate(() => window.__cls) }
+    report.responsive = { bar, art, scaled, cls375: await page.evaluate(() => window.__cls) }
     await context.close()
     ;({ context, page, problems } = await newPage({ colorScheme: 'dark' }))
     await page.goto(`${url}/landing`, { waitUntil: 'load' })
@@ -159,7 +173,7 @@ export async function runLandingChecks(chromium, { url, label, evidence, playwri
     report.themes = { dark, light: roles ? { canvas: roles.light.canvas.hex } : null }
     report.legibility.dark = gradeLegibility(await measureLegibility(page, 'landing dark'), `${label} landing dark`)
     expect(problems.length === 0, `console problems in dark: ${problems.join(' | ')}`)
-    ok(`${label}: 375 px bar and 4:3 art box, 320 px reflow, dark roles equal the contract's; dark page legible (${report.legibility.dark.texts} texts)`)
+    ok(`${label}: 375 px bar (aside while the form is in view) and 4:3 art box, 200% text and 320 px reflow, dark roles equal the contract's; dark page legible (${report.legibility.dark.texts} texts)`)
     await context.close()
 
     // ---- 5. the plugin's browser audit

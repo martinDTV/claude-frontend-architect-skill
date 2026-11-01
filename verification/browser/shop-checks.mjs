@@ -138,6 +138,8 @@ export async function runShopChecks(chromium, { url, label, evidence, playwright
     await page.click('[data-bag-button]')
     await page.waitForSelector('[data-bag-drawer]')
     expect((await count(page, '[data-bag-line]')) === 1 && (await text(page, '[data-bag-line] [data-qty]')) === '2', 'the drawer shows one line with quantity 2')
+    const toastsOverDrawer = await page.evaluate(() => [...document.querySelectorAll('li, [role="status"]')].filter((e) => /Added to your bag/.test(e.textContent) && e.getBoundingClientRect().width > 0 && !e.closest('[data-bag-drawer]')).length)
+    expect(toastsOverDrawer === 0, `opening the drawer clears the "added" toasts so they never cover the totals (${toastsOverDrawer} visible)`)
     const totalBefore = await text(page, '[data-bag-total]')
     await page.click('[data-qty-inc]')
     await page.waitForFunction(() => document.querySelector('[data-bag-line] [data-qty]')?.textContent.trim() === '3')
@@ -188,8 +190,23 @@ export async function runShopChecks(chromium, { url, label, evidence, playwright
     const mobileDetail = await page.evaluate(() => document.querySelector('[data-shelf] [data-piece] a')?.getAttribute('href'))
     await page.goto(`${url}${mobileDetail}`, { waitUntil: 'load' })
     await page.waitForSelector('[data-sticky-buy]')
+    // at the top of the page the purchase panel (price, variants, add) is on screen, so the fixed bar steps aside and no
+    // variant control is behind it; the in-flow add button serves here
+    // the panel carries its own add-to-bag, a 44 px target; scrolled into view it is actionable and the fixed bar steps aside
+    const inFlowAdd = await page.evaluate(() => { const b = document.querySelector('[data-purchase-panel] [data-add]'); const r = b?.getBoundingClientRect(); return b ? { h: r.height, w: r.width } : null })
+    expect(inFlowAdd && inFlowAdd.h >= 44 && inFlowAdd.w >= 44, `the panel's own add-to-bag is a 44 px target (${JSON.stringify(inFlowAdd)})`)
+    await page.locator('[data-purchase-panel] [data-add]').scrollIntoViewIfNeeded()
+    await page.waitForFunction(() => document.querySelector('[data-sticky-buy]')?.hasAttribute('data-bar-hidden'), null, { timeout: 3000 })
+    const withAdd = await page.evaluate(() => { const b = document.querySelector('[data-purchase-panel] [data-add]'); const r = b.getBoundingClientRect(); return { onScreen: r.top >= 0 && r.bottom <= innerHeight + 1, barHidden: document.querySelector('[data-sticky-buy]').hasAttribute('data-bar-hidden') } })
+    expect(withAdd.onScreen && withAdd.barHidden, `with the in-flow add button in view the fixed bar steps aside (no duplicate action) (${JSON.stringify(withAdd)})`)
+    // scroll into the reading: the panel leaves, the fixed bar appears at the bottom with its 44 px action
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    await page.waitForFunction(() => { const b = document.querySelector('[data-sticky-buy]'); return b && !b.hasAttribute('data-bar-hidden') && b.getBoundingClientRect().height > 0 }, null, { timeout: 3000 })
     const bar = await page.evaluate(() => { const b = document.querySelector('[data-add-mobile]'); const r = b.getBoundingClientRect(); const s = document.querySelector('[data-sticky-buy]').getBoundingClientRect(); return { h: r.height, w: r.width, bottom: s.bottom, inner: innerHeight } })
-    expect(bar.h >= 44 && bar.w >= 44 && Math.abs(bar.bottom - bar.inner) < 2 && !(await overflow(page)), `the sticky bar sits at the bottom with a 44 px action (${JSON.stringify(bar)})`)
+    expect(bar.h >= 44 && bar.w >= 44 && Math.abs(bar.bottom - bar.inner) < 2 && !(await overflow(page)), `scrolled past the panel the sticky bar sits at the bottom with a 44 px action (${JSON.stringify(bar)})`)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    const order = await page.evaluate(() => { const panel = document.querySelector('[data-purchase-panel]'); const prose = document.querySelector('[data-prose]'); return panel && prose ? { domBefore: Boolean(panel.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING), above: panel.getBoundingClientRect().top < prose.getBoundingClientRect().top } : null })
+    expect(order && order.domBefore && order.above, `on a phone the price and the variants come before the reading (${JSON.stringify(order)})`)
     await page.setViewportSize({ width: 320, height: 640 })
     await page.goto(`${url}/shop`, { waitUntil: 'load' })
     await page.waitForSelector('[data-shelf]')
@@ -197,7 +214,19 @@ export async function runShopChecks(chromium, { url, label, evidence, playwright
     await page.goto(`${url}${mobileDetail}`, { waitUntil: 'load' })
     await page.waitForSelector('[data-purchase-panel]')
     expect(!(await overflow(page)), 'no horizontal overflow at 320 px on the detail')
-    report.responsive = { bar }
+    // 200% text: the rail gives way to the sheet and the shelf drops columns (container units), the cards' words stay whole
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${url}/shop`, { waitUntil: 'load' })
+    await page.waitForSelector('[data-shelf]')
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+    await page.waitForTimeout(400)
+    const scaled = await page.evaluate(() => { const cards = [...document.querySelectorAll('[data-shelf] [data-piece]')]; const tops = cards.map((c) => Math.round(c.getBoundingClientRect().top)); const rail = document.querySelector('aside [data-filter-rail]'); return { columns: tops.filter((t) => t === tops[0]).length, clipped: cards.filter((c) => c.scrollWidth > c.clientWidth + 1).length, railVisible: Boolean(rail && rail.getBoundingClientRect().width > 0), overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 } })
+    expect(scaled.columns <= 2 && scaled.clipped === 0 && !scaled.railVisible && !scaled.overflow, `at 200% text on a desktop the shelf drops to ${scaled.columns} columns, nothing clipped, the rail behind the button (${JSON.stringify(scaled)})`)
+    await page.setViewportSize({ width: 375, height: 740 })
+    await page.waitForTimeout(300)
+    const scaledPhone = await page.evaluate(() => { const tops = [...document.querySelectorAll('[data-shelf] [data-piece]')].map((c) => Math.round(c.getBoundingClientRect().top)); return { columns: tops.filter((t) => t === tops[0]).length, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 } })
+    expect(scaledPhone.columns === 1 && !scaledPhone.overflow, `at 200% text on a phone the shelf is one card wide (${JSON.stringify(scaledPhone)})`)
+    report.responsive = { bar, order, scaled, scaledPhone }
     expect(problems.length === 0, `console problems on the phone: ${problems.join(' | ')}`)
     await context.close()
     ;({ context, page, problems } = await newPage({ colorScheme: 'dark' }))
@@ -217,7 +246,7 @@ export async function runShopChecks(chromium, { url, label, evidence, playwright
     const animated = await page.evaluate(() => [...document.querySelectorAll('*')].filter((e) => { const cs = getComputedStyle(e); return (cs.animationName !== 'none' && parseFloat(cs.animationDuration) > 0.01) || (cs.transitionProperty !== 'all' && cs.transitionProperty !== 'none' && parseFloat(cs.transitionDuration) > 0.01) }).length)
     expect(animated === 0, `reduced motion leaves no running animation or transition after adding to the bag (${animated})`)
     await context.close()
-    ok(`${label}: 375 px filter sheet and sticky buy bar, 320 px reflow, dark theme keeps the photographs, reduced motion cuts the bag bump; dark catalogue legible (${report.legibility.catalogueDark.texts} texts)`)
+    ok(`${label}: 375 px filter sheet and sticky buy bar, panel before the reading, 320 px reflow, 200% text drops the shelf to ${scaled.columns} then 1 column, dark theme keeps the photographs, reduced motion cuts the bag bump; dark catalogue legible (${report.legibility.catalogueDark.texts} texts)`)
 
     // ---- 4. the plugin's browser audit on three routes
     step = '4. browser audit'

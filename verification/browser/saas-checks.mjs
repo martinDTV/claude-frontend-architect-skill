@@ -69,10 +69,25 @@ export async function runSaasChecks(chromium, { url, label, evidence, playwright
     const exceptions = await count(page, '[data-exceptions] tbody tr')
     expect(exceptions > 0 && exceptions <= 8, `the exceptions table lists up to eight rows (${exceptions})`)
     await page.screenshot({ path: join(evidence, `${label}-saas-dashboard.png`), fullPage: true })
-    report.states.ready = { kpis, charts, exceptions }
+    // the grids answer to the text size (container units): five tiles across at 1280 px, fewer at 200% text, with the
+    // tiles' words whole, the chart's axis labels at the reader's size and nothing overflowing
+    const kpiColumns = () => page.evaluate(() => { const tops = [...document.querySelectorAll('[data-kpi]')].map((a) => Math.round(a.getBoundingClientRect().top)); return tops.filter((t) => t === tops[0]).length })
+    const columnsAt1 = await kpiColumns()
+    expect(columnsAt1 === 5, `the KPI tiles sit five across on a 1280 px desktop (${columnsAt1})`)
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+    await page.waitForTimeout(400)
+    const scaled = await page.evaluate(() => ({
+      columns: (() => { const tops = [...document.querySelectorAll('[data-kpi]')].map((a) => Math.round(a.getBoundingClientRect().top)); return tops.filter((t) => t === tops[0]).length })(),
+      clipped: [...document.querySelectorAll('[data-kpi]')].filter((a) => a.scrollWidth > a.clientWidth + 1).length,
+      axisPx: Math.min(...[...document.querySelectorAll('[data-chart="deliveries"] [data-axis-label]')].map((e) => parseFloat(getComputedStyle(e).fontSize))),
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    }))
+    expect(scaled.columns <= 3 && scaled.clipped === 0 && scaled.axisPx >= 20 && !scaled.overflow, `at 200% text the tiles drop to ${scaled.columns} columns with nothing clipped, the chart's axis labels follow the text (${scaled.axisPx}px) and nothing overflows (${JSON.stringify(scaled)})`)
+    await page.evaluate(() => { document.documentElement.style.fontSize = '' })
+    report.states.ready = { kpis, charts, exceptions, columnsAt1, scaled }
     report.legibility.dashboard = gradeLegibility(await measureLegibility(page, 'dashboard'), `${label} dashboard`)
     expect(problems.length === 0, `console problems on the dashboard: ${problems.join(' | ')}`)
-    ok(`${label}: dashboard server-rendered, five KPIs, two charts with alternatives, ${exceptions} exceptions; ${report.legibility.dashboard.texts} texts legible`)
+    ok(`${label}: dashboard server-rendered, five KPIs five across (${scaled.columns} at 200% text, axis labels ${scaled.axisPx}px), two charts with alternatives, ${exceptions} exceptions; ${report.legibility.dashboard.texts} texts legible`)
     // empty, error (with retry), slow
     await page.goto(`${url}/app?api=empty`, { waitUntil: 'load' })
     await waitRegion(page, 'kpis', 'empty')
@@ -204,6 +219,12 @@ export async function runSaasChecks(chromium, { url, label, evidence, playwright
     const summaryFocused = await page.evaluate(() => document.activeElement?.hasAttribute('data-error-summary'))
     const invalid = await count(page, '[data-shipment-form] [aria-invalid="true"]')
     expect(/Check \d+ fields?/.test(summary) && summaryFocused && invalid >= 4, `an empty submit focuses a summary naming the fields (${summary.slice(0, 60)}; focused ${summaryFocused}; ${invalid} invalid)`)
+    // one line per field, the count equal to the lines, and the field's message in the summary's danger colour (not a hint)
+    const lines = await page.evaluate(() => ({ count: Number((document.querySelector('[data-error-summary]')?.textContent.match(/Check (\d+)/) ?? [])[1]), items: [...document.querySelectorAll('[data-error-summary] li a')].map((a) => a.getAttribute('href')), danger: getComputedStyle(document.querySelector('[data-error-summary] p')).color }))
+    expect(lines.count === lines.items.length && new Set(lines.items).size === lines.items.length, `the summary counts one line per field (${lines.count} vs ${lines.items.join(', ')})`)
+    const fieldError = await page.evaluate(() => { const input = document.getElementById('field-reference'); const ids = (input?.getAttribute('aria-describedby') ?? '').split(/\s+/); const el = ids.map((id) => document.getElementById(id)).find((e) => e && /format ATL/.test(e.textContent)); return el ? { text: el.textContent.trim().slice(0, 40), color: getComputedStyle(el).color, body: getComputedStyle(document.body).color } : null })
+    // (shadcn colours the whole invalid field, label included; what matters is that the message is not body text)
+    expect(fieldError && fieldError.color === lines.danger && fieldError.color !== fieldError.body, `the field's message is described by the input and shares the summary's danger colour (${JSON.stringify(fieldError)} vs ${lines.danger})`)
     const fill = async (ref) => {
       await page.fill('#field-reference', ref)
       await page.fill('#field-customer', 'Norte Fresh')
@@ -244,6 +265,8 @@ export async function runSaasChecks(chromium, { url, label, evidence, playwright
     await page.waitForFunction(() => document.documentElement.classList.contains('dark'))
     await page.getByRole('checkbox', { name: 'Lane' }).uncheck()
     await page.waitForTimeout(200)
+    const locked = await page.evaluate(() => ['Reference', 'Status'].map((name) => { const box = [...document.querySelectorAll('[data-pref="columns"] [role="checkbox"], [data-pref="columns"] input[type="checkbox"], [data-pref="columns"] button')].find((b) => (b.getAttribute('aria-label') ?? b.labels?.[0]?.textContent ?? document.querySelector(`label[for="${b.id}"]`)?.textContent ?? '').trim().startsWith(name) || document.querySelector(`label[for="${b.id}"]`)?.textContent.trim() === name); return box ? { name, disabled: box.disabled || box.getAttribute('aria-disabled') === 'true' || box.hasAttribute('data-disabled'), checked: box.checked || box.getAttribute('aria-checked') === 'true' || box.getAttribute('data-state') === 'checked' } : { name, missing: true } }))
+    expect(locked.every((l) => l.disabled && l.checked), `the reference and status columns are checked and locked (${JSON.stringify(locked)})`)
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[data-pref="density"]')
     await page.waitForTimeout(400)

@@ -61,6 +61,10 @@ describe('table state', () => {
 describe('forms, preferences and the fake api', () => {
   it('validates the shipment form with human messages and the cross-field rule', () => {
     expect(Object.keys(fieldErrors(EMPTY_SHIPMENT_FORM))).toEqual(expect.arrayContaining(['reference', 'customer', 'promised', 'weightKg', 'pallets']))
+    // one issue per field: an empty promised slot is "enter it", not also "it is in the past"
+    const empty = shipmentFormSchema.safeParse(EMPTY_SHIPMENT_FORM)
+    expect(empty.success).toBe(false)
+    if (!empty.success) expect(empty.error.issues.filter((i) => i.path[0] === 'promised').map((i) => i.message)).toEqual(['Enter the promised date and time.'])
     const ok = shipmentFormSchema.safeParse({ reference: 'ATL-26500', customer: 'Norte Fresh', origin: 'Bilbao', destination: 'Madrid', promised: '2026-11-02T10:00', weightKg: '1200', pallets: '4' })
     expect(ok.success).toBe(true)
     if (ok.success) expect(ok.data.weightKg).toBe(1200)
