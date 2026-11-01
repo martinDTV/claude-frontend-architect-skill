@@ -16,6 +16,7 @@
 - Network waterfalls
 - Memory leaks procedure
 - Budgets
+- Static performance patterns (what the auditor can and cannot say)
 
 ## Measure first
 
@@ -138,3 +139,24 @@ For SSR servers, a rising resident memory between deploys with flat traffic has 
 - Per **route pattern**, not one number for the app: content routes, product routes and authenticated dashboards have different budgets. `assets/lighthouse-budgets.json` is a starting point (resource sizes, counts and timings) for Lighthouse CI; `bundle-budget.mjs` guards the startup set and the largest chunk in gzip KB from the real build output.
 - Set budgets from the current baseline minus the headroom you want, tighten as you improve, and fail the PR on breaches; a budget nobody can meet is deleted or renegotiated, not ignored.
 - Review budgets when the framework major changes or the target devices change, and record the reasoning in the repository next to the file.
+
+
+## Static performance patterns (what the auditor can and cannot say)
+
+`perf-audit.mjs` finds source patterns that are *plausibly* costly and tells you how to confirm the cost. It is the first step of a measurement, never the verdict.
+
+**What static analysis can confirm**: a syntactic fact — a heavy library is imported statically here; a list key is `Math.random()`; a context value is a fresh literal each render; a Vue `computed` calls `fetch`. These are certain from the text.
+
+**What it cannot confirm**: that any of them makes the app slow. It cannot see the bundle (a heavy import inside a dynamically-loaded component costs nothing on load), the device, the network, or how often a component actually renders. So a `confirmed` finding is a certain *pattern*, not a measured regression — never read it as "the app is slow".
+
+**How to interpret a finding**: read the three parts — the fact (certain), the risk (a hypothesis), the measurement named in the fix. Then measure before changing anything:
+- `heavy-static-import` → build and run `bundle-budget.mjs` on the real output and the Coverage panel (transferred vs executed JS). If the module is in the startup set and unused on first paint, make it `next/dynamic`/`React.lazy`/`defineAsyncComponent` or move it to the server. If it is already code-split or server-only, do nothing.
+- `provider-inline-value` / render-identity → the React DevTools Profiler on a production build: count consumer renders before and after. If consumers do not re-render (or React Compiler is on), do nothing.
+- `list-key-unstable` (index) → only a problem when the list reorders, inserts or deletes; a fixed list keyed by index is fine. The `Math.random()` form is always wrong (it remounts every item), confirmable in the Performance panel as repeated mount work.
+- `computed-side-effect` / `reactive-deep-watch` → the Performance panel under CPU throttling, or simply correctness: a `computed` must be pure regardless of cost; a whole-object watch is only worth narrowing when the object is large.
+
+**When to avoid memoisation**. Do not add `useMemo`/`useCallback`/`React.memo` to silence a pattern. Memoisation has its own cost and most inline values are cheap; add it only when the Profiler shows a real re-render cost. **If React Compiler is enabled, do not memoise by hand at all** — it inserts the memoisation for you, and `perf-audit` downgrades the identity findings to information when it detects the compiler (dependency `babel-plugin-react-compiler` or `experimental.reactCompiler` in `next.config`). React 19's `useTransition`, `Suspense` and Server Components reduce main-thread work structurally; prefer those over manual memoisation.
+
+**Vue/Nuxt render and load cost**. A plain `computed` and a normal `watch` are not problems; the auditor flags only an impure `computed` (I/O/emit) and a watch over a whole `reactive()`/props object (implicit deep traversal). `shallowRef`/`shallowReactive` help only for large structures you never mutate deeply; a normal `ref` is the default. For load cost, lazy-load heavy components (`defineAsyncComponent`, `<ClientOnly>` below the fold, route-level code splitting) and confirm the route chunk with `bundle-budget.mjs`; `nuxi analyze` shows what the entry pulls in. Heavy watchers and effects that run on every keystroke are the most common INP processing cause (`component-complexity.mjs` lists files with many watchers).
+
+**Preparing the browser measurements (1.6 increment 2)**. These static findings are leads for a future browser vitals check that will measure LCP, CLS, TTFB, long tasks, INP and the main-thread cost of hydration, lab-only and never on production by default, with a fixed device/network profile and several runs. Until then, use the reproducible procedure above (Lighthouse CI with `assets/lighthouse-budgets.json`, the Performance panel, `bundle-budget.mjs`). A static finding without a measurement is a question, not an answer.
