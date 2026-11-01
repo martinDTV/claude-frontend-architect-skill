@@ -74,8 +74,36 @@ Anti-signals: `memo` on every component, `useCallback` on every handler, `useMem
 | Custom hook that does three things | Hard to test, re-renders everything | One concern per hook; compose hooks |
 | Conditional hook calls | Hook order errors | Hooks at the top level; branch inside |
 | Object/array literals as dependencies | Effect runs every render | Stable references (`useMemo`) or primitive dependencies |
+| Disposable resource created in `useMemo`, disposed in an effect cleanup | Strict Mode remounts reuse the disposed instance: a WebGL scene renders empty, a connection is closed-then-read, a subscription points at freed memory | Own the resource in the effect, not the memo (below) |
 
 `eslint-plugin-react-hooks` (rules of hooks and exhaustive dependencies) stays on; suppressing it is a code smell to review.
+
+### `useMemo` is a cache, not ownership (a Strict Mode lesson)
+
+`useMemo` memoizes a *computation*; React may keep the memoized value across a Strict Mode unmount/remount, and is free to drop and recompute it at other times. So it must not own a resource with a lifecycle — anything you later `dispose()`, `close()`, `abort()` or `unsubscribe()`. The failure is quiet and specific:
+
+```tsx
+// WRONG: the instance is a memo, but its dispose() is tied to the effect's cleanup.
+const instance = useMemo(() => createThing(), [dep])   // cache
+useEffect(() => () => instance.dispose(), [instance])  // ownership
+```
+
+In development, Strict Mode runs effects twice: mount → cleanup → mount. With `dep` unchanged, `useMemo` returns the **same** instance on the second mount — but the first mount's cleanup already called `instance.dispose()`. The remount now renders a disposed resource. This is exactly how a React Three Fiber scene reads 0 geometries and 0 draw calls after re-entry while its part list still looks populated: `dispose()` emptied the root, the memo handed the gutted object back.
+
+The fix is to tie the resource's lifetime to the mount, where the cleanup already lives:
+
+```tsx
+// RIGHT: create in the effect, expose via state, dispose in the same effect's cleanup.
+const [instance, setInstance] = useState<Thing | null>(null)
+useEffect(() => {
+  const live = createThing()
+  setInstance(live)
+  return () => { setInstance((c) => (c === live ? null : c)); live.dispose() }
+}, [dep])
+if (!instance) return null // guard renders and dependent effects until it exists
+```
+
+Every mount gets a live instance; every unmount disposes its own. The cost is one extra render (and a brief `null`) on the remount, which is correct. For a pure, cheap computation `useMemo` is still right — the rule is only about ownership of something that must be released. A corollary for tests: a browser check that compares resource counts across a remount must also reject the **degenerate** case (0 on both reads is not "equal and fine"); assert the loaded resource is actually present, or a cleanup defect that zeroes both reads passes silently.
 
 ## Suspense and `use()`
 

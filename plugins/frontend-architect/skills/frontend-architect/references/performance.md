@@ -118,6 +118,8 @@ INP measures the slowest interaction (p98 of interactions on the page). Break th
 
 Procedure: reproduce the interaction from the field attribution (the `web-vitals` attribution build names the target element), record it with CPU throttling, find the long task, attribute it to a handler or a render, fix one cause, measure again. Heavy watchers and effects that run on every keystroke (`component-complexity.mjs` lists files with many watchers) are the most common processing cause in Vue and React apps.
 
+To get this same three-part split reproducibly in the lab against a running app, the browser-mode `interactions` check (`browser-audit.mjs --checks interactions --interactions-script <steps.json>`, `references/ui-verification.md`) drives named steps and reads each interaction's input delay, processing and presentation from the **Event Timing API** (grouped by `interactionId`), with Long Animation Frames attributing the main-thread block to a script. It is lab data under a fixed profile, not field INP, and a step with no qualifying entry is reported unavailable rather than fabricated. The part that is over budget names the phase to profile; confirm the cause in the Performance panel. The `hydration-cost` check reports the boot proxies (TTFB, parse, deferred-script time, boot long tasks, JS transferred) that most often inflate the **input delay** of the first interactions, without claiming an exact hydration time unless the framework emits a `performance.mark`.
+
 ## Network waterfalls
 
 - **Find**: the Network panel's waterfall for the route; `Promise.all` missing when two requests start only after the previous resolved; a component that fetches only after its parent's data arrived; fonts and critical CSS discovered late.
