@@ -61,10 +61,10 @@ const createdRef = computed(() => String(route.query.created ?? ''))
 <template>
   <UDashboardPanel id="shipments">
     <template #header><header>
-      <UDashboardNavbar title="Shipments" :toggle="NAV_TOGGLE" :ui="{ title: 'whitespace-normal' }">
+      <UDashboardNavbar title="Shipments" :toggle="NAV_TOGGLE" :ui="NAVBAR_UI">
         <template #right><UButton to="/app/shipments/new" icon="i-lucide-plus" label="New shipment" color="primary" /></template>
       </UDashboardNavbar>
-      <UDashboardToolbar>
+      <UDashboardToolbar :ui="TOOLBAR_UI">
         <div class="flex w-full flex-wrap items-center gap-2" data-toolbar>
           <UInput v-model="search" icon="i-lucide-search" placeholder="Search reference, customer, lane" aria-label="Search shipments" class="w-full sm:w-64" data-search />
           <!-- each filter is named by its label and its own value, so the visible text is part of the accessible name -->

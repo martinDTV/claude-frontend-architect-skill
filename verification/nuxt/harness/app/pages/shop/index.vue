@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The catalogue: the rail (or the filter sheet) edits the URL, the shelf renders it; a strict card grid, the count line
-// and the active filters as removable chips; sorting and paging through the URL as well.
+// and the active filters as removable chips; sorting and paging through the URL as well. The rail and the grid answer
+// to container widths in rem, so a larger text size drops columns the way a narrower screen does.
 import { activeFilterCount, AVAILABILITY_LABEL, FORM_LABEL, GLAZES, MAKERS, type SortKey } from '~/lib/ui/shop/catalog'
 
 definePageMeta({ layout: 'shop' })
@@ -20,22 +21,22 @@ const active = computed(() => activeFilterCount(state.value))
 </script>
 
 <template>
-  <main id="main" class="mx-auto max-w-(--container-page) px-(--gutter) py-8" tabindex="-1">
+  <main id="main" class="@container mx-auto max-w-(--container-page) px-(--gutter) py-8" tabindex="-1">
     <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="font-serif text-3xl tracking-tight">Studio ceramics by named makers</h1>
         <p class="mt-1 max-w-xl text-sm text-fg-muted">Small runs, real stock. Filter by maker, form, glaze and availability; prices include tax.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <UButton label="Filters" icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" class="lg:hidden" :aria-label="active ? `Filters, ${active} active` : 'Filters'" data-filters-button @click="filtersOpen = true"><template v-if="active" #trailing><UBadge color="primary" size="sm" class="rounded-full">{{ active }}</UBadge></template></UButton>
+        <UButton label="Filters" icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" class="@5xl:hidden" :aria-label="active ? `Filters, ${active} active` : 'Filters'" data-filters-button @click="filtersOpen = true"><template v-if="active" #trailing><UBadge color="primary" size="sm" class="rounded-full">{{ active }}</UBadge></template></UButton>
         <label class="flex min-w-0 basis-full flex-col items-start gap-1 text-sm sm:basis-auto sm:flex-row sm:items-center sm:gap-2"><span class="text-fg-muted">Sort</span><USelect v-model="sort" :items="sortItems" value-key="value" class="w-full min-w-0 sm:w-44" aria-label="Sort pieces" data-sort /></label>
       </div>
     </div>
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-[var(--sidebar-width)_1fr]">
-      <aside class="hidden lg:block" aria-label="Filters">
+    <div class="grid grid-cols-1 gap-8 @5xl:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]">
+      <aside class="hidden @5xl:block" aria-label="Filters">
         <div class="sticky top-6"><ShopFilterRail :state="state" :counts="{ total: result.total }" @toggle="toggle" @clear="clear" /></div>
       </aside>
-      <section aria-labelledby="shelf">
+      <section aria-labelledby="shelf" class="@container min-w-0">
         <h2 id="shelf" class="sr-only">Pieces</h2>
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <p class="text-sm text-fg-muted tabular-nums" aria-live="polite" data-results-count>{{ result.total }} piece{{ result.total === 1 ? '' : 's' }}<template v-if="state.search"> for “{{ state.search }}”</template></p>
@@ -49,7 +50,7 @@ const active = computed(() => activeFilterCount(state.value))
           <p class="mt-1 text-sm text-fg-muted">Widen the filters or clear the search; made-to-order pieces are hidden when availability is filtered to stock.</p>
           <UButton label="Clear all filters" color="neutral" variant="outline" class="mt-4" @click="clear" />
         </div>
-        <ul v-else class="grid grid-cols-2 gap-(--gutter) md:grid-cols-3 xl:grid-cols-4" aria-label="Pieces" data-shelf>
+        <ul v-else class="grid grid-cols-1 gap-(--gutter) @[18rem]:grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-4" aria-label="Pieces" data-shelf>
           <ShopPieceCard v-for="p in result.rows" :key="p.id" :piece="p" />
         </ul>
         <nav v-if="result.pages > 1" class="mt-8 flex justify-center" aria-label="Pagination">
@@ -58,7 +59,7 @@ const active = computed(() => activeFilterCount(state.value))
       </section>
     </div>
     <USlideover v-model:open="filtersOpen" title="Filters" :description="`${result.total} piece${result.total === 1 ? '' : 's'} match`" side="left" :ui="{ footer: 'justify-end' }">
-      <template #body><ShopFilterRail :state="state" :counts="{ total: result.total }" @toggle="toggle" @clear="clear" /></template>
+      <template #body><ShopFilterRail :state="state" :counts="{ total: result.total }" :heading="false" @toggle="toggle" @clear="clear" /></template>
       <template #footer="{ close }"><UButton :label="`Show ${result.total} piece${result.total === 1 ? '' : 's'}`" color="primary" data-filters-apply @click="close" /></template>
     </USlideover>
   </main>

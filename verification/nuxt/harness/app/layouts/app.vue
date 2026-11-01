@@ -15,6 +15,17 @@ const items = computed(() => [
 ])
 // UDashboardSearch registers the meta_k shortcut itself; a second handler toggling the same model cancelled it out
 const searchOpen = ref(false)
+// the sidebar's width is a share of the window (a resizable panel), so it cannot follow the text size: from 150% text
+// the labels no longer fit a 17% column and the sidebar starts as the icon rail (names in tooltips and on the links);
+// the reader can still expand it. A 1rem probe observed for size is how a root font-size change is noticed.
+const collapsed = ref(false)
+const remProbe = ref<HTMLElement | null>(null)
+onMounted(() => {
+  if (!remProbe.value || typeof ResizeObserver === 'undefined') return
+  const observer = new ResizeObserver(([entry]) => { const rem = entry?.contentRect.width ?? 16; collapsed.value = rem >= 24 })
+  observer.observe(remProbe.value)
+  onBeforeUnmount(() => observer.disconnect())
+})
 const searchGroups = computed(() => [
   { id: 'pages', label: 'Pages', items: items.value.map((i) => ({ label: i.label, icon: i.icon, to: i.to })) },
   { id: 'shipments', label: 'Shipments', items: DATASET.shipments.slice(0, 60).map((s) => ({ label: `${s.reference} · ${s.customer}`, suffix: `${s.lane} · ${STATUS_LABEL[s.status]}`, icon: 'i-lucide-package', to: { path: '/app/shipments', query: { q: s.reference } } })) },
@@ -24,7 +35,8 @@ const searchGroups = computed(() => [
 <template>
   <UDashboardGroup>
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface-raised focus:px-3 focus:py-2 focus:text-fg">Skip to content</a>
-    <UDashboardSidebar id="atlas-sidebar" collapsible resizable :min-size="12" :default-size="17" :max-size="22" :ui="{ footer: 'border-t border-border' }">
+    <span ref="remProbe" class="pointer-events-none fixed -left-px top-0 h-px w-[1rem] opacity-0" aria-hidden="true" data-rem-probe />
+    <UDashboardSidebar id="atlas-sidebar" v-model:collapsed="collapsed" collapsible resizable :min-size="12" :default-size="17" :max-size="22" :ui="{ footer: 'border-t border-border' }">
       <template #header="{ collapsed }">
         <NuxtLink to="/app" class="flex min-w-0 items-center gap-2 font-semibold tracking-tight">
           <span class="grid h-7 w-7 shrink-0 place-items-center rounded-sm bg-accent text-accent-fg text-xs font-bold" aria-hidden="true">A</span>

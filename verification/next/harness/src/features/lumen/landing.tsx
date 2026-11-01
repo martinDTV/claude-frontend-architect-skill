@@ -49,6 +49,15 @@ export function LumenLanding() {
   const root = useRef<HTMLDivElement>(null)
   const [finish, setFinish] = useState<FinishId>('graphite')
   const [intro, setIntro] = useState<'pending' | 'done'>('pending')
+  // the phone bar repeats the one action; while the reservation form itself is in view it steps aside
+  const [formInView, setFormInView] = useState(false)
+  useEffect(() => {
+    const form = document.getElementById('preorder')
+    if (!form || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(([entry]) => setFormInView(Boolean(entry?.isIntersecting)), { threshold: 0.2 })
+    io.observe(form)
+    return () => io.disconnect()
+  }, [])
   // the sticky bar on phones must never cover a focused control: scrolling leaves room at the bottom while this page is mounted
   useEffect(() => {
     const html = document.documentElement
@@ -91,7 +100,7 @@ export function LumenLanding() {
   )
   const finishLabel = FINISHES.find((f) => f.id === finish)?.label ?? 'Graphite'
   return (
-    <div ref={root} data-contract="lumen" data-finish={finish} data-intro={intro} className="min-h-screen bg-dc-canvas pb-24 font-sans text-base leading-(--leading-body) text-dc-fg antialiased md:pb-0">
+    <div ref={root} data-contract="lumen" data-finish={finish} data-intro={intro} className="min-h-screen bg-dc-canvas pb-28 font-sans text-base leading-(--leading-body) text-dc-fg antialiased md:pb-0">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:bg-dc-surface-raised focus:px-3 focus:py-2">Skip to content</a>
       <header className="sticky top-0 z-30 border-b border-dc-border bg-dc-canvas/92 backdrop-blur">
         <div className="mx-auto flex max-w-(--container-page) items-center justify-between gap-4 px-5 md:px-(--gutter) py-3">
@@ -177,10 +186,11 @@ export function LumenLanding() {
               <p className="mt-4 max-w-[62ch] text-dc-fg-muted">E-paper only spends power when the page changes. Write every day and the battery outlasts the month; charge it over USB-C in ninety minutes while you make coffee.</p>
               <a href="#preorder" className="mt-6 inline-block text-sm font-medium text-dc-accent underline-offset-4 hover:underline">Pre-order</a>
             </div>
-            <figure className="min-w-0 lg:col-span-5 lg:col-start-8">
+            <figure className="@container min-w-0 lg:col-span-5 lg:col-start-8">
               <figcaption className="flex items-baseline justify-between text-sm text-dc-fg-muted"><span>Daily notes, one charge</span><span className="tabular-nums">42 days</span></figcaption>
               <div className="mt-2 h-3 w-full bg-dc-border" style={{ borderRadius: 'var(--radius-sm)' }} aria-hidden="true"><div className="h-3 bg-dc-accent" style={{ width: '100%', borderRadius: 'var(--radius-sm)' }} data-battery-fill /></div>
-              <dl className="mt-6 grid grid-cols-3 gap-4 text-sm">
+              {/* three figures side by side only when the box is wide enough for the serif figures (24rem, so a phone column and 200% text both stack them); container units follow the text size */}
+              <dl className="mt-6 grid grid-cols-1 gap-x-4 gap-y-3 text-sm @sm:grid-cols-3" data-battery-figures>
                 <div><dt className="text-dc-fg-muted">A tablet</dt><dd className="font-serif text-(length:--text-xl) tabular-nums">2 days</dd></div>
                 <div><dt className="text-dc-fg-muted">An e-reader</dt><dd className="font-serif text-(length:--text-xl) tabular-nums">3 weeks</dd></div>
                 <div><dt className="text-dc-fg-muted">Lumen</dt><dd className="font-serif text-(length:--text-xl) tabular-nums">6 weeks</dd></div>
@@ -234,11 +244,12 @@ export function LumenLanding() {
           <nav aria-label="More" className="flex flex-wrap gap-x-4 gap-y-1"><Link href="/design" className="underline-offset-4 hover:underline">Design contract</Link><Link href="/" className="underline-offset-4 hover:underline">Verification home</Link></nav>
         </div>
       </footer>
-      {/* the pre-order bar on phones: the action in every section without shouting */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-dc-border bg-dc-canvas/95 px-5 md:px-(--gutter) py-3 backdrop-blur md:hidden" role="region" aria-label="Pre-order" data-preorder-bar>
-        <div className="flex items-center justify-between gap-4">
+      {/* the pre-order bar on phones: the action in every section without shouting; the action drops under the price when
+          the bar is narrower than the two of them (container units follow the text size), so the price is never the part cut */}
+      <div className={`@container fixed inset-x-0 bottom-0 z-30 border-t border-dc-border bg-dc-canvas/95 px-5 md:px-(--gutter) py-3 backdrop-blur md:hidden${formInView ? ' hidden' : ''}`} role="region" aria-label="Pre-order" data-preorder-bar data-bar-hidden={formInView || undefined}>
+        <div className="grid grid-cols-1 items-center gap-3 @[17rem]:grid-cols-[minmax(0,1fr)_auto] @[17rem]:gap-4">
           <span className="min-w-0 truncate text-sm"><span className="tabular-nums">249 €</span><span className="font-serif"> · Lumen</span></span>
-          <Button asChild size="lg" className="h-auto min-h-11 shrink-0 whitespace-normal" style={{ borderRadius: 'var(--radius-sm)' }}><a href="#preorder">Pre-order</a></Button>
+          <Button asChild size="lg" className="h-auto min-h-11 whitespace-normal" style={{ borderRadius: 'var(--radius-sm)' }}><a href="#preorder">Pre-order</a></Button>
         </div>
       </div>
     </div>

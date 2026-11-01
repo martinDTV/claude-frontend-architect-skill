@@ -25,7 +25,7 @@ export function DashboardPage() {
       <StateBlock state={state} region="kpis" rows={2} title="Today's numbers" emptyTitle="No shipments yet" emptyText="The dashboard fills in as soon as the first shipment is planned. Create one to see late, at-risk and unassigned loads here." emptyAction={{ label: 'Plan the first shipment', href: '/app/shipments/new' }} error={error} onRetry={reload}>
         <section aria-labelledby="kpis">
           <h2 id="kpis" className="sr-only">Key numbers</h2>
-          <ul className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:grid-cols-5" data-kpis>{kpis.map((k) => <li key={k.id}><KpiTile kpi={k} /></li>)}</ul>
+          <ul className="grid grid-cols-1 gap-3 @xs:grid-cols-2 @3xl:grid-cols-3 @4xl:grid-cols-5" data-kpis>{kpis.map((k) => <li key={k.id}><KpiTile kpi={k} /></li>)}</ul>
         </section>
         <section aria-labelledby="charts" className="mt-6 grid grid-cols-1 gap-4 @4xl:grid-cols-5">
           <h2 id="charts" className="sr-only">Trends</h2>
@@ -38,7 +38,7 @@ export function DashboardPage() {
             <Button asChild variant="link"><Link href="/app/shipments?status=late,at-risk">View all <ArrowRight aria-hidden="true" /></Link></Button>
           </div>
           <div className="rounded-md border border-border bg-card" data-exceptions>
-            <Table aria-label="Late and at-risk shipments" containerProps={{ tabIndex: 0, role: 'region', 'aria-label': 'Late and at-risk shipments, scrolls sideways on narrow screens' }}>
+            <Table aria-label="Late and at-risk shipments" containerProps={{ tabIndex: 0, role: 'region', 'aria-label': 'Late and at-risk shipments, scrolls sideways on narrow screens', className: 'scroll-hint-x' }}>
               <TableHeader><TableRow><TableHead>Reference</TableHead><TableHead>Customer</TableHead><TableHead>Lane</TableHead><TableHead>Status</TableHead><TableHead>ETA</TableHead></TableRow></TableHeader>
               <TableBody>{exceptions.map((s) => <TableRow key={s.id}><TableCell className="font-mono text-sm">{s.reference}</TableCell><TableCell>{s.customer}</TableCell><TableCell className="font-mono text-xs text-muted-foreground">{s.lane}</TableCell><TableCell><StatusBadge status={s.status} /></TableCell><TableCell className="tabular-nums">{fmtDateTime(s.eta)} · {fmtRelative(s.eta)}</TableCell></TableRow>)}</TableBody>
             </Table>

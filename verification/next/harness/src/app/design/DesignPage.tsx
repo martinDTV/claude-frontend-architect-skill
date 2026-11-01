@@ -43,7 +43,7 @@ export function DesignPage() {
           <h1 className="text-2xl font-semibold tracking-tight">{contract.direction.adjectives.join(' · ')}</h1>
           <p className="mt-2 max-w-prose whitespace-pre-line text-muted-foreground">{contract.direction.statement}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex basis-full flex-wrap items-center justify-end gap-2 sm:basis-auto">
           <span className="text-sm text-muted-foreground" data-theme-name>{theme}</span>
           <ThemeToggle theme={theme} onToggle={toggle} />
         </div>

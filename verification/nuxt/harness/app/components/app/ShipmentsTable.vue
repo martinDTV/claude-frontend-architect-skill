@@ -66,7 +66,7 @@ const actionsFor = (s: Shipment) => [
 <template>
   <div>
     <!-- desktop and tablet: the table -->
-    <UTable :data="rows" :columns="tableColumns" :sorting="sorting" :sorting-options="{ manualSorting: true }" :loading="loading" class="hidden rounded-md border border-border bg-surface md:block" :ui="{ th: 'py-1.5 text-xs uppercase tracking-wide text-fg-muted', td: 'py-1.5 [html[data-density=comfortable]_&]:py-3' }" role="region" tabindex="0" aria-label="Shipments, scrolls sideways when the columns do not fit" data-shipments-table />
+    <UTable :data="rows" :columns="tableColumns" :sorting="sorting" :sorting-options="{ manualSorting: true }" :loading="loading" class="scroll-hint-x hidden rounded-md border border-border bg-surface md:block" :ui="{ th: 'py-1.5 text-xs uppercase tracking-wide text-fg-muted', td: 'py-1.5 [html[data-density=comfortable]_&]:py-3' }" role="region" tabindex="0" aria-label="Shipments, scrolls sideways when the columns do not fit" data-shipments-table />
     <!-- phones: the same rows as cards with the status and the identifier first -->
     <ul class="space-y-2 md:hidden" aria-label="Shipments" data-shipments-cards>
       <li v-for="s in rows" :key="s.id" class="rounded-md border border-border bg-surface p-3">

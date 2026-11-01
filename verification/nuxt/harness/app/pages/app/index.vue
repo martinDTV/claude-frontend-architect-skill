@@ -26,7 +26,7 @@ const DATASET_VEHICLES = DATASET.vehicles
 <template>
   <UDashboardPanel id="dashboard">
     <template #header><header>
-      <UDashboardNavbar title="Dashboard" :toggle="NAV_TOGGLE" :ui="{ title: 'whitespace-normal' }">
+      <UDashboardNavbar title="Dashboard" :toggle="NAV_TOGGLE" :ui="NAVBAR_UI">
         <template #right><span class="text-xs text-fg-muted tabular-nums">Updated {{ fmtDateTime(NOW) }} UTC</span></template>
       </UDashboardNavbar>
     </header></template>
@@ -36,7 +36,7 @@ const DATASET_VEHICLES = DATASET.vehicles
         <AppStateBlock :state="state" region="kpis" title="Today's numbers" :rows="2" empty-title="No shipments yet" empty-text="The dashboard fills in as soon as the first shipment is planned. Create one to see late, at-risk and unassigned loads here." :empty-action="{ label: 'Plan the first shipment', to: '/app/shipments/new' }" :error="error" @retry="reload">
           <section aria-labelledby="kpis">
             <h2 id="kpis" class="sr-only">Key numbers</h2>
-            <ul class="grid grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:grid-cols-5" data-kpis>
+            <ul class="grid grid-cols-1 gap-3 @xs:grid-cols-2 @3xl:grid-cols-3 @4xl:grid-cols-5" data-kpis>
               <li v-for="k in kpis" :key="k.id"><AppKpiTile :kpi="k" /></li>
             </ul>
           </section>
@@ -50,7 +50,7 @@ const DATASET_VEHICLES = DATASET.vehicles
               <h2 id="exceptions" class="text-lg font-semibold">Exceptions · late and at risk</h2>
               <UButton to="/app/shipments?status=late,at-risk" variant="link" color="primary" label="View all" trailing-icon="i-lucide-arrow-right" />
             </div>
-            <UTable :data="exceptions" :columns="columns" class="rounded-md border border-border bg-surface" :ui="{ th: 'py-2', td: 'py-2' }" role="region" tabindex="0" aria-label="Late and at-risk shipments, scrolls sideways on narrow screens" data-exceptions />
+            <UTable :data="exceptions" :columns="columns" class="scroll-hint-x rounded-md border border-border bg-surface" :ui="{ th: 'py-2', td: 'py-2' }" role="region" tabindex="0" aria-label="Late and at-risk shipments, scrolls sideways on narrow screens" data-exceptions />
           </section>
         </AppStateBlock>
       </main>

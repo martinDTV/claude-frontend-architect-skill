@@ -5,6 +5,9 @@ import { CATALOG, fmtPrice, glazeOf } from '~/lib/ui/shop/catalog'
 import { maxQuantity, resolveLine } from '~/lib/ui/shop/cart'
 
 const { cart, totals, open, dispatch } = useBag()
+// the drawer shows what the "added" toast announced: when it opens, the toast goes, so it never covers the totals
+const toast = useToast()
+watch(open, (isOpen) => { if (isOpen) toast.clear() })
 const lines = computed(() => cart.value.lines.map((l) => ({ line: l, ...resolveLine(l, CATALOG)! })).filter((x) => x.piece))
 </script>
 

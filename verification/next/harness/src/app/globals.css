@@ -116,3 +116,13 @@
 }
 /* the launch page's sticky header: the same margin above, at every width */
 [data-contract="lumen"] :where(a, button, input, select, textarea, summary, [tabindex]) { scroll-margin-top: 5rem; }
+
+/* a table that scrolls sideways says so: a shadow at the edge that still has content, fading as it arrives
+   (the covers scroll with the content, the shadows do not); the element's own background must be --card */
+@utility scroll-hint-x {
+  background-image: linear-gradient(to right, var(--card) 30%, transparent), linear-gradient(to left, var(--card) 30%, transparent), linear-gradient(to right, color-mix(in srgb, var(--foreground) 18%, transparent), transparent), linear-gradient(to left, color-mix(in srgb, var(--foreground) 18%, transparent), transparent);
+  background-position: left center, right center, left center, right center;
+  background-repeat: no-repeat;
+  background-size: 2.5rem 100%, 2.5rem 100%, 0.75rem 100%, 0.75rem 100%;
+  background-attachment: local, local, scroll, scroll;
+}

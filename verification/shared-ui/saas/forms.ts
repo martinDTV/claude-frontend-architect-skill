@@ -11,7 +11,8 @@ export const shipmentFormSchema = z
     customer: z.string().trim().min(2, 'Name the customer (at least two characters).').max(60, 'Keep the customer name under 60 characters.'),
     origin: z.enum(HUBS, { message: 'Choose an origin hub.' }),
     destination: z.enum(HUBS, { message: 'Choose a destination hub.' }),
-    promised: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Enter the promised date and time.').refine((v) => Date.parse(v) >= Date.parse(NOW), 'The promised time is in the past; pick a later slot.'),
+    // an empty slot is one issue, not two: the first check aborts the second (Nuxt UI's form lists every issue it gets)
+    promised: z.string().refine((v) => !Number.isNaN(Date.parse(v)), { message: 'Enter the promised date and time.', abort: true }).refine((v) => Date.parse(v) >= Date.parse(NOW), 'The promised time is in the past; pick a later slot.'),
     weightKg: z.coerce.number({ message: 'Weight in kilograms, numbers only.' }).int('Round the weight to whole kilograms.').min(1, 'Weight must be at least 1 kg.').max(24000, 'Above 24,000 kg the load needs a special permit; split it.'),
     pallets: z.coerce.number({ message: 'Pallets as a whole number.' }).int('Pallets as a whole number.').min(1, 'At least one pallet.').max(33, 'An artic carries 33 pallets at most.'),
     driverId: z.string().nullable().default(null),

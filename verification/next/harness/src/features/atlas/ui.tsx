@@ -59,28 +59,40 @@ export function KpiTile({ kpi }: { kpi: Kpi }) {
 }
 
 export function DeliveriesChart({ series }: { series: SeriesPoint[] }) {
-  const width = 560, height = 180, pad = { top: 12, right: 8, bottom: 28, left: 36 }
+  // the bars are an SVG stretched to its box; the axis labels are HTML, so they follow the user's text size (text
+  // inside a scaled viewBox keeps the size the viewBox gives it, whatever the reader's setting)
+  const width = 560, height = 160
   const max = Math.max(...series.map((p) => p.volume)) || 1
-  const scaleY = (v: number) => height - pad.bottom - (v / max) * (height - pad.top - pad.bottom)
-  const slot = (width - pad.left - pad.right) / series.length
+  const scaleY = (v: number) => height - (v / max) * height
+  const slot = width / series.length
   const barW = slot * 0.62
-  const x = (i: number) => pad.left + (i + 0.19) * slot
+  const x = (i: number) => (i + 0.19) * slot
+  const ticks = [0, 0.5, 1].map((f) => Math.round(max * f))
+  const axis = [...ticks].reverse()
   const late = series.reduce((s, p) => s + p.late, 0)
   const total = series.reduce((s, p) => s + p.volume, 0)
   const summary = `${fmtInt(total)} deliveries in 14 days, ${fmtInt(late)} late (${Math.round((100 * late) / Math.max(1, total))}%)`
   return (
     <figure className="rounded-md border border-border bg-card p-4" data-chart="deliveries">
       <figcaption className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><span className="font-medium">Deliveries, last 14 days</span><span className="text-sm text-muted-foreground">{summary}</span></figcaption>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={`Stacked bars of on-time and late deliveries per day. ${summary}`}>
-        {[0, 0.5, 1].map((f) => { const t = Math.round(max * f); return <g key={f}><line x1={pad.left} x2={width - pad.right} y1={scaleY(t)} y2={scaleY(t)} stroke="var(--border)" /><text x={pad.left - 6} y={scaleY(t) + 4} textAnchor="end" fontSize="11" fill="var(--muted-foreground)">{t}</text></g> })}
-        {series.map((p, i) => (
-          <g key={p.day}>
-            <rect x={x(i)} y={scaleY(p.onTime + p.late)} width={barW} height={scaleY(0) - scaleY(p.late)} fill="var(--dc-danger)"><title>{p.day}: {p.late} late</title></rect>
-            <rect x={x(i)} y={scaleY(p.onTime)} width={barW} height={scaleY(0) - scaleY(p.onTime)} fill="var(--color-accent-500)"><title>{p.day}: {p.onTime} on time</title></rect>
-            {i % 2 === 0 && <text x={x(i) + barW / 2} y={height - 8} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)">{p.day.slice(5)}</text>}
-          </g>
-        ))}
-      </svg>
+      <div className="grid grid-cols-[auto_1fr] gap-x-2" role="img" aria-label={`Stacked bars of on-time and late deliveries per day. ${summary}`}>
+        <div className="flex h-40 flex-col justify-between text-right text-xs leading-none tabular-nums text-muted-foreground" aria-hidden="true" data-axis="y">
+          {axis.map((t, i) => <span key={i} className={i === 0 ? '-translate-y-1/2' : i === axis.length - 1 ? 'translate-y-1/2' : ''} data-axis-label>{t}</span>)}
+        </div>
+        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-40 w-full overflow-visible" aria-hidden="true">
+          {ticks.map((t, i) => <line key={i} x1={0} x2={width} y1={scaleY(t)} y2={scaleY(t)} stroke="var(--border)" vectorEffect="non-scaling-stroke" />)}
+          {series.map((p, i) => (
+            <g key={p.day}>
+              <rect x={x(i)} y={scaleY(p.onTime + p.late)} width={barW} height={scaleY(0) - scaleY(p.late)} fill="var(--dc-danger)"><title>{p.day}: {p.late} late</title></rect>
+              <rect x={x(i)} y={scaleY(p.onTime)} width={barW} height={scaleY(0) - scaleY(p.onTime)} fill="var(--color-accent-500)"><title>{p.day}: {p.onTime} on time</title></rect>
+            </g>
+          ))}
+        </svg>
+        <span aria-hidden="true" />
+        <ol className="mt-1 grid text-xs tabular-nums text-muted-foreground" style={{ gridTemplateColumns: `repeat(${series.length}, minmax(0, 1fr))` }} aria-hidden="true" data-axis="x">
+          {series.map((p, i) => <li key={p.day} className="text-center">{i % 2 === 0 && <span data-axis-label>{p.day.slice(5)}</span>}</li>)}
+        </ol>
+      </div>
       <div className="mt-2 flex gap-4 text-xs text-muted-foreground"><span><span className="mr-1 inline-block size-2.5 rounded-sm align-middle" style={{ background: 'var(--color-accent-500)' }} aria-hidden="true" />On time</span><span><span className="mr-1 inline-block size-2.5 rounded-sm align-middle" style={{ background: 'var(--dc-danger)' }} aria-hidden="true" />Late</span></div>
       <details className="mt-2 text-sm">
         <summary className="cursor-pointer text-muted-foreground">Data table</summary>

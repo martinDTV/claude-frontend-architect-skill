@@ -125,7 +125,7 @@ export function ShipmentForm({ mode, onCreated }: { mode: ApiMode; onCreated: (r
           <Field data-invalid={invalid('promised')}>
             <FieldLabel htmlFor="field-promised">Promised date <span aria-hidden="true">*</span></FieldLabel>
             <div className="flex flex-wrap items-center gap-2">
-              <Input id="field-promised" type="date" min={MIN_DATE} value={values.date} onChange={(e) => set('date', e.target.value)} onBlur={() => blur('promised')} className="w-44 max-w-full" aria-label="Promised date" required aria-required="true" aria-invalid={invalid('promised')} aria-describedby={describedBy('promised')} />
+              <Input id="field-promised" type="date" min={MIN_DATE} value={values.date} onChange={(e) => set('date', e.target.value)} onBlur={() => blur('promised')} className="w-full sm:w-44" aria-label="Promised date" required aria-required="true" aria-invalid={invalid('promised')} aria-describedby={describedBy('promised')} />
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild><Button type="button" variant="outline" size="icon" aria-label="Pick the promised date from a calendar"><CalendarIcon aria-hidden="true" /></Button></PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -171,8 +171,9 @@ export function ShipmentForm({ mode, onCreated }: { mode: ApiMode; onCreated: (r
             <FieldDescription id="field-notes-help">{values.notes.length}/500</FieldDescription>
             {shown('notes') && <FieldError id="field-notes-error">{shown('notes')}</FieldError>}
           </Field>
-          <Field orientation="horizontal" className="sm:col-span-2">
-            <Checkbox id="field-priority" checked={values.priority} onCheckedChange={(c) => set('priority', c === true)} aria-describedby="field-priority-help" />
+          {/* the box aligns with the first line of its label, not with the middle of label and description */}
+          <Field orientation="horizontal" className="sm:col-span-2 data-[orientation=horizontal]:items-start">
+            <Checkbox id="field-priority" checked={values.priority} onCheckedChange={(c) => set('priority', c === true)} aria-describedby="field-priority-help" className="mt-0.5" />
             <div className="grid gap-1">
               <FieldLabel htmlFor="field-priority">Priority load</FieldLabel>
               <FieldDescription id="field-priority-help">Dispatch plans it before standard loads of the same slot.</FieldDescription>

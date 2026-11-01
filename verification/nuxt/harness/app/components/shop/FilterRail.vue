@@ -4,7 +4,8 @@
 // sheet below.
 import { AVAILABILITY_LABEL, FORM_LABEL, FORMS, GLAZES, MAKERS, type Availability, type CatalogState } from '~/lib/ui/shop/catalog'
 
-const props = defineProps<{ state: CatalogState; counts: { total: number } }>()
+// the sheet already has a title: inside it the rail shows no heading of its own
+const props = withDefaults(defineProps<{ state: CatalogState; counts: { total: number }; heading?: boolean }>(), { heading: true })
 const emit = defineEmits<{ toggle: [key: 'makers' | 'forms' | 'glazes' | 'availability', value: string]; clear: [] }>()
 const AVAILABILITIES: Availability[] = ['in-stock', 'last-few', 'made-to-order', 'sold-out']
 const active = computed(() => props.state.makers.length + props.state.forms.length + props.state.glazes.length + props.state.availability.length)
@@ -12,9 +13,9 @@ const active = computed(() => props.state.makers.length + props.state.forms.leng
 
 <template>
   <div class="space-y-6" data-filter-rail>
-    <div class="flex items-baseline justify-between gap-2">
-      <h2 class="font-serif text-lg">Filter</h2>
-      <UButton v-if="active" label="Clear all" variant="link" color="neutral" size="sm" data-clear-filters @click="emit('clear')" />
+    <div v-if="heading || active" class="flex items-baseline justify-between gap-2">
+      <h2 v-if="heading" class="font-serif text-lg">Filter</h2>
+      <UButton v-if="active" label="Clear all" variant="link" color="neutral" size="sm" class="ms-auto" data-clear-filters @click="emit('clear')" />
     </div>
     <fieldset>
       <legend class="mb-2 text-sm font-semibold">Maker</legend>
