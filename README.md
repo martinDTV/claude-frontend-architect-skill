@@ -97,7 +97,7 @@ Every script supports `--json`, `--md` (or `--format`) and `--fail-on confirmed|
 | Creative: `tsc --strict` + Vitest (Three.js disposal, cleanup stack) | Pass (see report) |
 | dependency-cruiser boundary rules; Nginx reverse-proxy example | Pass; `nginx -t` not run on this machine (no nginx) |
 | `claude plugin validate` (marketplace and plugin) | Pass |
-| `claude plugin eval` (88 scenarios) | Smoke subset of the 1.1 cases run under a cost ceiling (see `docs/evals.md` for scores and limits); cases 49–77 and the UI briefs 85–88 not yet run (their procedure, model, run count and cost estimate are in `docs/evals.md`); the full suite is not run in CI |
+| `claude plugin eval` (88 scenarios) | Smoke subset of the 1.1 cases run under a cost ceiling (see `docs/evals.md` for scores and limits); cases 49–77 not yet run, and the UI briefs 85–88 are **NOT_RUN — PROVIDER_NOT_AUTHORIZED** (no personal model provider is authorised for this project; their procedure, model, run count and cost estimate are in `docs/evals.md`); the full suite is not run in CI |
 
 Run it yourself: `./verification/run-all.sh` (Node 22, pnpm 10, python3; nginx optional). Run the evals with your account through `./verification/evals/run-evals.sh smoke|activation|tag <tag>|full`, which always sets a cost ceiling (details and results in [`docs/evals.md`](docs/evals.md); the audit case needs `--allow-tools Bash`).
 
