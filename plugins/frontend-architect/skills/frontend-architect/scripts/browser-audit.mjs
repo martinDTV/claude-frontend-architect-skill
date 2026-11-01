@@ -30,10 +30,21 @@ usage: node browser-audit.mjs <url> --playwright <dir> [options]
   --playwright <dir>      directory whose node_modules provides playwright (and axe-core); required
   --axe <dir|file>        axe-core location when it is not next to playwright (default: same dir)
   --paths </a,/b>         page paths to visit under the url (default: the url itself)
-  --checks <list>         axe,keyboard,dialogs,responsive,hydration,forms,visual,vitals (default: axe,keyboard,dialogs,responsive,hydration)
+  --checks <list>         axe,keyboard,dialogs,responsive,hydration,forms,visual,vitals,interactions,hydration-cost
+                          (default: axe,keyboard,dialogs,responsive,hydration)
   --vitals-runs <n>       vitals: independent runs, fresh context each (default 5)
   --vitals-settle <ms>    vitals: observation window after load before reading (default 1500)
   --vitals-budget <file>  vitals: optional JSON of p75 budgets; a breach becomes a confirmed finding (CI gate, opt-in)
+  --interactions-script <file>  interactions: JSON array of steps [{label,selector,type}] where type is
+                                click|press|type|menu|dialog (press/type take a value); drives each step and reads its
+                                latency from the Event Timing API (input delay / processing / presentation by interactionId)
+  --interactions-runs <n>       interactions: independent runs, fresh context each (default 5)
+  --interactions-settle <ms>    interactions: wait after load before the first interaction so it is not timing boot (default 1200)
+  --interactions-budget <file>  interactions: optional JSON {latency, byLabel:{<label>:ms}} of p75 budgets; a breach is confirmed
+  --hydration-runs <n>          hydration-cost: independent runs, fresh context each (default 5)
+  --hydration-settle <ms>       hydration-cost: observation window after load before reading boot proxies (default 1500)
+  --hydration-budget <file>     hydration-cost: optional JSON {ttfb,toLoad,deferredScripts,bootLongTaskTotalMs,jsTransferBytes} of
+                                budgets on boot proxies; a breach is a confirmed finding (never an exact-hydration verdict)
   --viewports <list>      presets mobile 375×667, tablet 768×1024, desktop 1280×800 (default all three), reflow 320×568
                           (the WCAG 1.4.10 width, opt-in) or WIDTHxHEIGHT tokens such as 390x844; responsive, visual
                           and target-size checks run per viewport
@@ -404,7 +415,7 @@ export async function run(argv) {
   const tooling = loadTooling(String(args.playwright), args.axe ? String(args.axe) : null)
   if (tooling.error) return failNow(tooling.error)
   const checks = new Set(String(args.checks ?? 'axe,keyboard,dialogs,responsive,hydration').split(',').map((s) => s.trim()).filter(Boolean))
-  for (const c of checks) if (!['axe', 'keyboard', 'dialogs', 'responsive', 'hydration', 'forms', 'visual', 'vitals'].includes(c)) return failNow(`unknown check: ${c}`)
+  for (const c of checks) if (!['axe', 'keyboard', 'dialogs', 'responsive', 'hydration', 'forms', 'visual', 'vitals', 'interactions', 'hydration-cost'].includes(c)) return failNow(`unknown check: ${c}`)
   if (checks.has('forms') && !args['allow-submit']) return failNow('the forms check submits forms: pass --allow-submit (fixtures and staging only)')
   if (checks.has('visual') && !args['baseline-dir']) return failNow('the visual check needs --baseline-dir <dir>')
   let baselineDir = null
@@ -425,6 +436,24 @@ export async function run(argv) {
   const vitalsSettle = Math.max(0, Number(args['vitals-settle'] ?? 1500))
   let vitalsBudget = null
   if (args['vitals-budget']) { try { vitalsBudget = JSON.parse(readFileSync(resolve(String(args['vitals-budget'])), 'utf8')) } catch (e) { return failNow(`--vitals-budget: cannot read JSON (${e.message})`) } }
+  const interactionsRuns = Math.max(1, Number(args['interactions-runs'] ?? 5))
+  const interactionsSettle = Math.max(0, Number(args['interactions-settle'] ?? 1200))
+  let interactionsScript = null
+  if (args['interactions-script']) {
+    try { interactionsScript = JSON.parse(readFileSync(resolve(String(args['interactions-script'])), 'utf8')) } catch (e) { return failNow(`--interactions-script: cannot read JSON (${e.message})`) }
+    if (!Array.isArray(interactionsScript)) return failNow('--interactions-script must be a JSON array of steps')
+    for (const s of interactionsScript) {
+      if (!s || typeof s.selector !== 'string' || !s.selector) return failNow('--interactions-script: every step needs a non-empty "selector"')
+      if (!['click', 'press', 'type', 'menu', 'dialog'].includes(s.type)) return failNow(`--interactions-script: step "${s.label ?? s.selector}" has an unknown type "${s.type}" (click|press|type|menu|dialog)`)
+    }
+  }
+  let interactionsBudget = null
+  if (args['interactions-budget']) { try { interactionsBudget = JSON.parse(readFileSync(resolve(String(args['interactions-budget'])), 'utf8')) } catch (e) { return failNow(`--interactions-budget: cannot read JSON (${e.message})`) } }
+  const hydrationRuns = Math.max(1, Number(args['hydration-runs'] ?? 5))
+  const hydrationSettle = Math.max(0, Number(args['hydration-settle'] ?? 1500))
+  let hydrationBudget = null
+  if (args['hydration-budget']) { try { hydrationBudget = JSON.parse(readFileSync(resolve(String(args['hydration-budget'])), 'utf8')) } catch (e) { return failNow(`--hydration-budget: cannot read JSON (${e.message})`) } }
+  if (checks.has('interactions') && !interactionsScript) return failNow('the interactions check needs --interactions-script <file> (a JSON array of steps)')
   const maxPages = Number(args['max-pages'] ?? 10)
   const masks = String(args.mask ?? 'input[type=password],[data-sensitive],[data-fa-mask]').split(',').map((s) => s.trim()).filter(Boolean)
   let outDir
@@ -437,7 +466,7 @@ export async function run(argv) {
   const deadline = Date.now() + maxTime
   const timeLeft = () => Math.max(0, deadline - Date.now())
 
-  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, viewportSizes, textScales, textScaleMethod: 'root font-size (rem/em-sized text only; not browser zoom, not a WCAG 1.4.4 verdict)', checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir, baselineDir, vitals: checks.has('vitals') ? { runs: vitalsRuns, settleMs: vitalsSettle, viewport: viewports[0] ?? 'desktop', reducedMotion: true, cpuThrottle: 'none (document the device profile when you set budgets)', network: 'host-allowlist only; no throttling by default', cachePerRun: 'cold (fresh context, no storage reuse)', budget: vitalsBudget ? 'provided' : 'none (diagnostic only; does not fail CI)' } : null } }
+  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, viewportSizes, textScales, textScaleMethod: 'root font-size (rem/em-sized text only; not browser zoom, not a WCAG 1.4.4 verdict)', checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir, baselineDir, vitals: checks.has('vitals') ? { runs: vitalsRuns, settleMs: vitalsSettle, viewport: viewports[0] ?? 'desktop', reducedMotion: true, cpuThrottle: 'none (document the device profile when you set budgets)', network: 'host-allowlist only; no throttling by default', cachePerRun: 'cold (fresh context, no storage reuse)', budget: vitalsBudget ? 'provided' : 'none (diagnostic only; does not fail CI)' } : null, interactions: checks.has('interactions') ? { runs: interactionsRuns, settleMs: interactionsSettle, steps: interactionsScript.length, metric: 'PerformanceEventTiming (native); Playwright wall-clock kept as a labelled proxy only', cpuThrottle: 'none (document the device profile when you set budgets)', network: 'host-allowlist only; no throttling', cachePerRun: 'cold (fresh context)', budget: interactionsBudget ? 'provided' : 'none (diagnostic only; does not fail CI)' } : null, hydrationCost: checks.has('hydration-cost') ? { runs: hydrationRuns, settleMs: hydrationSettle, metric: 'Navigation Timing proxies + Long Animation Frames + long tasks + app marks when present; no exact hydration time without an app marker', cpuThrottle: 'none (document the device profile when you set budgets)', network: 'host-allowlist only; no throttling', cachePerRun: 'cold (fresh context)', budget: hydrationBudget ? 'provided' : 'none (diagnostic only; does not fail CI)' } : null } }
   const emit = (f) => addFinding(report, { verification: 'browser', ...f })
   if (parsedViewports.unknown.length) report.notes.push(`--viewports: ignored ${parsedViewports.unknown.join(', ')} (presets: ${Object.keys(VIEWPORTS).join(', ')}; or WIDTHxHEIGHT)`)
 
@@ -533,6 +562,8 @@ export async function run(argv) {
       if (checks.has('dialogs')) await checkDialogs(page, path, Boolean(args.interact), pageEmit, pageRecord)
       if (checks.has('forms')) await checkForms(page, context, url, path, pageEmit, pageRecord)
       if (checks.has('vitals')) await checkVitals(browser, url, path, { allowed, viewport: viewportSizes[viewports[0]] ?? VIEWPORTS.desktop, runs: vitalsRuns, settleMs: vitalsSettle, timeLeft, blockedSink: report.data.blockedRequests, budget: vitalsBudget }, pageEmit, pageRecord)
+      if (checks.has('interactions')) await checkInteractions(browser, url, path, { allowed, viewport: viewportSizes[viewports[0]] ?? VIEWPORTS.desktop, runs: interactionsRuns, script: interactionsScript, settleMs: interactionsSettle, timeLeft, blockedSink: report.data.blockedRequests, budget: interactionsBudget }, pageEmit, pageRecord)
+      if (checks.has('hydration-cost')) await checkHydrationCost(browser, url, path, { allowed, viewport: viewportSizes[viewports[0]] ?? VIEWPORTS.desktop, runs: hydrationRuns, settleMs: hydrationSettle, timeLeft, blockedSink: report.data.blockedRequests, budget: hydrationBudget }, pageEmit, pageRecord)
       if (perViewport) {
         for (const vp of viewports) {
           await page.setViewportSize(viewportSizes[vp])
@@ -1237,6 +1268,281 @@ export async function checkVitals(browser, url, path, opts, pageEmit, pageRecord
       const limit = budget[key];
       if (limit != null && agg[key].available && agg[key].p75 != null && agg[key].p75 > limit) {
         pageEmit({ id: 'vitals-over-budget', level: 'confirmed', severity: 'medium', file: path, evidence: `${key} p75 ${agg[key].p75}${METRIC_META[key].unit === 'ms' ? 'ms' : ''}`, message: `${key.toUpperCase()} p75 ${agg[key].p75}${METRIC_META[key].unit === 'ms' ? 'ms' : ''} exceeds the budget ${limit} over ${agg[key].validSamples} lab runs`, fix: 'a measured lab breach of your opt-in budget; profile the route (Performance panel) to find the cause, then re-measure. Lab p75 of a few runs is not the field p75' });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 1.6 increment 3: interaction latency (INP sub-parts from the Event Timing API) and hydration cost (navigation-timing
+// proxies + Long Animation Frames). Both reuse the vitals pattern: a fresh context per run, the observer injected
+// before navigation, median/p75 over runs, an info finding, an opt-in budget that turns a measured p75 breach into a
+// confirmed finding. The ground truth is the browser's own entries; anything Playwright times is reported as a proxy
+// and never presented as the native metric.
+
+// Observer for interaction latency and main-thread blocking. Captures Event Timing entries (keyed by interactionId so a
+// logical interaction groups its low-level events) and Long Animation Frames (with script attribution). durationThreshold
+// is lowered to the 16ms minimum so a fixture's small-but-real handler is still reported; entries are rounded to 8ms by
+// the platform, which is noted in the output.
+export const INTERACTION_OBSERVER = `(() => {
+  const s = window.__faInteractions = { events: [], firstInput: null, loaf: [], support: {} };
+  const supported = (t) => { try { return (PerformanceObserver.supportedEntryTypes || []).includes(t); } catch (e) { return false; } };
+  const obs = (type, opts, cb) => { s.support[type] = supported(type); if (!s.support[type]) return; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) cb(e); }).observe(Object.assign({ type, buffered: true }, opts)); } catch (e) { s.support[type] = false; } };
+  const targetOf = (e) => { const t = e.target; if (!t || !t.tagName) return null; return t.tagName.toLowerCase() + (t.id ? '#' + t.id : (t.getAttribute && t.getAttribute('data-testid') ? '[data-testid=' + t.getAttribute('data-testid') + ']' : '')); };
+  const record = (e) => ({ name: e.name, entryType: e.entryType, interactionId: e.interactionId || 0, startTime: e.startTime, duration: e.duration, processingStart: e.processingStart, processingEnd: e.processingEnd, inputDelay: e.processingStart - e.startTime, processing: e.processingEnd - e.processingStart, presentation: (e.startTime + e.duration) - e.processingEnd, target: targetOf(e) });
+  obs('event', { durationThreshold: 16 }, (e) => { s.events.push(record(e)); });
+  obs('first-input', {}, (e) => { if (!s.firstInput) s.firstInput = record(e); });
+  obs('long-animation-frame', {}, (e) => { s.loaf.push({ startTime: e.startTime, duration: e.duration, blockingDuration: e.blockingDuration, renderStart: e.renderStart || null, styleAndLayoutStart: e.styleAndLayoutStart || null, firstUIEventTimestamp: e.firstUIEventTimestamp || null, scripts: (e.scripts || []).slice(0, 5).map((sc) => ({ invoker: sc.invoker || null, invokerType: sc.invokerType || null, sourceURL: sc.sourceURL || null, sourceFunctionName: sc.sourceFunctionName || null, duration: sc.duration, forcedStyleAndLayoutDuration: sc.forcedStyleAndLayoutDuration || 0, pauseDuration: sc.pauseDuration || 0, compile: (sc.executionStart != null && sc.startTime != null) ? (sc.executionStart - sc.startTime) : null })) }); });
+})()`;
+
+// A declarative interaction step. type: 'click' | 'press' (a key) | 'type' (controlled typing) | 'menu' | 'dialog'
+// (a click that is expected to open an overlay). Each step names a selector and, for press/type, a value. The step is a
+// label and a Playwright action; the measured latency is read from the Event Timing entries the browser recorded for it.
+async function runInteractionStep(page, step) {
+  const sel = step.selector;
+  // Event Timing entries flush to the observer only after the paint that follows the interaction, which can land during
+  // the next step. Select this step's entries by time, not by a count snapshot: mark the page clock just before the
+  // action, then poll until an entry with startTime >= that mark has flushed (so a later step never steals it, and a
+  // slow interaction that paints late is still waited for). t0 is read in-page so it shares the entries' time origin.
+  const t0 = await page.evaluate(() => performance.now());
+  const wallStart = Date.now();
+  let actionError = null;
+  try {
+    const locator = page.locator(sel).first();
+    await locator.waitFor({ state: 'visible', timeout: 4000 });
+    if (step.type === 'press') await locator.press(step.value || 'Enter');
+    else if (step.type === 'type') { await locator.click(); await locator.type(String(step.value ?? 'abc'), { delay: 20 }); }
+    else await locator.click(); // click | menu | dialog
+  } catch (e) { actionError = String(e.message).split('\n')[0].slice(0, 120); }
+  const wallMs = Date.now() - wallStart;
+  // wait for this step's entries to arrive (bounded): keep polling while new matching entries keep appearing
+  const after = await page.evaluate(async ({ t0, type }) => {
+    const s = window.__faInteractions || { events: [], loaf: [] };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const mine = () => s.events.filter((e) => e.startTime >= t0 - 1); // -1ms guards the shared time origin
+    const deadline = performance.now() + (type === 'type' ? 1200 : 900);
+    let count = -1;
+    // poll until the set of this step's entries stops growing (all low-level events of the interaction flushed), bounded
+    while (performance.now() < deadline) { const n = mine().length; if (n > 0 && n === count) break; count = n; await sleep(80); }
+    const fresh = mine();
+    // A real interaction is the set of events that share a non-zero interactionId (keydown/keyup; pointerdown/pointerup/
+    // click). Continuous and non-interaction events (pointerover, pointerout, mousemove...) carry interactionId 0 and
+    // must not be grouped or chosen as the representative: they share the interaction's duration but point at the element
+    // the pointer just left, which would misattribute the target to the previous step. Keep id-0 events only as a
+    // fallback when the browser produced no distinct interaction at all.
+    const byId = new Map();
+    for (const e of fresh) { if (!e.interactionId) continue; if (!byId.has(e.interactionId)) byId.set(e.interactionId, []); byId.get(e.interactionId).push(e); }
+    const pickLead = (evs) => {
+      // prefer the discrete event that carries the interaction's meaning and target (click, then keydown, then the rest),
+      // and among those the longest; its sub-parts are the interaction's sub-parts.
+      const rank = (e) => (e.name === 'click' ? 3 : (e.name === 'keydown' ? 2 : (/down|up/.test(e.name) ? 1 : 0)));
+      return evs.slice().sort((a, b) => (b.duration - a.duration) || (rank(b) - rank(a)))[0];
+    };
+    let interactions = [...byId.entries()].map(([id, evs]) => {
+      const lead = pickLead(evs);
+      return { interactionId: id, grouped: evs.map((e) => e.name), eventCount: evs.length, latency: lead.duration, inputDelay: lead.inputDelay, processing: lead.processing, presentation: lead.presentation, target: lead.target };
+    }).sort((a, b) => b.latency - a.latency);
+    if (!interactions.length) {
+      // no distinct interaction (e.g. a key that produced no interactionId): fall back to the longest id-0 discrete event
+      const discrete = fresh.filter((e) => /down|up|click|keydown|keypress|input/.test(e.name));
+      const lead = discrete.sort((a, b) => b.duration - a.duration)[0];
+      if (lead) interactions = [{ interactionId: 0, grouped: [lead.name], eventCount: 1, latency: lead.duration, inputDelay: lead.inputDelay, processing: lead.processing, presentation: lead.presentation, target: lead.target }];
+    }
+    return { interactions };
+  }, { t0, type: step.type });
+  return { label: step.label || step.type, type: step.type, selector: sel, actionError, wallMsProxy: wallMs, eventTiming: after.interactions.length ? after.interactions[0] : null, allGroups: after.interactions };
+}
+
+async function interactionsRun(browser, url, { allowed, viewport, script, settleMs, blockedSink }) {
+  const context = await browser.newContext({ viewport, reducedMotion: 'reduce', locale: 'en-US' });
+  await context.route('**/*', (route) => {
+    const u = new URL(route.request().url());
+    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.protocol === 'about:' || hostAllowed(u.hostname, allowed)) return route.continue();
+    blockedSink.push({ url: u.origin + u.pathname, method: route.request().method() });
+    return route.abort('blockedbyclient');
+  });
+  await context.addInitScript(INTERACTION_OBSERVER);
+  const page = await context.newPage();
+  try {
+    await page.goto(url, { waitUntil: 'load', timeout: 20000 });
+    await page.waitForTimeout(settleMs); // let hydration settle so the first interaction is not measuring boot
+    const support = await page.evaluate(() => (window.__faInteractions ? window.__faInteractions.support : {}));
+    const steps = [];
+    for (const step of script) steps.push(await runInteractionStep(page, step));
+    const loaf = await page.evaluate(() => (window.__faInteractions ? window.__faInteractions.loaf : []));
+    return { support, steps, loaf };
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+export async function checkInteractions(browser, url, path, opts, pageEmit, pageRecord) {
+  const { allowed, viewport, runs, script, settleMs, timeLeft, blockedSink, budget } = opts;
+  if (!Array.isArray(script) || !script.length) {
+    pageEmit({ id: 'interactions-no-script', level: 'info', severity: 'info', file: path, message: 'the interactions check ran without a script; pass --interactions-script <file> with steps (selector + type)', fix: 'provide a JSON array of steps, e.g. [{"label":"open menu","selector":"[data-menu]","type":"menu"}]' });
+    pageRecord.checks.interactions = { ran: false, reason: 'no script' };
+    return;
+  }
+  const perRun = [];
+  for (let i = 0; i < runs; i++) {
+    if (timeLeft && timeLeft() < settleMs + 5000) break;
+    try { perRun.push(await interactionsRun(browser, url, { allowed, viewport, script, settleMs, blockedSink })); }
+    catch (e) { perRun.push({ error: String(e.message).split('\n')[0].slice(0, 120) }); }
+  }
+  const valid = perRun.filter((r) => !r.error);
+  const support = valid.find((r) => r.support)?.support || {};
+  const eventTimingSupported = Boolean(support.event);
+  // aggregate per labelled step across runs, from the native Event Timing entry (the proxy is kept but never aggregated as the metric)
+  const byLabel = new Map();
+  for (const r of valid) for (const s of r.steps) { if (!byLabel.has(s.label)) byLabel.set(s.label, []); byLabel.get(s.label).push(s); }
+  const steps = [...byLabel.entries()].map(([label, samples]) => {
+    const withEt = samples.filter((s) => s.eventTiming);
+    const lat = withEt.map((s) => s.eventTiming.latency);
+    const agg = (pick) => { const xs = withEt.map((s) => pick(s.eventTiming)).filter((x) => x != null); return xs.length ? { median: round1(median(xs)), p75: round1(p75(xs)), max: round1(Math.max(...xs)) } : null; };
+    return {
+      label, type: samples[0].type, selector: samples[0].selector,
+      available: withEt.length > 0,
+      measuredBy: withEt.length ? 'event-timing (native)' : 'none (no Event Timing entry for this step; see wallMsProxy)',
+      samples: withEt.length, requestedRuns: runs,
+      latency: agg((e) => e.latency), inputDelay: agg((e) => e.inputDelay), processing: agg((e) => e.processing), presentation: agg((e) => e.presentation),
+      interactionId: withEt.length ? withEt[withEt.length - 1].eventTiming.interactionId : null,
+      grouped: withEt.length ? withEt[withEt.length - 1].eventTiming.grouped : null,
+      target: withEt.length ? withEt[withEt.length - 1].eventTiming.target : null,
+      wallMsProxy: { median: round1(median(samples.map((s) => s.wallMsProxy))), note: 'Playwright wall-clock around the action: a PROXY, not INP; includes test-driver overhead' },
+      actionErrors: samples.filter((s) => s.actionError).length,
+    };
+  });
+  // the slowest measured step and the worst LoAF for a one-line summary; LoAF scripts attribute the main-thread work
+  const measured = steps.filter((s) => s.available && s.latency);
+  const worst = measured.sort((a, b) => b.latency.p75 - a.latency.p75)[0] || null;
+  const loafAll = valid.flatMap((r) => r.loaf || []);
+  const worstLoaf = loafAll.sort((a, b) => b.blockingDuration - a.blockingDuration)[0] || null;
+  pageRecord.checks.interactions = {
+    ran: true,
+    profile: { viewport, reducedMotion: true, cpuThrottle: 'none', network: 'host-allowlist, no throttling', cachePerRun: 'cold', browser: browser.version(), settleMs, runs, durationThreshold: '16ms (platform rounds entries to 8ms)' },
+    support: { eventTiming: eventTimingSupported, firstInput: Boolean(support['first-input']), loaf: Boolean(support['long-animation-frame']) },
+    requestedRuns: runs, completedRuns: valid.length, steps,
+    loaf: { available: Boolean(support['long-animation-frame']), worst: worstLoaf ? { blockingDuration: round1(worstLoaf.blockingDuration), duration: round1(worstLoaf.duration), scripts: worstLoaf.scripts } : null, note: 'LoAF attributes main-thread blocking to scripts; it correlates with slow interactions and boot but is not per-interaction causation' },
+  };
+  if (!eventTimingSupported) {
+    pageEmit({ id: 'interaction-latency-unavailable', level: 'info', severity: 'info', file: path, message: 'the Event Timing API is unavailable in this browser; interaction latency was not measured (the Playwright wall-clock proxy is recorded but is not INP)', fix: 'run against a Chromium that supports the event entry type; do not read the proxy as interaction latency' });
+    return;
+  }
+  const fmt = (a) => (a && a.p75 != null ? `${a.p75}ms` : 'n/a');
+  pageEmit({ id: 'interaction-latency-measured', level: 'info', severity: 'info', file: path, message: worst
+      ? `lab interaction latency over ${valid.length}/${runs} runs: slowest step "${worst.label}" p75 ${fmt(worst.latency)} (input delay ${fmt(worst.inputDelay)}, processing ${fmt(worst.processing)}, presentation ${fmt(worst.presentation)})${worstLoaf ? `; worst LoAF blocking ${round1(worstLoaf.blockingDuration)}ms` : ''}`
+      : `interactions ran over ${valid.length}/${runs} runs but no step produced an Event Timing entry (durations under the threshold, or the action hit no handler)`,
+    fix: 'lab numbers under a fixed profile, not field INP. The split tells you where the time goes: input delay -> main thread busy at click (boot, long tasks); processing -> your handler; presentation -> render/layout after. Attribute with the LoAF scripts, then confirm in the Performance panel' });
+  if (budget) {
+    for (const s of steps) {
+      if (!s.available || !s.latency) continue;
+      const limit = (budget.byLabel && budget.byLabel[s.label] != null) ? budget.byLabel[s.label] : budget.latency;
+      if (limit != null && s.latency.p75 > limit) {
+        pageEmit({ id: 'interaction-over-budget', level: 'confirmed', severity: 'medium', file: path, evidence: `${s.label} p75 ${s.latency.p75}ms`, message: `interaction "${s.label}" p75 ${s.latency.p75}ms exceeds the budget ${limit}ms over ${s.samples} lab runs (input delay ${fmt(s.inputDelay)}, processing ${fmt(s.processing)}, presentation ${fmt(s.presentation)})`, fix: 'a measured lab breach of your opt-in budget; the sub-part over budget names the phase to profile. Lab p75 of a few runs is not field INP' });
+      }
+    }
+  }
+}
+
+// Observer for hydration/boot cost: captures Long Animation Frames and long tasks during startup, and reads the
+// framework's own hydration marks when it emits any (a performance.mark whose name contains "hydrat"). Navigation
+// Timing is read at the end. No exact hydration time is claimed unless the app provides a marker.
+export const BOOT_OBSERVER = `(() => {
+  const s = window.__faBoot = { longTasks: { count: 0, total: 0, max: 0 }, loaf: [], marks: [], support: {} };
+  const supported = (t) => { try { return (PerformanceObserver.supportedEntryTypes || []).includes(t); } catch (e) { return false; } };
+  const obs = (type, cb) => { s.support[type] = supported(type); if (!s.support[type]) return; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) cb(e); }).observe({ type, buffered: true }); } catch (e) { s.support[type] = false; } };
+  obs('longtask', (e) => { s.longTasks.count++; s.longTasks.total += e.duration; if (e.duration > s.longTasks.max) s.longTasks.max = e.duration; });
+  obs('long-animation-frame', (e) => { s.loaf.push({ startTime: e.startTime, duration: e.duration, blockingDuration: e.blockingDuration }); });
+  obs('mark', (e) => { if (/hydrat|app-?ready|interactive|mounted/i.test(e.name)) s.marks.push({ name: e.name, startTime: e.startTime }); });
+  obs('measure', (e) => { if (/hydrat|app-?ready|interactive|mounted/i.test(e.name)) s.marks.push({ name: e.name, startTime: e.startTime, duration: e.duration, kind: 'measure' }); });
+})()`;
+
+async function hydrationCostRun(browser, url, { allowed, viewport, settleMs, blockedSink }) {
+  const context = await browser.newContext({ viewport, reducedMotion: 'reduce', locale: 'en-US' });
+  await context.route('**/*', (route) => {
+    const u = new URL(route.request().url());
+    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.protocol === 'about:' || hostAllowed(u.hostname, allowed)) return route.continue();
+    blockedSink.push({ url: u.origin + u.pathname, method: route.request().method() });
+    return route.abort('blockedbyclient');
+  });
+  await context.addInitScript(BOOT_OBSERVER);
+  const page = await context.newPage();
+  try {
+    await page.goto(url, { waitUntil: 'load', timeout: 20000 });
+    await page.waitForTimeout(settleMs);
+    return await page.evaluate(() => {
+      const s = window.__faBoot || { longTasks: {}, loaf: [], marks: [], support: {} };
+      const nav = performance.getEntriesByType('navigation')[0] || null;
+      const a = nav ? (nav.activationStart || 0) : 0;
+      const t = (v) => (v == null ? null : Math.max(0, v - a));
+      // sum of JS resource transfer (download) and decoded size as a boot proxy; not parse/compile, which the platform does not expose per-script here
+      const js = performance.getEntriesByType('resource').filter((r) => r.initiatorType === 'script' || /\.m?js(\?|$)/.test(r.name));
+      const jsTransfer = js.reduce((m, r) => m + (r.transferSize || 0), 0);
+      const jsDecoded = js.reduce((m, r) => m + (r.decodedBodySize || 0), 0);
+      return {
+        nav: nav ? {
+          responseStart: t(nav.responseStart), responseEnd: t(nav.responseEnd),
+          domInteractive: t(nav.domInteractive), domContentLoadedEventStart: t(nav.domContentLoadedEventStart), domContentLoadedEventEnd: t(nav.domContentLoadedEventEnd),
+          domComplete: t(nav.domComplete), loadEventEnd: t(nav.loadEventEnd), activationStart: a,
+        } : null,
+        intervals: nav ? {
+          ttfb: t(nav.responseStart),
+          ssrBodyDownload: nav.responseEnd - nav.responseStart,
+          htmlParse: nav.domInteractive - nav.responseEnd,
+          deferredScripts: nav.domContentLoadedEventStart - nav.domInteractive,
+          dclHandlers: nav.domContentLoadedEventEnd - nav.domContentLoadedEventStart,
+          toLoad: t(nav.loadEventEnd),
+        } : null,
+        marks: s.marks || [],
+        longTasks: s.longTasks || { count: 0, total: 0, max: 0 },
+        loaf: s.loaf || [],
+        jsResources: { files: js.length, transferBytes: jsTransfer, decodedBytes: jsDecoded },
+        support: s.support || {},
+      };
+    });
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+export async function checkHydrationCost(browser, url, path, opts, pageEmit, pageRecord) {
+  const { allowed, viewport, runs, settleMs, timeLeft, blockedSink, budget } = opts;
+  const perRun = [];
+  for (let i = 0; i < runs; i++) {
+    if (timeLeft && timeLeft() < settleMs + 4000) break;
+    try { perRun.push(await hydrationCostRun(browser, url, { allowed, viewport, settleMs, blockedSink })); }
+    catch (e) { perRun.push({ error: String(e.message).split('\n')[0].slice(0, 120) }); }
+  }
+  const valid = perRun.filter((r) => !r.error);
+  const med = (pick) => { const xs = valid.map(pick).filter((x) => x != null); return xs.length ? round1(median(xs)) : null; };
+  const intervals = {};
+  for (const key of ['ttfb', 'ssrBodyDownload', 'htmlParse', 'deferredScripts', 'dclHandlers', 'toLoad']) intervals[key] = med((r) => r.intervals && r.intervals[key]);
+  const ltCount = med((r) => r.longTasks && r.longTasks.count);
+  const ltTotal = med((r) => r.longTasks && r.longTasks.total);
+  const loafBlocking = med((r) => (r.loaf || []).reduce((m, f) => m + (f.blockingDuration || 0), 0));
+  const jsTransfer = med((r) => r.jsResources && r.jsResources.transferBytes);
+  const jsDecoded = med((r) => r.jsResources && r.jsResources.decodedBytes);
+  // an app-provided hydration mark is the only exact signal; collect the distinct ones observed
+  const markNames = [...new Set(valid.flatMap((r) => (r.marks || []).map((m) => m.name)))];
+  const appMark = markNames.length ? med((r) => { const m = (r.marks || []).find((x) => /hydrat/i.test(x.name)); return m ? (m.kind === 'measure' ? m.duration : m.startTime) : null; }) : null;
+  pageRecord.checks.hydrationCost = {
+    profile: { viewport, reducedMotion: true, cpuThrottle: 'none', network: 'host-allowlist, no throttling', cachePerRun: 'cold', browser: browser.version(), settleMs, runs },
+    requestedRuns: runs, completedRuns: valid.length,
+    bootProxies: { ...intervals, note: 'Navigation Timing proxies, medians over runs (ms from activationStart). These bracket hydration; they do not measure it.' },
+    bootWork: { longTaskCountMedian: ltCount, longTaskTotalMsMedian: ltTotal, loafBlockingMsMedian: loafBlocking, available: valid.some((r) => r.support && (r.support.longtask || r.support['long-animation-frame'])) },
+    jsCost: { transferBytesMedian: jsTransfer, decodedBytesMedian: jsDecoded, note: 'download + decoded JS as a proxy for parse/compile/execute cost; the platform does not expose per-script parse here' },
+    hydrationMark: appMark != null ? { available: true, names: markNames, valueMsMedian: appMark, note: 'the app emitted a hydration marker: this is an exact signal' } : { available: false, names: markNames, note: 'no app-provided hydration marker (performance.mark); no exact hydration time is claimed, only the proxies above' },
+  };
+  const n = (x, u) => (x == null ? 'n/a' : (u ? `${x}${u}` : x));
+  pageEmit({ id: 'hydration-cost-measured', level: 'info', severity: 'info', file: path, message: `lab boot cost over ${valid.length}/${runs} runs: TTFB ${n(intervals.ttfb, 'ms')}, SSR body ${n(intervals.ssrBodyDownload, 'ms')}, parse ${n(intervals.htmlParse, 'ms')}, deferred scripts ${n(intervals.deferredScripts, 'ms')}, to load ${n(intervals.toLoad, 'ms')}; boot long tasks ${n(ltCount)} (${n(ltTotal, 'ms')}), JS ${jsTransfer != null ? Math.round(jsTransfer / 1024) + 'KB' : 'n/a'} over the wire; ${appMark != null ? `app hydration marker ${n(appMark, 'ms')}` : 'no app hydration marker (proxies only)'}`, fix: 'these are boot proxies and work counters, not an exact hydration time. A heavy client bundle shows as deferred-script time and boot long tasks; to measure hydration itself, have the framework emit a performance.mark. Compare a heavy vs a light page, and confirm in the Performance panel' });
+  if (budget) {
+    const checks = [['ttfb', intervals.ttfb], ['toLoad', intervals.toLoad], ['deferredScripts', intervals.deferredScripts], ['bootLongTaskTotalMs', ltTotal], ['jsTransferBytes', jsTransfer]];
+    for (const [key, value] of checks) {
+      const limit = budget[key];
+      if (limit != null && value != null && value > limit) {
+        pageEmit({ id: 'hydration-cost-over-budget', level: 'confirmed', severity: 'medium', file: path, evidence: `${key} ${value}`, message: `boot proxy ${key} ${value} exceeds the budget ${limit} over ${valid.length} lab runs`, fix: 'a measured lab breach of your opt-in budget; reduce client JS (code-split, defer, server components / islands) or server time, then re-measure. A proxy breach is a signal to profile, not a hydration verdict' });
       }
     }
   }
