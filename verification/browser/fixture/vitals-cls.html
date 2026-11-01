@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Vitals CLS</title>
+<style>body{margin:0;font:16px system-ui}#banner{height:0;overflow:hidden;background:#fdd}#content{padding:16px}</style></head>
+<body>
+<div id="banner">A late banner that pushes everything down.</div>
+<div id="content"><h1>Article</h1><p>Lots of content that gets shoved downward when the banner appears, a clear unexpected layout shift.</p><p>More content below.</p></div>
+<script>
+  // a large, late, unexpected layout shift: reveal a tall banner that pushes the whole article down
+  setTimeout(() => { document.getElementById('banner').style.height = '300px'; }, 200);
+</script>
+</body></html>

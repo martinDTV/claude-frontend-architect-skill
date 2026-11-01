@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Vitals LCP</title>
+<style>body{margin:0;font:16px system-ui}.hero{height:400px;background:#123;color:#fff;display:flex;align-items:center;justify-content:center;font-size:48px}</style></head>
+<body>
+<h1 class="hero">Largest contentful element</h1>
+<p>A page with a clear LCP candidate and a deliberate long task on load.</p>
+<script>
+  // a deliberate long task (> 50ms) so the longtask observer has something to report
+  const end = performance.now() + 120; while (performance.now() < end) { Math.sqrt(Math.random()); }
+</script>
+</body></html>
