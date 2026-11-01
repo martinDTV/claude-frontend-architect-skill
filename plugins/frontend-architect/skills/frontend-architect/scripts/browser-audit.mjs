@@ -30,7 +30,10 @@ usage: node browser-audit.mjs <url> --playwright <dir> [options]
   --playwright <dir>      directory whose node_modules provides playwright (and axe-core); required
   --axe <dir|file>        axe-core location when it is not next to playwright (default: same dir)
   --paths </a,/b>         page paths to visit under the url (default: the url itself)
-  --checks <list>         axe,keyboard,dialogs,responsive,hydration,forms,visual (default: axe,keyboard,dialogs,responsive,hydration)
+  --checks <list>         axe,keyboard,dialogs,responsive,hydration,forms,visual,vitals (default: axe,keyboard,dialogs,responsive,hydration)
+  --vitals-runs <n>       vitals: independent runs, fresh context each (default 5)
+  --vitals-settle <ms>    vitals: observation window after load before reading (default 1500)
+  --vitals-budget <file>  vitals: optional JSON of p75 budgets; a breach becomes a confirmed finding (CI gate, opt-in)
   --viewports <list>      presets mobile 375×667, tablet 768×1024, desktop 1280×800 (default all three), reflow 320×568
                           (the WCAG 1.4.10 width, opt-in) or WIDTHxHEIGHT tokens such as 390x844; responsive, visual
                           and target-size checks run per viewport
@@ -401,7 +404,7 @@ export async function run(argv) {
   const tooling = loadTooling(String(args.playwright), args.axe ? String(args.axe) : null)
   if (tooling.error) return failNow(tooling.error)
   const checks = new Set(String(args.checks ?? 'axe,keyboard,dialogs,responsive,hydration').split(',').map((s) => s.trim()).filter(Boolean))
-  for (const c of checks) if (!['axe', 'keyboard', 'dialogs', 'responsive', 'hydration', 'forms', 'visual'].includes(c)) return failNow(`unknown check: ${c}`)
+  for (const c of checks) if (!['axe', 'keyboard', 'dialogs', 'responsive', 'hydration', 'forms', 'visual', 'vitals'].includes(c)) return failNow(`unknown check: ${c}`)
   if (checks.has('forms') && !args['allow-submit']) return failNow('the forms check submits forms: pass --allow-submit (fixtures and staging only)')
   if (checks.has('visual') && !args['baseline-dir']) return failNow('the visual check needs --baseline-dir <dir>')
   let baselineDir = null
@@ -418,6 +421,10 @@ export async function run(argv) {
   const viewportSizes = parsedViewports.sizes
   const textScales = String(args['text-scale'] ?? '1,1.25').split(',').map(Number).filter((n) => n > 0)
   const maxTime = Number(args['max-time'] ?? 90) * 1000
+  const vitalsRuns = Math.max(1, Number(args['vitals-runs'] ?? 5))
+  const vitalsSettle = Math.max(0, Number(args['vitals-settle'] ?? 1500))
+  let vitalsBudget = null
+  if (args['vitals-budget']) { try { vitalsBudget = JSON.parse(readFileSync(resolve(String(args['vitals-budget'])), 'utf8')) } catch (e) { return failNow(`--vitals-budget: cannot read JSON (${e.message})`) } }
   const maxPages = Number(args['max-pages'] ?? 10)
   const masks = String(args.mask ?? 'input[type=password],[data-sensitive],[data-fa-mask]').split(',').map((s) => s.trim()).filter(Boolean)
   let outDir
@@ -430,7 +437,7 @@ export async function run(argv) {
   const deadline = Date.now() + maxTime
   const timeLeft = () => Math.max(0, deadline - Date.now())
 
-  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, viewportSizes, textScales, textScaleMethod: 'root font-size (rem/em-sized text only; not browser zoom, not a WCAG 1.4.4 verdict)', checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir, baselineDir } }
+  const report = { tool: 'browser-audit', version: TOOL_VERSION, root: target.origin, framework: 'browser', generatedAt: new Date().toISOString(), config: null, summary: {}, findings: [], notes: [], data: { pages: [], blockedRequests: [], screenshots: [], visual: [] }, analysis: { mode: 'browser', playwright: tooling.playwrightVersion, axe: tooling.axeVersion, browser: null, viewports, viewportSizes, textScales, textScaleMethod: 'root font-size (rem/em-sized text only; not browser zoom, not a WCAG 1.4.4 verdict)', checks: [...checks], interact: Boolean(args.interact), allowSubmit: Boolean(args['allow-submit']), allowedHosts: [...allowed], budgets: { maxTimeMs: maxTime, maxPages }, outDir, baselineDir, vitals: checks.has('vitals') ? { runs: vitalsRuns, settleMs: vitalsSettle, viewport: viewports[0] ?? 'desktop', reducedMotion: true, cpuThrottle: 'none (document the device profile when you set budgets)', network: 'host-allowlist only; no throttling by default', cachePerRun: 'cold (fresh context, no storage reuse)', budget: vitalsBudget ? 'provided' : 'none (diagnostic only; does not fail CI)' } : null } }
   const emit = (f) => addFinding(report, { verification: 'browser', ...f })
   if (parsedViewports.unknown.length) report.notes.push(`--viewports: ignored ${parsedViewports.unknown.join(', ')} (presets: ${Object.keys(VIEWPORTS).join(', ')}; or WIDTHxHEIGHT)`)
 
@@ -525,6 +532,7 @@ export async function run(argv) {
       if (checks.has('keyboard')) await checkKeyboard(page, path, pageEmit, pageRecord)
       if (checks.has('dialogs')) await checkDialogs(page, path, Boolean(args.interact), pageEmit, pageRecord)
       if (checks.has('forms')) await checkForms(page, context, url, path, pageEmit, pageRecord)
+      if (checks.has('vitals')) await checkVitals(browser, url, path, { allowed, viewport: viewportSizes[viewports[0]] ?? VIEWPORTS.desktop, runs: vitalsRuns, settleMs: vitalsSettle, timeLeft, blockedSink: report.data.blockedRequests, budget: vitalsBudget }, pageEmit, pageRecord)
       if (perViewport) {
         for (const vp of viewports) {
           await page.setViewportSize(viewportSizes[vp])
@@ -1125,6 +1133,113 @@ async function compareVisual(shot, path, viewport, args, report, emit, outDir) {
       emit({ id: 'visual-regression', level: 'confirmed', severity: 'medium', file: path, message: `${shot.name}: ${(diff.ratio * 100).toFixed(2)}% of pixels differ from the approved baseline (${diff.regions.length} region(s), largest ${diff.regions[0] ? `${diff.regions[0].w}×${diff.regions[0].h} at ${diff.regions[0].x},${diff.regions[0].y}` : 'n/a'})`, evidence: `viewport ${viewport}; threshold ${threshold}`, fix: 'review the regions; approve with --approve <name> only when the change is intended' })
     }
   } else record.status = 'match'
+}
+
+// ---------------------------------------------------------------- vitals (1.6 increment 2): lab Core Web Vitals
+// Injected before navigation so it catches early entries. It observes, it does not interpret: LCP keeps the last
+// candidate (and stops on the first input, as the spec does); CLS uses the session-window maximum excluding
+// shifts after recent input; FCP is the paint entry; long tasks are diagnostic. A metric with no entry is marked
+// unavailable with a cause — never substituted with zero. TTFB is read from PerformanceNavigationTiming afterwards.
+export const VITALS_OBSERVER = `(() => {
+  const v = window.__vitals = { lcp: null, lcpEl: null, cls: 0, clsSources: [], fcp: null, longTasks: { count: 0, total: 0, max: 0 }, support: {}, stoppedByInput: false };
+  const supported = (t) => { try { return (PerformanceObserver.supportedEntryTypes || []).includes(t); } catch (e) { return false; } };
+  const obs = (type, cb) => { v.support[type] = supported(type); if (!v.support[type]) return; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) cb(e); }).observe({ type, buffered: true }); } catch (e) { v.support[type] = false; } };
+  // LCP: the largest-contentful-paint candidates arrive progressively; keep the last one, stop on first input.
+  const stop = () => { v.stoppedByInput = true; };
+  for (const ev of ['keydown', 'pointerdown', 'click']) addEventListener(ev, stop, { once: true, capture: true });
+  obs('largest-contentful-paint', (e) => { if (!v.stoppedByInput) { v.lcp = e.startTime; v.lcpEl = (e.element && (e.element.tagName ? e.element.tagName.toLowerCase() + (e.element.id ? '#' + e.element.id : '') : null)) || v.lcpEl; } });
+  // CLS: session-window maximum (<=5s window, <=1s gap), excluding shifts with recent input.
+  let sessionValue = 0, sessionStart = 0, sessionPrev = 0;
+  obs('layout-shift', (e) => {
+    if (e.hadRecentInput) return;
+    if (sessionValue && e.startTime - sessionPrev < 1000 && e.startTime - sessionStart < 5000) { sessionValue += e.value; }
+    else { sessionValue = e.value; sessionStart = e.startTime; }
+    sessionPrev = e.startTime;
+    if (sessionValue > v.cls) { v.cls = sessionValue; if (e.sources) v.clsSources = e.sources.slice(0, 3).map((s) => (s.node && s.node.tagName) ? s.node.tagName.toLowerCase() + (s.node.id ? '#' + s.node.id : '') : 'anon'); }
+  });
+  obs('paint', (e) => { if (e.name === 'first-contentful-paint') v.fcp = e.startTime; });
+  obs('longtask', (e) => { v.longTasks.count++; v.longTasks.total += e.duration; if (e.duration > v.longTasks.max) v.longTasks.max = e.duration; });
+})()`;
+
+// one independent run: a fresh context (cold cache), the observer injected before navigation, a settle window.
+async function vitalsRun(browser, url, { allowed, viewport, settleMs, blockedSink }) {
+  const context = await browser.newContext({ viewport, reducedMotion: 'reduce', locale: 'en-US' });
+  await context.route('**/*', (route) => {
+    const u = new URL(route.request().url());
+    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.protocol === 'about:' || hostAllowed(u.hostname, allowed)) return route.continue();
+    blockedSink.push({ url: u.origin + u.pathname, method: route.request().method() });
+    return route.abort('blockedbyclient');
+  });
+  await context.addInitScript(VITALS_OBSERVER);
+  const page = await context.newPage();
+  try {
+    await page.goto(url, { waitUntil: 'load', timeout: 20000 });
+    await page.waitForTimeout(settleMs);
+    return await page.evaluate(() => {
+      const v = window.__vitals || {};
+      const nav = performance.getEntriesByType('navigation')[0];
+      const ttfb = nav ? nav.responseStart : null;
+      return {
+        lcp: { value: v.lcp ?? null, available: v.support && v.support['largest-contentful-paint'] && v.lcp != null, element: v.lcpEl ?? null },
+        cls: { value: (v.support && v.support['layout-shift']) ? (v.cls ?? 0) : null, available: Boolean(v.support && v.support['layout-shift']), sources: v.clsSources ?? [] },
+        fcp: { value: v.fcp ?? null, available: Boolean(v.support && v.support['paint'] && v.fcp != null) },
+        ttfb: { value: ttfb, available: Boolean(nav && ttfb != null) },
+        longTasks: { value: v.longTasks ? v.longTasks.count : null, total: v.longTasks ? v.longTasks.total : null, max: v.longTasks ? v.longTasks.max : null, available: Boolean(v.support && v.support['longtask']) },
+        stoppedByInput: Boolean(v.stoppedByInput),
+      };
+    });
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+const median = (xs) => { if (!xs.length) return null; const a = [...xs].sort((p, q) => p - q); const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+const p75 = (xs) => { if (!xs.length) return null; const a = [...xs].sort((p, q) => p - q); return a[Math.min(a.length - 1, Math.ceil(0.75 * a.length) - 1)]; };
+const round1 = (x) => (x == null ? null : Math.round(x * 10) / 10)
+const round3 = (x) => (x == null ? null : Math.round(x * 1000) / 1000)
+// CLS is a unitless 0..~0.5 score; ms metrics round to 0.1ms. Rounding a metric by its unit keeps a real 0.012 CLS from collapsing to 0.0
+const roundFor = (metric, x) => (metric === 'cls' ? round3(x) : round1(x));
+
+// CWV first, diagnostics after; long tasks and FCP are never presented as primary Core Web Vitals.
+const METRIC_META = {
+  lcp: { unit: 'ms', type: 'core-web-vital', what: 'Largest Contentful Paint: time to the largest content element', api: 'PerformanceObserver("largest-contentful-paint"), last candidate before first input' },
+  cls: { unit: 'score', type: 'core-web-vital', what: 'Cumulative Layout Shift: session-window maximum, recent-input shifts excluded', api: 'PerformanceObserver("layout-shift"), session-window max (<=5s, <=1s gap)' },
+  ttfb: { unit: 'ms', type: 'core-web-vital-diagnostic', what: 'Time to First Byte: navigation start to responseStart; not download time, not app time, not pure backend latency', api: 'PerformanceNavigationTiming.responseStart' },
+  fcp: { unit: 'ms', type: 'diagnostic', what: 'First Contentful Paint (complementary, not a primary CWV)', api: 'PerformanceObserver("paint") first-contentful-paint' },
+  longTasks: { unit: 'count', type: 'diagnostic', what: 'long tasks (> 50ms): a diagnostic signal, NOT INP and NOT a Core Web Vital', api: 'PerformanceObserver("longtask")' },
+}
+
+export async function checkVitals(browser, url, path, opts, pageEmit, pageRecord) {
+  const { allowed, viewport, runs, settleMs, timeLeft, blockedSink, budget } = opts;
+  const perRun = [];
+  for (let i = 0; i < runs; i++) {
+    if (timeLeft && timeLeft() < settleMs + 3000) break; // leave the budget intact
+    try { perRun.push(await vitalsRun(browser, url, { allowed, viewport, settleMs, blockedSink })); }
+    catch (e) { perRun.push({ error: String(e.message).split('\n')[0].slice(0, 120) }); }
+  }
+  const valid = perRun.filter((r) => !r.error);
+  const agg = {};
+  for (const key of ['lcp', 'cls', 'ttfb', 'fcp']) {
+    const vals = valid.filter((r) => r[key] && r[key].available).map((r) => r[key].value);
+    agg[key] = { ...METRIC_META[key], origin: 'lab', runs, validSamples: vals.length, values: vals.map((x) => roundFor(key, x)), median: roundFor(key, median(vals)), p75: roundFor(key, p75(vals)), min: roundFor(key, vals.length ? Math.min(...vals) : null), max: roundFor(key, vals.length ? Math.max(...vals) : null), available: vals.length > 0, unavailableCause: vals.length ? null : (valid.length ? 'the browser emitted no entry for this metric on this page (e.g. no contentful element for LCP, no shift for CLS)' : 'no run completed') };
+  }
+  const ltVals = valid.filter((r) => r.longTasks && r.longTasks.available).map((r) => r.longTasks.value);
+  const ltTotal = valid.filter((r) => r.longTasks && r.longTasks.available).map((r) => r.longTasks.total);
+  agg.longTasks = { ...METRIC_META.longTasks, origin: 'lab', runs, validSamples: ltVals.length, countMedian: round1(median(ltVals)), totalMsMedian: round1(median(ltTotal)), maxMs: round1(valid.reduce((m, r) => Math.max(m, (r.longTasks && r.longTasks.max) || 0), 0)), available: ltVals.length > 0 };
+  pageRecord.checks.vitals = { profile: { viewport, reducedMotion: true, cpuThrottle: 'none', network: 'host-allowlist, no throttling', cachePerRun: 'cold', browser: browser.version(), settleMs, runs }, requestedRuns: runs, completedRuns: valid.length, perRun, aggregate: agg };
+  // one info finding summarises the measured CWV; diagnostics are labelled as such and never as primary CWV
+  const fmt = (m, u) => (m == null ? 'n/a' : (u === 'ms' ? `${m}ms` : m));
+  pageEmit({ id: 'vitals-measured', level: 'info', severity: 'info', file: path, message: `lab vitals over ${valid.length}/${runs} runs: LCP p75 ${fmt(agg.lcp.p75, 'ms')}, CLS p75 ${fmt(agg.cls.p75)}, TTFB p75 ${fmt(agg.ttfb.p75, 'ms')} (diagnostic: FCP p75 ${fmt(agg.fcp.p75, 'ms')}, long tasks median ${agg.longTasks.countMedian ?? 'n/a'})`, fix: 'lab numbers under a fixed profile, not field percentiles; confirm with Lighthouse CI / field RUM. Static leads to measure here: heavy-static-import -> initial JS and LCP; provider-inline-value / list-key-unstable -> renders and reconciliation; reactive-deep-watch -> main-thread work (perf-audit.mjs). Causation needs the Performance panel, not this summary' });
+  // opt-in CI gate: a p75 over budget is a confirmed fact (a measured breach), never implicit
+  if (budget) {
+    for (const key of ['lcp', 'cls', 'ttfb', 'fcp']) {
+      const limit = budget[key];
+      if (limit != null && agg[key].available && agg[key].p75 != null && agg[key].p75 > limit) {
+        pageEmit({ id: 'vitals-over-budget', level: 'confirmed', severity: 'medium', file: path, evidence: `${key} p75 ${agg[key].p75}${METRIC_META[key].unit === 'ms' ? 'ms' : ''}`, message: `${key.toUpperCase()} p75 ${agg[key].p75}${METRIC_META[key].unit === 'ms' ? 'ms' : ''} exceeds the budget ${limit} over ${agg[key].validSamples} lab runs`, fix: 'a measured lab breach of your opt-in budget; profile the route (Performance panel) to find the cause, then re-measure. Lab p75 of a few runs is not the field p75' });
+      }
+    }
+  }
 }
 
 if (isMainModule(import.meta.url)) run(process.argv.slice(2)).then((code) => { process.exitCode = code }, (error) => { process.stderr.write(`error: ${error?.stack ?? error}\n`); process.exitCode = 2 })
