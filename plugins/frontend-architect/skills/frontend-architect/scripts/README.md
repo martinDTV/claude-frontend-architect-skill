@@ -315,3 +315,27 @@ pnpm build && node $S/bundle-budget.mjs . --md > audit/bundle.md
 ```
 
 Tests and fixtures live in the repository under `verification/tools/` (not shipped with the plugin): `node --test verification/tools/*.test.mjs`.
+
+## Performance end-to-end flow (1.6, opt-in)
+
+The 1.6 performance tools chain through their JSON — there is no new orchestrator and nothing runs a build or a browser on its own. You run each step you want and feed the results to `perf-budget.mjs`. Every step is opt-in; the browser steps need `--playwright <dir>` and only touch hosts you allow.
+
+```bash
+S=…/scripts; B=/path/with/node_modules/playwright; mkdir -p perf
+# 1. static leads (never measures): what is worth measuring, per source
+node $S/perf-audit.mjs . --json > perf/static.json
+# 2. per-route attribution + render strategy from the existing build (you built it; this never does)
+node $S/route-attribution.mjs . --json > perf/routes.json
+# 3. build budgets (sizes against thresholds) from the same build
+node $S/bundle-budget.mjs . --json > perf/bundle.json
+# 4. browser measurement (opt-in; against localhost you serve): vitals + interactions + hydration-cost
+node $S/browser-audit.mjs http://localhost:3000 --playwright $B --paths /,/app \
+  --checks vitals,interactions,hydration-cost --interactions-script ./steps.json \
+  --out perf/evidence --json > perf/browser.json
+# 5. evaluate one typed budget contract over all of the above
+node $S/perf-budget.mjs --budget ./perf-budget.json --results perf/routes.json,perf/bundle.json,perf/browser.json --md
+# 6. verify an optimization: capture perf/browser.json (or perf/routes.json) before and after, same profile
+node $S/perf-budget.mjs --compare perf/before.json perf/after.json --budget ./perf-budget.json --md
+```
+
+The flow never claims a build byte is a transferred byte, a lab number is a field percentile, or a smaller number is proof of causality; each step carries its own evidence source and the budget evaluator carries the five states. For CI, run the steps you can reproduce cheaply (static, attribution, bundle budgets, and the browser steps against a served build with a documented profile) and gate on `perf-budget.mjs`.
