@@ -23,6 +23,8 @@ jobs:
         run: node verification/plugin-check.mjs
       - name: Install the verification vue project (supplies typescript and vue/compiler-sfc to the fixture tests)
         run: cd verification/vue && npm install --no-audit --no-fund
+      - name: Extract the documented code into the verification projects (precondition of the tests that read them)
+        run: node verification/extract.mjs
       - name: Test the audit scripts against the fixture apps
         run: node --test verification/tools/*.test.mjs
       - name: Install the browser verification tooling (Playwright and axe-core pinned in verification/browser) and Chromium

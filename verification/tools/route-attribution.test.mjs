@@ -91,7 +91,15 @@ test('the honesty contract is stated and no finding is confirmed (this tool expl
   }
 })
 
-test('the reference applications are attributed without error and with build-manifest confidence where available', () => {
+test('the reference applications are attributed without error and with build-manifest confidence where available', (t) => {
+  // This test needs the reference apps built (.next / .output); the light CI job and a fresh checkout have only
+  // the extracted sources. route-attribution exits 2 with "no production build found" when there is no build, which
+  // is a precondition this environment did not meet, not a defect — skip rather than fail. The full build job
+  // (verify-examples / run-all.sh after the check scripts) does satisfy it and runs the assertions below.
+  for (const app of ['nuxt', 'next']) {
+    const probe = runTool('route-attribution.mjs', [join(here, '..', app), '--no-perf'], { parse: false })
+    if (probe.code === 2 && /no production build found/.test(probe.stderr)) { t.skip(`${app}: no production build in this environment (build it to run this test)`); return }
+  }
   for (const app of ['nuxt', 'next']) {
     const { code, report } = runTool('route-attribution.mjs', [join(here, '..', app), '--no-perf'])
     assert.equal(code, 0, `${app}: exit 0`)
