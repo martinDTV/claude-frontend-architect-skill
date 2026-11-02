@@ -1,0 +1,13 @@
+[
+  { "_comment": "perf-budget.mjs contract (1.6): evaluated against the JSON of route-attribution, browser-audit and bundle-budget. Opt-in: a metric whose producing check did not run is UNAVAILABLE, never a pass. Tune per product after a baseline.", "route": "*", "category": "build", "metric": "totalJsKb", "unit": "kb", "threshold": 2000, "source": "bundle", "severity": "medium", "failOn": true },
+
+  { "route": "/", "category": "route", "metric": "initialClientJsKb", "unit": "kb", "threshold": 120, "source": "route-attribution", "severity": "high", "failOn": true },
+  { "route": "/app/shipments", "category": "route", "metric": "initialClientJsKb", "unit": "kb", "threshold": 200, "source": "route-attribution", "severity": "high", "failOn": true },
+  { "route": "/app/shipments", "category": "route", "metric": "initialCssKb", "unit": "kb", "threshold": 60, "source": "route-attribution", "severity": "low", "failOn": false },
+
+  { "route": "/", "category": "experience", "metric": "lcp", "unit": "ms", "threshold": 2500, "source": "vitals", "profile": "1280x800|cpu:none|net:none|cold", "minSamples": 3, "severity": "high", "failOn": true },
+  { "route": "/", "category": "experience", "metric": "cls", "unit": "score", "threshold": 0.1, "source": "vitals", "minSamples": 3, "severity": "high", "failOn": true },
+  { "route": "/app/shipments", "category": "experience", "metric": "interaction:open menu", "unit": "ms", "threshold": 200, "source": "interactions", "minSamples": 3, "severity": "medium", "failOn": true },
+
+  { "route": "/app/shipments", "category": "diagnostic", "metric": "hydration:toLoad", "unit": "ms", "threshold": 2500, "source": "hydration-cost", "minSamples": 3, "severity": "low", "failOn": false }
+]
