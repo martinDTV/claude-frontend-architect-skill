@@ -1,0 +1,4 @@
+[
+  { "route": "/heavy", "category": "route", "metric": "initialClientJsKb", "unit": "kb", "threshold": 200, "source": "route-attribution", "severity": "high", "failOn": true },
+  { "route": "/light", "category": "route", "metric": "initialClientJsKb", "unit": "kb", "threshold": 200, "source": "route-attribution", "severity": "medium", "failOn": true }
+]

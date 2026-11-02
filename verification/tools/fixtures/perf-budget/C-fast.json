@@ -1,0 +1,40 @@
+{
+ "tool": "browser-audit",
+ "data": {
+  "pages": [
+   {
+    "url": "http://x/app",
+    "checks": {
+     "interactions": {
+      "profile": {
+       "viewport": {
+        "width": 1280,
+        "height": 800
+       },
+       "cpuThrottle": "none",
+       "network": "host-allowlist, no throttling",
+       "cachePerRun": "cold",
+       "runs": 5
+      },
+      "support": {
+       "eventTiming": true
+      },
+      "requestedRuns": 5,
+      "completedRuns": 5,
+      "steps": [
+       {
+        "label": "open menu",
+        "available": true,
+        "measuredBy": "event-timing (native)",
+        "latency": {
+         "p75": 40
+        },
+        "samples": 5
+       }
+      ]
+     }
+    }
+   }
+  ]
+ }
+}

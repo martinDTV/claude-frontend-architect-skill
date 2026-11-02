@@ -1,0 +1,28 @@
+{
+ "tool": "route-attribution",
+ "data": {
+  "routes": [
+   {
+    "route": "/app/a",
+    "strategy": "SSG",
+    "strategyConfidence": "build-manifest",
+    "attribution": {
+     "confidence": "build-manifest",
+     "source": "m.js",
+     "initialClientJs": {
+      "gzipKb": 120,
+      "rawKb": 160,
+      "files": 10,
+      "missing": 0
+     },
+     "css": {
+      "gzipKb": 39,
+      "files": 1
+     },
+     "sharedChunks": 8,
+     "largestInitialKb": 40
+    }
+   }
+  ]
+ }
+}

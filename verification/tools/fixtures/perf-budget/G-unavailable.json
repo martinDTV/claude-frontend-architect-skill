@@ -1,0 +1,16 @@
+{
+ "tool": "route-attribution",
+ "data": {
+  "routes": [
+   {
+    "route": "/blog/[slug]",
+    "strategy": "dynamic",
+    "strategyConfidence": "build-manifest",
+    "attribution": {
+     "confidence": "unavailable",
+     "reason": "no client-reference manifest for this route"
+    }
+   }
+  ]
+ }
+}

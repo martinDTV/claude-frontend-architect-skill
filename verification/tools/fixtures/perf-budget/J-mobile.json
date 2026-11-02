@@ -1,0 +1,36 @@
+{
+ "tool": "browser-audit",
+ "data": {
+  "pages": [
+   {
+    "url": "http://x/app",
+    "checks": {
+     "vitals": {
+      "profile": {
+       "viewport": {
+        "width": 390,
+        "height": 844
+       },
+       "cpuThrottle": "4x",
+       "network": "Slow 4G",
+       "cachePerRun": "cold",
+       "runs": 5
+      },
+      "requestedRuns": 5,
+      "completedRuns": 5,
+      "aggregate": {
+       "lcp": {
+        "p75": 1600,
+        "median": 1600,
+        "validSamples": 5,
+        "available": true,
+        "unit": "ms",
+        "unavailableCause": null
+       }
+      }
+     }
+    }
+   }
+  ]
+ }
+}

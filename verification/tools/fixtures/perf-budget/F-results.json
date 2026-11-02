@@ -1,0 +1,49 @@
+{
+ "tool": "route-attribution",
+ "data": {
+  "routes": [
+   {
+    "route": "/heavy",
+    "strategy": "SSG",
+    "strategyConfidence": "build-manifest",
+    "attribution": {
+     "confidence": "build-manifest",
+     "source": "m",
+     "initialClientJs": {
+      "gzipKb": 260,
+      "rawKb": 340,
+      "files": 4,
+      "missing": 0
+     },
+     "css": {
+      "gzipKb": 8,
+      "files": 1
+     },
+     "sharedChunks": 2,
+     "largestInitialKb": 226
+    }
+   },
+   {
+    "route": "/light",
+    "strategy": "SSG",
+    "strategyConfidence": "build-manifest",
+    "attribution": {
+     "confidence": "build-manifest",
+     "source": "m",
+     "initialClientJs": {
+      "gzipKb": 31,
+      "rawKb": 40,
+      "files": 3,
+      "missing": 0
+     },
+     "css": {
+      "gzipKb": 8,
+      "files": 1
+     },
+     "sharedChunks": 2,
+     "largestInitialKb": 15
+    }
+   }
+  ]
+ }
+}

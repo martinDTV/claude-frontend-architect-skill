@@ -1,0 +1,1 @@
+[ { "route": "/app", "category": "experience", "metric": "lcp", "unit": "ms", "threshold": 2500, "source": "vitals", "minSamples": 3 } ]
