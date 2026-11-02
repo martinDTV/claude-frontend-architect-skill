@@ -214,7 +214,7 @@ function compareMetric(route, metric, before, after, minSamples) {
     note = `the per-run ranges overlap (before ${before.min}..${before.max}, after ${after.min}..${after.max}); the change is within run-to-run variance at ${before.samples}/${after.samples} samples — not a demonstrated effect`
   } else if (tiny) {
     verdict = 'inconclusive'
-    note = `within the +/-2% noise floor at ${before.samples ?? 'n/a'}/${after.samples ?? 'n/a'} samples (no per-run range to test overlap)`
+    note = `within the +/-2% noise floor at ${before.samples ?? 'n/a'}/${after.samples ?? 'n/a'} samples${haveRange ? `; the per-run ranges separate (before ${before.min}..${before.max}, after ${after.min}..${after.max}) but the point moved less than the floor` : ' (no per-run range to test overlap)'}`
   } else {
     verdict = after.value < before.value ? 'improved' : after.value > before.value ? 'regressed' : 'inconclusive'
     note = `lower is better; delta is after-before (negative = improvement)${haveRange ? `; ranges separate (before ${before.min}..${before.max}, after ${after.min}..${after.max})` : '; no per-run range available, point estimates only'}`
@@ -265,6 +265,7 @@ export function run(argv) {
     for (const c of comparisons.filter((x) => x.state === 'INVALID_CONFIGURATION')) addFinding(report, { id: 'perf-compare-not-comparable', level: 'info', severity: 'info', file: c.route, message: `${c.metric}: not compared — ${c.reason}`, fix: 'make the two measurements compatible (same route, metric, unit and profile) before comparing' })
     const sections = [{ title: 'Before / after', table: { headers: ['route', 'metric', 'state', 'before', 'after', 'Δ', 'Δ%', 'verdict', 'profile'], rows: comparisons.map((c) => [c.route, c.metric, c.state, c.before ?? '-', c.after ?? '-', c.absolute ?? '-', c.percent ?? '-', c.verdict ?? '-', c.profile ?? '-']) } }]
     report.notes.push('a verdict is only given for a compatible, sufficiently-sampled pair; different profiles/units/routes are reported INVALID_CONFIGURATION and never read as an improvement. Lab latency is not field INP.')
+    report.analysis = `mode: compare; metrics compared: ${verdicts.length}; not comparable: ${comparisons.length - verdicts.length}`
     return finish(report, args, { sections })
   }
 
@@ -299,6 +300,7 @@ export function run(argv) {
   const sections = [{ title: 'Budgets', table: { headers: ['route', 'metric', 'state', 'value', 'threshold', 'samples', 'profile', 'evidence'], rows: evaluations.map((e) => [e.route, e.metric, e.state, e.value ?? '-', e.threshold ?? '-', e.samples ?? '-', e.profile ?? '-', e.evidence ?? e.reason ?? '-']) } }]
   if (configErrors.length) report.notes.push(`${configErrors.length} budget entry(ies) are invalid and were reported INVALID_CONFIGURATION, not skipped.`)
   report.notes.push('absence of a measurement is UNAVAILABLE or INSUFFICIENT_DATA, never PASS and never zero; a build byte is not a transferred byte is not a millisecond is not a CLS score.')
+  report.analysis = `mode: evaluate; entries: ${evaluations.length}; results read: ${resultFiles.length}`
   return finish(report, args, { sections })
 }
 

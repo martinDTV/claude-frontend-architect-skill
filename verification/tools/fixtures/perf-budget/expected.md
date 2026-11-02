@@ -27,3 +27,4 @@ states, verdicts and sign of change, never exact machine timings.
 ## Compare with per-run spread (increment 6, Fase 3 fix)
 - L (overlap): before p75 2200 (range 1800..2400) vs after p75 2000 (range 1700..2300): the ranges overlap -> **inconclusive**, even though the p75 point dropped — the change is within run-to-run variance. The verdict is data-driven, not the fixed +/-2% point check.
 - L (separated): before (1800..2400) vs after (1200..1500): ranges do not overlap -> **improved**, a demonstrated effect.
+- M (separated but sub-floor point move, increment 6 audit): before p75 2200 (range 1800..2400) vs after p75 2170 (range 1500..1799): ranges do not overlap but the point moved -1.36% (under the +/-2% floor) -> **inconclusive**. The note must state the ranges separate but the point stayed under the floor; it must not claim "no per-run range" when the record carries one.

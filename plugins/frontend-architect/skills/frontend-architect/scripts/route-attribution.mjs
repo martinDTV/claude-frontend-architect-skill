@@ -415,6 +415,7 @@ export function run(argv) {
       rows: result.records.map((r) => [r.route, r.strategy, r.strategyConfidence, r.attribution.initialClientJs?.gzipKb ?? '-', r.attribution.sharedChunks ?? '-', r.attribution.css?.gzipKb ?? '-', r.staticFindings?.length ?? 0, r.attribution.source ?? r.attribution.reason ?? '-']) } },
   ]
   report.notes.push('a built chunk is not a route-associated chunk is not a browser-requested chunk is not transferred/evaluated/used JavaScript; this tool reports up to route-associated, the browser checks report transfer and the Coverage panel reports used.')
+  report.analysis = `build: ${output.kind}; routes: ${result.records.length}; with build attribution: ${withChunks}; attribution unavailable: ${unavailable}`
   return finish(report, args, { sections })
 }
 

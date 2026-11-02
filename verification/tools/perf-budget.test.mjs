@@ -138,3 +138,20 @@ test('the honesty invariants are stated in the notes', () => {
   const { report: cr } = compare('A-before.json', 'A-after.json')
   assert.ok(cr.notes.some((n) => /not field INP/.test(n) && /different profiles/.test(n)))
 })
+
+test('M: a sub-2% move with separated ranges is inconclusive, and the note does not deny the ranges it carries (increment 6 audit)', () => {
+  const { report } = compare('L-before.json', 'M-tiny-separated.json')
+  const c = cmp(report, '/app', 'lcp')
+  assert.equal(c.verdict, 'inconclusive', 'a point move under the noise floor is not a claimed win even when the ranges separate')
+  assert.ok(c.range, 'the record carries the per-run ranges')
+  assert.doesNotMatch(c.note, /no per-run range/, 'the note must not claim there is no range when the record shows one')
+  assert.match(c.note, /ranges separate/, 'the note states the ranges separate but the point stayed under the floor')
+})
+
+test('the report carries the full contract shape including analysis in both modes (increment 6 audit)', () => {
+  const keys = ['tool', 'version', 'root', 'framework', 'summary', 'findings', 'notes', 'data', 'analysis']
+  const { report: cmpReport } = compare('A-before.json', 'A-after.json')
+  for (const k of keys) assert.ok(k in cmpReport, `compare report lacks ${k}`)
+  const { report: evalReport } = evalBudget('F-budget.json', ['F-results.json'])
+  for (const k of keys) assert.ok(k in evalReport, `evaluate report lacks ${k}`)
+})

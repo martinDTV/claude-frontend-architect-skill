@@ -105,3 +105,9 @@ test('the reference applications are attributed without error and with build-man
     }
   }
 })
+
+test('the report carries the full contract shape including analysis (increment 6 audit)', () => {
+  const keys = ['tool', 'version', 'root', 'framework', 'summary', 'findings', 'notes', 'data', 'analysis']
+  const { report } = run('route-next-app')
+  for (const k of keys) assert.ok(k in report, `route-attribution report lacks ${k}`)
+})
