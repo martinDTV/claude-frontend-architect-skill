@@ -4,6 +4,26 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-02
+
+Performance intelligence: static patterns, browser measurement, bundle attribution, typed budgets and verified optimization. Every tool is read-only and opt-in; a lab number is never a field percentile, a build byte is never a transferred byte, and a smaller number is never proof of causality.
+
+### Added
+- **Increment 1, static performance intelligence.** `scripts/perf-audit.mjs`: source patterns worth measuring, not confirmed slowdowns — a known-heavy client library imported statically, a React Context provider with a fresh value each render, an unstable list key (`Math.random()`/`Date.now()` confirmed, index heuristic), a Vue `computed` with I/O, a `watch` over a whole reactive/props object; the memoisation-identity advice is downgraded to info when React Compiler is detected. A `confirmed` level is a certain syntactic fact, never "the app is slow"; every finding names the measurement that would confirm it. Fixtures with prior truth, 100% precision/recall on the controlled set.
+- **Increment 2, lab Core Web Vitals.** `browser-audit.mjs --checks vitals`: LCP, CLS (session-window maximum, recent-input shifts excluded), TTFB (navigation `responseStart`), plus diagnostic FCP and long tasks, over several fresh-context runs with median and p75, each value labelled lab with its profile and availability (a missing metric is reported with its cause, never zero). Diagnostic by default; a `--vitals-budget` breach is the only way it affects CI.
+- **Increment 2B, Strict Mode fix.** `fix(atelier-r3f)`: a disposable model instance was held in `useMemo` and disposed in an effect cleanup, so a React Strict Mode remount reused the disposed instance (an empty scene, 0 geometries). Tied the instance to the mount (create in the effect, dispose in its cleanup); the re-entry GPU-resource assertion was hardened so a model-loading page must read geometries > 0 on both visits, rejecting the vacuous 0g/0g pass. Documented in `references/react.md` as the useMemo-is-a-cache-not-ownership lesson.
+- **Increment 3, interaction latency and hydration cost.** `browser-audit.mjs --checks interactions` drives a declarative step script and reads each interaction's latency from the Event Timing API, split into input delay / processing / presentation and grouped by `interactionId`, with Long Animation Frames attributing the main-thread work to a script; the Playwright wall-clock is kept only as a labelled proxy, never INP. `--checks hydration-cost` reports Navigation-Timing boot proxies, boot long tasks, LoAF blocking and JS transferred, plus an app `performance.mark` when present — never an exact hydration time without one. Both diagnostic by default with opt-in budgets.
+- **Increment 4, bundle attribution and rendering strategy.** `scripts/route-attribution.mjs` (reusing `bundle-budget`'s manifest readers, extracted to `lib/bundle.mjs`): per route, the client JS/CSS the build associates with it (initial vs deferred, shared chunks counted once, never summed across routes), the effective rendering strategy (SSG/ISR/dynamic for Next from the prerender/routes manifests; SSR/CSR/route-rules for Nuxt from the config), and the correlated `perf-audit` findings — each field with its evidence source and a confidence (`build-manifest`/`config`/`heuristic`/`unavailable`); a built chunk / route-associated chunk / browser-requested chunk / transferred / used are never equated; it explains, it does not gate.
+- **Increment 5, performance budgets and verified optimization.** `scripts/perf-budget.mjs`: a pure evaluator over the JSON the other tools emit (never measures or builds). One typed budget contract per route and metric yields `PASS`, `FAIL`, `UNAVAILABLE` (absence is never a pass and never zero), `INSUFFICIENT_DATA` or `INVALID_CONFIGURATION`; different magnitudes are never compared. A before/after mode verifies an optimization only for a compatible, sufficiently-sampled pair (same route, metric, unit and profile), reporting improved/regressed/inconclusive with the absolute and percent change — data-driven: overlapping per-run ranges are inconclusive even when the p75 point moved (a ±2% floor where no range exists). It never claims causality from two different numbers. Example contract `assets/perf-budget.example.json`.
+
+### Changed
+- `plugin.json` and `marketplace.json` descriptions updated to fifteen read-only audit scripts and the 1.6 performance capabilities; `TOOL_VERSION` to 1.6.0.
+- A documented, opt-in performance end-to-end flow in `scripts/README.md` chains the tools through their JSON with no new orchestrator and nothing that builds or navigates on its own.
+
+### Notes
+- All existing IDs, CLI, JSON contracts, exit codes, historical tools, design/GSAP/WebGL/design-system capabilities and frozen baselines are unchanged; the 1.6 additions are additive and opt-in.
+- Seven performance eval cases (89–95) added and structurally validated; **NOT RUN** (no paid evaluations / external providers were authorized).
+
 ## [1.5.0] - 2026-10-31
 
 ### Added
