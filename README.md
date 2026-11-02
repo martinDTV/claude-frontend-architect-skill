@@ -81,7 +81,7 @@ Every script supports `--json`, `--md` (or `--format`) and `--fail-on confirmed|
 
 ## Validation
 
-`verification/` extracts every `@verify` code block from the references into real projects and checks them, tests the scripts against fixture apps, and checks the plugin's own consistency. Results of the last run (2026-10-31, see [`docs/validation-report.md`](docs/validation-report.md)):
+`verification/` extracts every `@verify` code block from the references into real projects and checks them, tests the scripts against fixture apps, and checks the plugin's own consistency. Results of the last run (2026-11-02, see [`docs/validation-report.md`](docs/validation-report.md)):
 
 | Check | Result |
 |---|---|
