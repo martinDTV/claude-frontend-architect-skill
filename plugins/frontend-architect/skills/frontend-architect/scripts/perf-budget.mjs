@@ -96,7 +96,7 @@ function readBrowserAudit(rep, put) {
       for (const key of ['lcp', 'cls', 'fcp', 'ttfb']) {
         const m = v.aggregate[key]
         if (!m) continue
-        put(route, key, { value: m.available ? m.p75 : null, unit: m.unit ?? (key === 'cls' ? 'score' : 'ms'), samples: m.validSamples ?? 0, available: Boolean(m.available), cause: m.available ? null : (m.unavailableCause ?? 'metric not emitted'), profile, evidence: 'browser-audit vitals (lab p75)', confidence: 'browser-evidence', kind: 'browser-evidence' })
+        put(route, key, { value: m.available ? m.p75 : null, unit: m.unit ?? (key === 'cls' ? 'score' : 'ms'), samples: m.validSamples ?? 0, min: m.min ?? null, max: m.max ?? null, available: Boolean(m.available), cause: m.available ? null : (m.unavailableCause ?? 'metric not emitted'), profile, evidence: 'browser-audit vitals (lab p75)', confidence: 'browser-evidence', kind: 'browser-evidence' })
       }
       const lt = v.aggregate.longTasks
       if (lt) put(route, 'longTasks', { value: lt.available ? lt.countMedian : null, unit: 'count', samples: lt.validSamples ?? 0, available: Boolean(lt.available), cause: lt.available ? null : 'no long task entry', profile, evidence: 'browser-audit vitals longTasks (diagnostic)', confidence: 'browser-evidence', kind: 'diagnostic' })
@@ -197,12 +197,29 @@ function compareMetric(route, metric, before, after, minSamples) {
   if (minSamples != null && ((before.samples ?? Infinity) < minSamples || (after.samples ?? Infinity) < minSamples)) return { ...common, state: 'INSUFFICIENT_DATA', reason: `fewer than ${minSamples} valid samples (before ${before.samples}, after ${after.samples})` }
   const abs = round(after.value - before.value, 3)
   const percent = pct(before.value, after.value)
-  // Lower is better for every magnitude this tool compares (KB, ms, score, count, bytes). A change within +/-2% is
-  // read as inconclusive rather than a win/loss: with the small sample sizes lab metrics use, a tiny delta is noise,
-  // not a demonstrated effect. A build fact (no spread) under 2% is likewise not worth claiming.
+  // Lower is better for every magnitude this tool compares (KB, ms, score, count, bytes). The verdict is driven by the
+  // data, not only by the point estimate:
+  //  - when both sets carry a per-run range [min,max] (lab metrics do), overlapping ranges mean the change is not
+  //    distinguishable from run-to-run variance at these sample sizes -> inconclusive, with the ranges named. This is
+  //    the honest guard against reading two p75 points as an effect when their spreads overlap.
+  //  - otherwise (a build fact has no spread; interactions expose no min) fall back to a +/-2% floor: a smaller delta
+  //    than that, at these samples, is not worth claiming either way.
+  // In neither case does it assert the change *caused* the difference; a smaller number is evidence to keep reproducing.
+  const haveRange = before.min != null && before.max != null && after.min != null && after.max != null
+  const rangesOverlap = haveRange && before.min <= after.max && after.min <= before.max
   const tiny = before.value !== 0 && Math.abs(percent ?? 0) < 2
-  const verdict = tiny ? 'inconclusive' : after.value < before.value ? 'improved' : after.value > before.value ? 'regressed' : 'inconclusive'
-  return { ...common, state: 'COMPARED', unit: before.unit, before: before.value, after: after.value, absolute: abs, percent, samples: { before: before.samples, after: after.samples }, profile: before.profile, verdict, note: 'lower is better; delta is after-before (negative = improvement)' }
+  let verdict, note
+  if (rangesOverlap) {
+    verdict = 'inconclusive'
+    note = `the per-run ranges overlap (before ${before.min}..${before.max}, after ${after.min}..${after.max}); the change is within run-to-run variance at ${before.samples}/${after.samples} samples — not a demonstrated effect`
+  } else if (tiny) {
+    verdict = 'inconclusive'
+    note = `within the +/-2% noise floor at ${before.samples ?? 'n/a'}/${after.samples ?? 'n/a'} samples (no per-run range to test overlap)`
+  } else {
+    verdict = after.value < before.value ? 'improved' : after.value > before.value ? 'regressed' : 'inconclusive'
+    note = `lower is better; delta is after-before (negative = improvement)${haveRange ? `; ranges separate (before ${before.min}..${before.max}, after ${after.min}..${after.max})` : '; no per-run range available, point estimates only'}`
+  }
+  return { ...common, state: 'COMPARED', unit: before.unit, before: before.value, after: after.value, absolute: abs, percent, samples: { before: before.samples, after: after.samples }, range: haveRange ? { before: [before.min, before.max], after: [after.min, after.max] } : null, profile: before.profile, verdict, note }
 }
 
 // ---- running ------------------------------------------------------------------------------------------------

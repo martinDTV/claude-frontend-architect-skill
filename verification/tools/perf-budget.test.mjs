@@ -116,6 +116,22 @@ test('K: a change within the noise band (<2%) is inconclusive, not a claimed win
   assert.equal(cmp(report, '/app', 'lcp').verdict, 'inconclusive')
 })
 
+test('L: overlapping per-run ranges are inconclusive even when the p75 point moves (increment 6)', () => {
+  const { report } = compare('L-before.json', 'L-overlap.json')
+  const c = cmp(report, '/app', 'lcp')
+  assert.equal(c.state, 'COMPARED')
+  assert.equal(c.verdict, 'inconclusive', 'overlapping ranges mean the change is within variance, not a demonstrated effect')
+  assert.match(c.note, /ranges overlap/)
+  assert.ok(c.before > c.after, 'the p75 point did drop, but the verdict stays inconclusive because the spreads overlap')
+})
+
+test('L: separated per-run ranges are a real improvement (increment 6)', () => {
+  const { report } = compare('L-before.json', 'L-separated.json')
+  const c = cmp(report, '/app', 'lcp')
+  assert.equal(c.verdict, 'improved')
+  assert.match(c.note, /ranges separate/)
+})
+
 test('the honesty invariants are stated in the notes', () => {
   const { report } = evalBudget('F-budget.json', ['F-results.json'])
   assert.ok(report.notes.some((n) => /never PASS and never zero/.test(n)))

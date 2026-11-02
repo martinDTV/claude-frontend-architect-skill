@@ -23,3 +23,7 @@ states, verdicts and sign of change, never exact machine timings.
 - Absence of data is UNAVAILABLE or INSUFFICIENT_DATA, never zero, never PASS.
 - Different profiles/units are never compared as if equivalent.
 - Lab interaction latency is labelled as such, never field INP.
+
+## Compare with per-run spread (increment 6, Fase 3 fix)
+- L (overlap): before p75 2200 (range 1800..2400) vs after p75 2000 (range 1700..2300): the ranges overlap -> **inconclusive**, even though the p75 point dropped — the change is within run-to-run variance. The verdict is data-driven, not the fixed +/-2% point check.
+- L (separated): before (1800..2400) vs after (1200..1500): ranges do not overlap -> **improved**, a demonstrated effect.
