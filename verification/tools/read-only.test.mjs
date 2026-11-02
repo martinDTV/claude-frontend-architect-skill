@@ -46,6 +46,11 @@ test('static scan: no process execution, network or filesystem writes in the scr
     // --out / --baseline-dir, validated against the working directory or the OS temp dir, never the audited project.
     // It is opt-in (--playwright <dir> is mandatory) and the static tools never import it (next test).
     ['browser-audit.mjs', [/\bwriteFileSync?\s*\(/, /\bmkdirSync?\s*\(/]],
+    // 1.6 increment 4: route-attribution spawns the plugin's own read-only perf-audit.mjs as a subprocess for the
+    // static-finding correlation (opt-out with --no-perf). It runs no other command, downloads nothing, contacts no
+    // network and writes nothing (its --json goes to stdout); the spawned tool is itself on this allowlist for being
+    // read-only. The next test asserts route-attribution never writes to the audited project.
+    ['route-attribution.mjs', [/\bchild_process\b/, /(?<![.\w])spawn(?:Sync)?\s*\(/]],
   ])
   const hits = []
   for (const file of listScripts(scriptsDir)) {
@@ -86,8 +91,21 @@ test('dynamic check: running every tool with the semantic engine leaves the audi
   }
   const bb = runTool('bundle-budget.mjs', [dir], { parse: false })
   assert.equal(bb.code, 2, 'no build: refuses, does not build')
+  const ra = runTool('route-attribution.mjs', [dir, '--no-perf'], { parse: false })
+  assert.equal(ra.code, 2, 'route-attribution with no build: refuses, does not build')
   const after = snapshot(dir)
   assert.deepEqual([...after.keys()].sort(), [...before.keys()].sort(), 'no file created or deleted')
+  for (const [k, v] of before) assert.equal(after.get(k), v, `${k} modified`)
+})
+
+test('dynamic check: route-attribution on a built fixture leaves the build byte-identical (reads, never writes)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fa-ra-'))
+  cpSync(join(fixtures, 'route-next-app'), dir, { recursive: true })
+  const before = snapshot(dir)
+  const { code } = runTool('route-attribution.mjs', [dir, '--no-perf', '--fail-on', 'none'])
+  assert.equal(code, 0)
+  const after = snapshot(dir)
+  assert.deepEqual([...after.keys()].sort(), [...before.keys()].sort(), 'no file created or deleted in the build')
   for (const [k, v] of before) assert.equal(after.get(k), v, `${k} modified`)
 })
 

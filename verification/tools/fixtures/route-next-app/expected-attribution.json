@@ -1,0 +1,15 @@
+{
+  "_comment": "Truth defined before running route-attribution. Structural facts + raw-size thresholds, not exact gzip (version/entropy fragile).",
+  "framework": "next",
+  "routesTotal": 5,
+  "routesWithBuildAttribution": 4,
+  "routesUnavailable": 1,
+  "routes": {
+    "/heavy":    { "strategyStartsWith": "SSG", "strategyConfidence": "build-manifest", "files": 4, "sharedChunks": 2, "rawKbAtLeast": 300, "heavyInitialChunk": true, "mustIncludeHeavyVendor": true },
+    "/light":    { "strategyStartsWith": "ISR", "strategyConfidence": "build-manifest", "files": 3, "sharedChunks": 2, "rawKbAtMost": 60, "heavyInitialChunk": false, "lazyChunkExcluded": "lazy-heavy.js" },
+    "/shared-a": { "strategyStartsWith": "SSG", "strategyConfidence": "build-manifest", "files": 4, "sharedChunks": 3, "includesSharedWidget": true },
+    "/shared-b": { "strategyStartsWith": "SSG", "strategyConfidence": "build-manifest", "files": 4, "sharedChunks": 3, "includesSharedWidget": true },
+    "/blog/[slug]": { "strategyStartsWith": "dynamic", "strategyConfidence": "build-manifest", "attributionConfidence": "unavailable" }
+  },
+  "sharedWidgetCountedOncePerRoute": "shared-widget.js is in /shared-a and /shared-b; each route counts it once, the two routes are not summed into one inflated figure"
+}

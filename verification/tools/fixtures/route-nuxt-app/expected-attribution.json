@@ -1,0 +1,11 @@
+{
+  "_comment": "Truth defined before running route-attribution. The config is ssr:true with routeRules '/admin/**': { ssr:false }; detectProject reads ssr:false lexically, so non-admin routes are reported SSR with heuristic confidence and the ambiguity named.",
+  "framework": "nuxt",
+  "routesTotal": 3,
+  "routes": {
+    "/heavy": { "strategyContains": "SSR", "strategyConfidence": "heuristic", "files": 3, "sharedChunks": 1, "rawKbAtLeast": 300, "heavyInitialChunk": true },
+    "/light": { "strategyContains": "SSR", "strategyConfidence": "heuristic", "files": 2, "sharedChunks": 1, "includesSharedChunk": true },
+    "/admin": { "strategyContains": "client-only", "strategyConfidence": "config", "files": 1 }
+  },
+  "sharedChunkCountedOnce": "shared.js is in /heavy and /light; each counts it once"
+}
