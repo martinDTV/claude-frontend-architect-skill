@@ -21,3 +21,11 @@ verification/nuxt/public/
 verification/browser/evidence-gpu/
 # written by `next dev` (check-strict.mjs) on first start; not ours
 verification/next/AGENTS.md
+# route-attribution fixtures (1.6 increment 4): these .next/.output trees are hand-authored test
+# fixtures, not real build output, so they are tracked despite the .next/.output ignores above.
+!verification/tools/fixtures/route-next-app/.next/
+!verification/tools/fixtures/route-next-app/.next/**
+!verification/tools/fixtures/route-next-nomanifest/.next/
+!verification/tools/fixtures/route-next-nomanifest/.next/**
+!verification/tools/fixtures/route-nuxt-app/.output/
+!verification/tools/fixtures/route-nuxt-app/.output/**

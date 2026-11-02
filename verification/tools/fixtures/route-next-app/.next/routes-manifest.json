@@ -1,0 +1,1 @@
+{"version":3,"basePath":"","staticRoutes":[{"page":"/heavy"},{"page":"/light"},{"page":"/shared-a"},{"page":"/shared-b"}],"dynamicRoutes":[{"page":"/blog/[slug]"}],"dataRoutes":[],"redirects":[],"rewrites":[],"headers":[]}

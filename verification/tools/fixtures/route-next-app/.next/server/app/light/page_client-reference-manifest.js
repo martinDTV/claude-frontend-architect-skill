@@ -1,0 +1,2 @@
+globalThis.__RSC_MANIFEST = globalThis.__RSC_MANIFEST || {};
+globalThis.__RSC_MANIFEST["/light/page"] = {"moduleLoading":{"prefix":""},"clientModules":{"[project]/src/light.tsx":{"id":2,"name":"*","chunks":["static/chunks/page-light.js"],"async":false},"[project]/src/lazy.tsx":{"id":3,"name":"*","chunks":["static/chunks/lazy-heavy.js"],"async":true}},"entryCSSFiles":{"x":["static/chunks/app-layout.css"]},"entryJSFiles":{"x":["static/chunks/base1.js","static/chunks/base2.js"]}};

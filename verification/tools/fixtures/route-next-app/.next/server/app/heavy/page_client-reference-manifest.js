@@ -1,0 +1,2 @@
+globalThis.__RSC_MANIFEST = globalThis.__RSC_MANIFEST || {};
+globalThis.__RSC_MANIFEST["/heavy/page"] = {"moduleLoading":{"prefix":""},"clientModules":{"[project]/src/heavy.tsx":{"id":1,"name":"*","chunks":["static/chunks/page-heavy.js","static/chunks/heavy-vendor.js"],"async":false}},"entryCSSFiles":{"[project]/src/app/layout":["static/chunks/app-layout.css"]},"entryJSFiles":{"[project]/src/app/layout":["static/chunks/base1.js","static/chunks/base2.js"]}};
