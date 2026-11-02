@@ -142,6 +142,16 @@ For SSR servers, a rising resident memory between deploys with flat traffic has 
 - Set budgets from the current baseline minus the headroom you want, tighten as you improve, and fail the PR on breaches; a budget nobody can meet is deleted or renegotiated, not ignored.
 - Review budgets when the framework major changes or the target devices change, and record the reasoning in the repository next to the file.
 
+### One contract over the plugin's own tools: `perf-budget.mjs`
+
+`perf-budget.mjs` (1.6) evaluates a single opt-in budget contract against the JSON the plugin's tools already emit — `route-attribution.mjs` (initial client JS/CSS, shared chunks per route), `browser-audit.mjs` (vitals, interaction latency, hydration proxies) and `bundle-budget.mjs` (build totals). It is a pure evaluator: it reads results, it does not measure or build. Each budget entry is judged to one of five states — `PASS`, `FAIL`, `UNAVAILABLE`, `INSUFFICIENT_DATA`, `INVALID_CONFIGURATION` — so the gate distinguishes a real breach from a missing measurement (absence is never a pass, never zero) and from a misconfigured budget. A `failOn` breach is a confirmed finding and fails CI; diagnostics do not fail by themselves. Example contract: `assets/perf-budget.example.json`. The six categories (build / route / network / experience / diagnostic, plus the unavailable signals) are never summed or compared across kinds: a build gzip byte, a transferred byte, a millisecond and a CLS score are different magnitudes.
+
+### Verifying an optimization (before / after)
+
+To show a change actually helped, measure the **same route under the same profile** before and after, then `perf-budget.mjs --compare before.json after.json`. It checks compatibility first (same route, metric, unit, measurement profile, enough valid samples) and only then reports `improved` / `regressed` / `inconclusive` with the absolute and percent change; a change within ±2% is `inconclusive` because a tiny delta at small sample sizes is noise. It never claims the change *caused* the difference — a smaller number is evidence to keep reproducing, not proof — and it never compares two different profiles (that is reported not-comparable). The canonical example: a 3D library in the initial bundle vs the same route with that library deferred — `route-attribution` before/after shows the initial JS dropping, and the comparison labels it an observed improvement.
+
+**Emulation is not a device.** A mobile-emulated or CPU-throttled profile is a label on the measurement, documented and matched on; it is never presented as a result on a physical phone. And a win in bytes is not automatically a win: a change that halves JS but regresses the slowest interaction or the text legibility is not an improvement — compare the metric the user feels, not only the one that is easy to shrink.
+
 
 ## Static performance patterns (what the auditor can and cannot say)
 
