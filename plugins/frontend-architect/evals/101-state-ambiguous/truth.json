@@ -1,0 +1,27 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real state-audit.mjs with the semantic engine (--engine semantic --typescript <verification/vue> --vue-compiler <verification/vue>). The only findings are module-level-mutable-state at the HEURISTIC level (exit 0 under the default --fail-on confirmed). The risk is a cross-request leak ONLY if this app server-renders; the honest answer names that ambiguity rather than asserting an active leak. The tool deliberately does not confirm it.",
+  "tool": "state-audit.mjs",
+  "expect": [
+    {
+      "id": "module-level-mutable-state",
+      "file": "app/composables/useCatalog.ts",
+      "line": 3,
+      "level": "heuristic"
+    },
+    {
+      "id": "module-level-mutable-state",
+      "file": "app/composables/useCatalog.ts",
+      "line": 4,
+      "level": "heuristic"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/composables/useCatalog.ts",
+    "app/pages/index.vue"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": true
+}

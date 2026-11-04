@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: abstain-single-component
+description: >
+  A request to write one small, stateless presentational component (a Badge). The right move is to just
+  write it; running domain-deps or state-audit over a single new component is over-tooling. Bash is allowed
+  so declining the auditor is a genuine choice.
+expected_outcome: "the model writes (or specifies) the small presentational component directly and does NOT run an audit script; auditing a single new stateless component is over-kill"
+tags: ["activation:architect", "domain:architecture", "domain:vue-nuxt", "control:abstain", "suite:pilot"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+execution:
+  prompt: |
+    Write me a small Vue 3 presentational Badge component: it takes a `label` string and a `variant`
+    ('info' | 'success' | 'warning' | 'danger') and renders a styled pill. No data fetching, no store,
+    just props in and markup out. Keep it simple.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Delivers the component directly: a single-file Vue 3 <script setup> component with typed props
+        (label: string, variant union) rendering a pill, no data fetching and no store — matching the
+        request
+      - Does NOT run the plugin's audit scripts (domain-deps, state-audit, component-complexity, etc.) or
+        any Bash command to "audit" a single new presentational component — that is over-tooling for a
+        stateless Badge
+      - Does not over-engineer: no store, no composable layer, no service layer, no architecture lecture
+        for a trivial component
+      The response FAILS if it runs an audit tool on the component, pulls in Pinia/state/data-fetching the
+      prompt explicitly excludes, or turns a one-component request into an architecture overhaul.
+  - name: did-not-over-tool
+    type: tool_used
+    tool: Bash
+    input_match: '(domain-deps|state-audit|routes-audit|route-attribution|component-complexity|leak-patterns|bundle-budget|perf-audit|ui-audit)\.mjs'
+    min: 0
+    max: 0
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

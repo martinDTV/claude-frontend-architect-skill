@@ -1,0 +1,38 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real state-audit.mjs with the semantic engine (--engine semantic --typescript <verification/vue> --vue-compiler <verification/vue>), the same invocation ssr-rules.test.mjs uses. Only what the tool actually emits is recorded. logout-without-cache-clear is a file-level finding and carries no line.",
+  "tool": "state-audit.mjs",
+  "expect": [
+    {
+      "id": "module-level-http-client-mutable-auth",
+      "file": "app/composables/useApi.ts",
+      "line": 3,
+      "level": "confirmed"
+    },
+    {
+      "id": "token-in-web-storage",
+      "file": "app/stores/auth.ts",
+      "line": 7,
+      "level": "confirmed"
+    },
+    {
+      "id": "token-in-web-storage",
+      "file": "app/stores/auth.ts",
+      "line": 8,
+      "level": "confirmed"
+    },
+    {
+      "id": "logout-without-cache-clear",
+      "file": "app/stores/auth.ts",
+      "level": "heuristic"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/composables/useApi.ts",
+    "app/stores/auth.ts",
+    "app/pages/index.vue"
+  ],
+  "line_tolerance": 1
+}

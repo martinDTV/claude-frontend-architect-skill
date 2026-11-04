@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: abstain-clarify-first
+description: >
+  A vague architecture question — SSR or SPA? — that is missing the deciding fact (does it need SEO /
+  first-paint on public pages? what is the team and traffic?). The right move is to ask the clarifying
+  question or state the assumption that decides it, not to run an auditor on nothing. Bash is allowed so
+  declining the auditor is a real choice.
+expected_outcome: "the model asks the deciding clarifying question (or names the assumption that resolves it) and gives the conditional answer; it does NOT run an audit script on a project that is not described"
+tags: ["activation:architect", "domain:architecture", "domain:vue-nuxt", "control:abstain"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+execution:
+  prompt: |
+    We're starting a new Nuxt app. Should we use SSR or just ship it as an SPA? Give me the right call.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Recognises the question cannot be answered well without the deciding fact and handles it honestly:
+        it either ASKS the clarifying question (does the app need SEO / fast first paint on public,
+        crawlable pages? is it a logged-in internal tool? expected traffic / team?) OR explicitly STATES
+        the assumption it is making and gives the answer conditional on it (the answer "depends" on that
+        fact). It must make clear the decision hinges on SEO / public-vs-authenticated and first paint
+      - Does NOT run the plugin's audit scripts or any Bash command to "inspect" an app that has not been
+        described — there is nothing to audit yet, so reaching for a tool is the wrong move
+      - Does not hard-commit to SSR or SPA as if it were unconditionally correct, and does not
+        over-architect (no store/monorepo/microfrontends recommendation for an undefined app)
+      The response FAILS if it picks SSR or SPA with false certainty and no stated condition, runs an audit
+      tool on nothing, or over-engineers the undefined project.
+  - name: did-not-over-tool
+    type: tool_used
+    tool: Bash
+    input_match: '(domain-deps|state-audit|routes-audit|route-attribution|component-complexity|leak-patterns|bundle-budget|perf-audit|ui-audit)\.mjs'
+    min: 0
+    max: 0
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

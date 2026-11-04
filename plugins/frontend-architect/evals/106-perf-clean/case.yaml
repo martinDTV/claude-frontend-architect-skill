@@ -1,0 +1,48 @@
+schema_version: "1.1"
+name: perf-clean
+description: >
+  Performance audit of a small Next.js (App Router) app with NO performance defect: the heavy 3D engine is
+  code-split with next/dynamic and loaded with a dynamic import() inside an effect (off the startup bundle),
+  and the list is keyed by a stable id. The model must NOT invent a defect. Requires Bash for the plugin's
+  perf-audit script
+  (run with: claude plugin eval ./plugins/frontend-architect --case 106-perf-clean --allow-tools Bash).
+expected_outcome: "perf-audit run; no confirmed or heuristic performance defect reported; the model confirms the heavy dependency is already code-split and the list key is stable instead of inventing a problem; no file modified"
+tags: ["activation:architect", "domain:audit", "domain:react-next", "domain:performance"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the performance of the Next.js frontend in the current directory (read-only) and tell me what
+    to fix first. Cite file paths with line numbers. Separate what you demonstrated in the code from what
+    you measured and from what is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's perf-audit script (perf-audit.mjs) or equivalent read-only
+        inspection
+      - Reports that there is NO performance defect to fix: the 3D engine is already code-split with
+        next/dynamic and loaded lazily with a dynamic import() (so it is not in the startup bundle), and
+        the list is keyed by a stable id from the data
+      - Does NOT invent a defect, does NOT cite a heavy-static-import, list-key-unstable or
+        provider-inline-value that the code does not contain
+      - Labels its statements by evidence tier (demonstrated / measured / hypothetical) and does not
+        measured-claim anything it did not measure
+      - Does not modify any file
+      The response FAILS if it fabricates a performance defect, recommends a rewrite or microfrontends, or
+      reports the clean app as broken.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'perf-audit\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

@@ -1,0 +1,28 @@
+{
+  "tool": "domain-deps.mjs",
+  "expect": [
+    {
+      "id": "feature-internal-import",
+      "file": "app/features/orders/useOrders.ts",
+      "line": 1,
+      "level": "confirmed"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/layouts/default.vue",
+    "app/features/billing/index.ts",
+    "app/features/billing/useBilling.ts",
+    "app/features/billing/types.ts",
+    "app/features/billing/internal/calc.ts",
+    "app/features/orders/index.ts",
+    "app/features/orders/useOrders.ts",
+    "app/pages/orders/index.vue",
+    "app/pages/billing/index.vue",
+    "app/composables/useFormatMoney.ts",
+    "app/types/index.ts"
+  ],
+  "line_tolerance": 1
+}

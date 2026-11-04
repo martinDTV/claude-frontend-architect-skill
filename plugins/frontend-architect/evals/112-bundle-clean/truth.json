@@ -1,0 +1,15 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real route-attribution.mjs against the copied-and-trimmed route-next-app fixture build. Command: node plugins/frontend-architect/skills/frontend-architect/scripts/route-attribution.mjs <dir> --no-perf --format json --fail-on none. Exit 0. With /heavy removed, the remaining routes /light (31 KB gzip), /shared-a and /shared-b (62 KB each) are all under the 150 KB heavy-chunk heuristic threshold: the tool emits only route-attribution (info) for the three attributed routes and route-attribution-unavailable (info) for the dynamic /blog/[slug] route. No route-heavy-initial-chunk, no confirmed finding. This is the negative control: attribution is available and there is nothing heavy to report.",
+  "tool": "route-attribution.mjs",
+  "expect": [],
+  "clean": true,
+  "allowed_files": [
+    "next.config.ts",
+    "package.json",
+    "/light",
+    "/shared-a",
+    "/shared-b",
+    "/blog/[slug]"
+  ],
+  "line_tolerance": 1
+}

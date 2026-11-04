@@ -1,0 +1,21 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real perf-audit.mjs on the scaffolded app (node perf-audit.mjs <dir> --json): one heuristic finding, exit 0. heavy-static-import is a bundle SIGNAL, not a confirmed slowdown; whether the chart runtime matters depends on whether the dashboard is on the critical path, a judgement call to confirm with a real build (bundle-budget).",
+  "tool": "perf-audit.mjs",
+  "expect": [
+    {
+      "id": "heavy-static-import",
+      "file": "app/components/AnalyticsPanel.vue",
+      "line": 2,
+      "level": "heuristic"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/pages/dashboard.vue",
+    "app/components/AnalyticsPanel.vue"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": true
+}

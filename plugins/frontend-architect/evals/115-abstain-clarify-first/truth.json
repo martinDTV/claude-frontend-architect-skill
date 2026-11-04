@@ -1,0 +1,8 @@
+{
+  "$comment": "Abstention case: the architecture question is missing the deciding fact (SEO need? team size? traffic?), so no audit tool should run — the right move is to ask the clarifying question or state the assumption that decides the answer. truth-grader (abstain:true) requires Bash (the auditor) NOT be run AND the task be answered. NOTE on task_mentions: the intent is that ANY ONE of depends/assume/clarify is an acceptable signal, but transcript-assert.answerAddresses requires ALL listed mentions (AND-semantics). To keep the deterministic grader honest we require the single most reliable token for a clarify-first answer ('clarify'); the broader depends/assume/clarify acceptance is enforced by the llm criteria grader. There is no scaffold defect and no tool output to verify.",
+  "abstain": true,
+  "task_mentions": [
+    "clarify"
+  ],
+  "clean": true
+}

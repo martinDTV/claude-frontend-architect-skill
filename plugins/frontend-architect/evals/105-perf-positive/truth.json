@@ -1,0 +1,26 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real perf-audit.mjs on the scaffolded app (node perf-audit.mjs <dir> --json). Only what the tool actually emits is recorded. The heavy three import is heuristic (a bundle signal to measure); the Math.random() list key is the one confirmed finding (a certain syntactic fact) and makes the tool exit 1.",
+  "tool": "perf-audit.mjs",
+  "expect": [
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/SceneHero.tsx",
+      "line": 2,
+      "level": "heuristic"
+    },
+    {
+      "id": "list-key-unstable",
+      "file": "src/components/SceneHero.tsx",
+      "line": 9,
+      "level": "confirmed"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "next.config.ts",
+    "src/app/page.tsx",
+    "src/components/SceneHero.tsx"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": false
+}

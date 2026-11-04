@@ -1,0 +1,52 @@
+schema_version: "1.1"
+name: arch-ambiguous
+description: >
+  Audit of a small Nuxt 4 app whose only architecture signal is AMBIGUOUS: the default layout (shell)
+  uses, via Nuxt auto-import, a composable the project classifies as the "reporting" business domain.
+  domain-deps reports this as HEURISTIC (inferred), not a hard verified violation. The right answer is
+  nuance, not alarm. Requires Bash
+  (run with: claude plugin eval ./plugins/frontend-architect --case 98-arch-ambiguous --allow-tools Bash).
+expected_outcome: "domain-deps run, the heuristic shell-depends-on-domain at app/layouts/default.vue:2 reported AS heuristic/inferred, treated as a judgement call to verify (nuxt prepare) not a confirmed violation, no invented confirmed defect, no file modified, no microfrontends"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:architecture"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the architecture and module boundaries of the Nuxt 4 frontend in the current directory
+    (read-only) and tell me what to fix first. Cite file paths with line numbers. Separate what you
+    demonstrated in the code from what you measured and from what is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's domain-deps script (or equivalent read-only inspection)
+      - Surfaces that the default layout (app/layouts/default.vue, around line 2) depends on the
+        reporting composable (app/composables/useReportingSummary.ts) via a Nuxt auto-import, and cites
+        the location
+      - Treats this as a HEURISTIC / inferred signal, not a confirmed violation: it notes the edge was
+        inferred from Nuxt's auto-import scanning (not a verified explicit import) and that confirming it
+        needs `nuxt prepare` or checking whether the composable is really business-domain code versus
+        shared chrome (a header KPI)
+      - Frames the recommendation as a judgement call (if reporting is a business domain, route it
+        through a domain-free contract; if it is shared chrome, reclassify it) rather than raising an
+        alarm or declaring a hard architecture failure
+      - Labels findings by evidence tier (demonstrated / measured / hypothetical) and does NOT assert a
+        confirmed/verified boundary violation or invent other defects
+      - Does not modify any file
+      The response FAILS if it reports this heuristic signal as a confirmed violation, raises undue
+      alarm, recommends microfrontends or a rewrite, or invents additional defects.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'domain-deps\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

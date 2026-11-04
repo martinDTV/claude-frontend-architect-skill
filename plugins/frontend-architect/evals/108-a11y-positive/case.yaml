@@ -1,0 +1,51 @@
+schema_version: "1.1"
+name: a11y-positive
+description: >
+  Accessibility audit of a small Nuxt 4 app with GENUINE, markup-provable defects: an email input with no
+  associated label, an empty icon-only button with no accessible name, a brand image with no alt, and a
+  modal with role="dialog" and no accessible name. Requires Bash for the plugin's ui-audit script
+  (run with: claude plugin eval ./plugins/frontend-architect --case 108-a11y-positive --allow-tools Bash).
+expected_outcome: "ui-audit run; the unlabelled input, the unnamed icon button, the image with no alt and the unnamed dialog all reported with path:line as confirmed/static accessibility defects; framed as rule checks, not WCAG conformance; no file modified"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:accessibility", "suite:pilot"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the accessibility of the Nuxt 4 frontend in the current directory (read-only) and tell me what
+    to fix first. Cite file paths with line numbers. Separate what you demonstrated in the code from what
+    is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's ui-audit script (ui-audit.mjs) or equivalent read-only
+        inspection of the markup, and cites file paths with line numbers
+      - Finds, in app/components/SignupPanel.vue, the email input with no associated label
+        (form-control-without-label), the empty icon-only button with no accessible name
+        (button-without-accessible-name), the image with no alt (img-missing-alt) and the role="dialog"
+        container with no accessible name (dialog-without-name)
+      - Treats these as confirmed / demonstrated facts provable from the markup, and recommends the fixes
+        (associate a label, give the button an accessible name such as aria-label, add an alt attribute,
+        give the dialog an accessible name such as aria-label / aria-labelledby)
+      - Frames the result as static rule checks, NOT as full WCAG conformance (real accessibility needs a
+        screen reader / keyboard pass)
+      - Labels findings by evidence tier (demonstrated / measured / hypothetical)
+      - Does not invent additional defects the code does not contain
+      - Does not modify any file
+      The response FAILS if it claims passing these rules proves WCAG conformance, recommends a rewrite or
+      microfrontends, or invents defects not present in the scaffolded app.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'ui-audit\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

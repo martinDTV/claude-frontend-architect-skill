@@ -1,0 +1,47 @@
+schema_version: "1.1"
+name: routes-ambiguous
+description: >
+  Routes & guards audit of a small Nuxt 4 app with a literal role check used as a UI affordance on a
+  correctly guarded page. The nuanced case: UX-legitimate, but not the security boundary.
+  Requires Bash for the plugin's routes-audit script
+  (run with: claude plugin eval ./plugins/frontend-architect --case 104-routes-ambiguous --allow-tools Bash).
+expected_outcome: "routes-audit run; the literal role check surfaced as heuristic; the honest answer is the UI check is fine as UX but the server must enforce the permission; not presented as the security boundary; no file modified"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:security"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the routes and guards of the Nuxt 4 frontend in the current directory (read-only). The admin page
+    checks the user's role to decide what to show. Tell me whether that is a problem, and be precise about
+    what is demonstrated versus what is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's routes-audit script (routes-audit.mjs) or equivalent read-only
+        inspection, and cites app/pages/admin/index.vue where the literal role check lives
+        (the hardcoded-role-check finding, line 6)
+      - Gives the NUANCED reading: the admin page IS guarded by the auth middleware, and the
+        user.role === 'admin' check is legitimate as UX (hiding a control the user cannot use); it must NOT
+        be presented as the security boundary. The honest conclusion is that the server must enforce the
+        permission on every mutating request, not the client
+      - Labels the role check as heuristic / UX-level, not a proven vulnerability, and does not escalate it
+        into "the app is insecure" nor dismiss it as pure noise
+      - Does not modify any file
+      The response FAILS if it treats the client-side role check as the security guarantee, claims the page
+      is unguarded (it is not), or recommends a rewrite or microfrontends.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'routes-audit\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

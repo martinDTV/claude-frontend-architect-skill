@@ -1,0 +1,23 @@
+{
+  "tool": "routes-audit.mjs",
+  "expect": [
+    {
+      "id": "hardcoded-role-check",
+      "file": "app/pages/admin/index.vue",
+      "line": 6,
+      "level": "heuristic"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/middleware/auth.ts",
+    "app/pages/index.vue",
+    "app/pages/admin/index.vue",
+    "app/stores/auth.ts",
+    "server/api/tenant.delete.ts"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": true
+}

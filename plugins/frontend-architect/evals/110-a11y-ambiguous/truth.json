@@ -1,0 +1,21 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real ui-audit.mjs with the semantic engine (--engine semantic --typescript <verification/vue> --vue-compiler <verification/vue>), the same invocation ui-audit.test.mjs uses: one review/heuristic finding, exit 0. heading-level-skipped is a REVIEW finding: a reader must decide whether the h1->h3 jump is a real structure defect or a deliberate visual choice.",
+  "tool": "ui-audit.mjs",
+  "expect": [
+    {
+      "id": "heading-level-skipped",
+      "file": "app/components/ArticleCard.vue",
+      "line": 4,
+      "level": "heuristic"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/components/ArticleCard.vue",
+    "app/pages/index.vue"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": true
+}

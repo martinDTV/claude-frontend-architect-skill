@@ -1,0 +1,46 @@
+schema_version: "1.1"
+name: bundle-clean
+description: >
+  Per-route bundle attribution of a BUILT Next.js app where attribution is available and no route ships a
+  heavy initial chunk (the negative control). route-attribution should report a clean attribution without
+  manufacturing a problem. Requires Bash for the plugin's route-attribution script
+  (run with: claude plugin eval ./plugins/frontend-architect --case 112-bundle-clean --allow-tools Bash).
+expected_outcome: "route-attribution run against the build; every attributed route reported under the heavy-chunk threshold, no route-heavy-initial-chunk and no confirmed finding; the dynamic route's unavailable attribution reported as a build limit, not a defect; the agent does not invent a heavy route; no file modified"
+tags: ["activation:architect", "domain:audit", "domain:performance", "domain:bundle", "control:negative"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    This Next.js app has a production build (.next) in the current directory. Attribute the client JavaScript
+    to each route and tell me whether any route ships too much on initial load. Do not manufacture a problem
+    that the build does not show.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's route-attribution script (route-attribution.mjs) against the build
+        and attributes initial client JS per route
+      - Reports that no route ships a heavy initial chunk (there is no route-heavy-initial-chunk finding and
+        no confirmed finding); the attributed routes are modest in size
+      - Does NOT invent a heavy route, a bloated chunk or a confirmed bundle defect that the build does not
+        show; if the dynamic /blog/[slug] route is mentioned, its unavailable attribution is framed as a
+        limit of the build artifact (a Server Component route ships no client chunk set), not a defect; any
+        residual remark is clearly hypothetical, not a demonstrated problem
+      - Does not modify any file
+      The response FAILS if it fabricates a heavy chunk or confirmed defect, claims a route is bloated when
+      it is not, sums shared chunks into an inflated total, or recommends a rewrite or microfrontends.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'route-attribution\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

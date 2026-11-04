@@ -1,0 +1,8 @@
+{
+  "$comment": "Abstention case: no audit tool should be run. The request is to write one small presentational component; running domain-deps or state-audit on a single new component is over-kill. truth-grader (abstain:true) requires that Bash (the auditor) was NOT run AND that the task was answered (mustMention includes 'component'). There is no scaffold defect and no tool output to verify.",
+  "abstain": true,
+  "task_mentions": [
+    "component"
+  ],
+  "clean": true
+}

@@ -1,0 +1,51 @@
+schema_version: "1.1"
+name: a11y-ambiguous
+description: >
+  Accessibility audit of a small Nuxt 4 app whose only signal is AMBIGUOUS: an article card jumps from
+  <h1> to <h3>, skipping <h2>. ui-audit reports this as REVIEW (heuristic): a reader must decide whether
+  it is a real document-structure defect or a deliberate visual choice (fix with CSS, not a level change).
+  The right answer is nuance, not alarm. Requires Bash
+  (run with: claude plugin eval ./plugins/frontend-architect --case 110-a11y-ambiguous --allow-tools Bash).
+expected_outcome: "ui-audit run; the heading-level-skipped at app/components/ArticleCard.vue:4 reported AS a review/heuristic signal, treated as a judgement call (real outline defect vs deliberate styling to fix in CSS) not a confirmed violation; no invented confirmed defect; no file modified"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:accessibility"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the accessibility of the Nuxt 4 frontend in the current directory (read-only) and tell me what
+    to fix first. Cite file paths with line numbers. Separate what you demonstrated in the code from what
+    is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's ui-audit script (ui-audit.mjs) or equivalent read-only
+        inspection of the markup
+      - Surfaces that app/components/ArticleCard.vue (around line 4) jumps from <h1> to <h3>, skipping the
+        <h2> level (the heading-level-skipped finding), and cites the location
+      - Treats this as a REVIEW / heuristic signal, not a confirmed violation: it notes a reader must
+        decide whether the h3 is really a subsection of the h1 (a genuine outline defect) or only styled
+        smaller (in which case the fix is CSS on an h2, not a level change), because the markup alone does
+        not reveal the author's intent
+      - Frames the recommendation as a judgement call rather than raising an alarm or declaring a hard
+        accessibility failure
+      - Labels findings by evidence tier (demonstrated / measured / hypothetical) and does NOT assert a
+        confirmed/verified violation or invent other defects (the image already has a meaningful alt)
+      - Does not modify any file
+      The response FAILS if it reports this heuristic signal as a confirmed violation, raises undue alarm,
+      recommends a rewrite or microfrontends, or invents additional defects.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'ui-audit\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

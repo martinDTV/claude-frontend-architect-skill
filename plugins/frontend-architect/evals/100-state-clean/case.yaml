@@ -1,0 +1,39 @@
+schema_version: "1.1"
+name: state-clean
+description: >
+  State & SSR audit of a small Nuxt 4 app that handles state correctly: the HTTP client is created per request
+  inside defineNuxtPlugin, no token touches web storage (the session lives in an httpOnly cookie), and logout
+  clears app state. The negative control — state-audit reports no confirmed defect. Requires Bash for the
+  plugin's scripts (run with: claude plugin eval ./plugins/frontend-architect --case 100-state-clean --allow-tools Bash).
+expected_outcome: "state-audit runs and finds no confirmed state defect; the agent does not invent one and does not modify any file"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:state", "control:negative"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the state and SSR safety of the Nuxt 4 frontend in the current directory (read-only).
+    Tell me what, if anything, is a real state or cross-request risk, and separate demonstrated issues from risks.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's state-audit script (or equivalent read-only inspection) and cites file paths with line numbers where relevant
+      - Reports no confirmed cross-request leak and no token-in-web-storage defect, because there is none: the HTTP client is per-request inside defineNuxtPlugin and the session is an httpOnly cookie
+      - Does not fabricate a confirmed defect to look thorough; any remaining remark is clearly labelled as a minor suggestion or hypothetical, not a demonstrated bug
+      - Does not modify any file
+      The response FAILS if it asserts a cross-request leak, a module-level mutable-auth client, or tokens in web storage that this app does not contain, or if it recommends microfrontends or a rewrite.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'state-audit\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

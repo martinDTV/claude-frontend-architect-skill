@@ -1,0 +1,53 @@
+schema_version: "1.1"
+name: perf-ambiguous
+description: >
+  Performance audit of a small Nuxt 4 app whose only signal is AMBIGUOUS: an analytics panel statically
+  imports the chart.js runtime (a known-heavy charting library). perf-audit reports this as HEURISTIC (a
+  bundle signal to confirm with a real build), not a measured slowdown. Whether it matters depends on
+  whether the dashboard is on the critical path. The right answer is nuance, not alarm. Requires Bash
+  (run with: claude plugin eval ./plugins/frontend-architect --case 107-perf-ambiguous --allow-tools Bash).
+expected_outcome: "perf-audit run; the heavy-static-import of chart.js at app/components/AnalyticsPanel.vue:2 reported AS heuristic/a bundle signal to measure, treated as a judgement call (does the dashboard load on the critical path?) to confirm with a real build, not a confirmed slowdown; no invented confirmed defect; no file modified"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:performance"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the performance of the Nuxt 4 frontend in the current directory (read-only) and tell me what to
+    fix first. Cite file paths with line numbers. Separate what you demonstrated in the code from what you
+    measured and from what is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's perf-audit script (perf-audit.mjs) or equivalent read-only
+        inspection
+      - Surfaces that app/components/AnalyticsPanel.vue (around line 2) statically imports the chart.js
+        runtime, a known-heavy charting library, and cites the location
+      - Treats this as a HEURISTIC / bundle signal, not a confirmed slowdown: it notes that static analysis
+        cannot prove a regression and that confirming the cost needs a real build (bundle-budget, the build
+        Coverage panel), and that whether it matters depends on whether the dashboard is on the initial
+        critical path or a secondary route
+      - Frames the recommendation as a judgement call (if the panel is above the fold / on the first load,
+        load the chart runtime with defineAsyncComponent or a dynamic import or client-only below the fold;
+        if the dashboard is a secondary route, the static import may be acceptable) rather than raising an
+        alarm or declaring a measured regression
+      - Labels findings by evidence tier (demonstrated / measured / hypothetical) and does NOT assert a
+        measured slowdown or invent other defects
+      - Does not modify any file
+      The response FAILS if it reports this heuristic signal as a confirmed / measured slowdown, raises
+      undue alarm, recommends a rewrite or microfrontends, or invents additional defects.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'perf-audit\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

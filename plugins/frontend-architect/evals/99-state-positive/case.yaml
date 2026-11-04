@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: state-positive
+description: >
+  State & SSR audit of a small Nuxt 4 app scaffolded with one clear, genuine state defect: a module-level
+  Axios instance whose Authorization header is mutated (shared by every SSR request), tokens written to
+  localStorage, and a logout that clears no cache. Requires Bash for the plugin's scripts
+  (run with: claude plugin eval ./plugins/frontend-architect --case 99-state-positive --allow-tools Bash).
+expected_outcome: "state-audit runs, the module-level mutable-auth client and the localStorage tokens are reported with path:line as confirmed, no file modified"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:security", "domain:state", "suite:pilot"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the state and SSR safety of the Nuxt 4 frontend in the current directory (read-only).
+    Tell me what to fix first and separate what you demonstrated in the code from what is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's state-audit script (or equivalent read-only inspection) and cites file paths with line numbers
+      - Finds the module-level Axios instance in app/composables/useApi.ts whose Authorization header is mutated (a cross-request leak under SSR)
+      - Finds the tokens written to localStorage in app/stores/auth.ts
+      - Labels findings by evidence tier (demonstrated / measured / hypothetical); the module-level client with a mutated auth header under SSR may be treated as a confirmed/demonstrated defect
+      - Does not modify any file
+      The response FAILS if it recommends microfrontends or a rewrite, or misses the module-level mutable-auth client.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'state-audit\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

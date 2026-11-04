@@ -1,0 +1,17 @@
+{
+  "tool": "routes-audit.mjs",
+  "expect": [],
+  "clean": true,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/middleware/auth.ts",
+    "app/pages/index.vue",
+    "app/pages/login.vue",
+    "app/pages/account/index.vue",
+    "app/pages/billing/invoices.vue",
+    "app/composables/useBilling.ts",
+    "app/stores/auth.ts"
+  ],
+  "line_tolerance": 1
+}

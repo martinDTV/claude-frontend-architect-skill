@@ -1,0 +1,14 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real ui-audit.mjs with the semantic engine (--engine semantic --typescript <verification/vue> --vue-compiler <verification/vue>), the same invocation ui-audit.test.mjs uses: zero findings, exit 0. The input has a label (for/id), the icon button an aria-label, the image an alt and the dialog an accessible name.",
+  "tool": "ui-audit.mjs",
+  "expect": [],
+  "clean": true,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/components/SignupPanel.vue",
+    "app/pages/index.vue"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": false
+}

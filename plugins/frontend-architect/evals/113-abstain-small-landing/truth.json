@@ -1,0 +1,9 @@
+{
+  "$comment": "Abstention case: no audit tool should be run. The question is an architecture-sizing decision for a tiny marketing site; the right answer is stage 0 (no store, no Axios), useFetch for the handful of reads, and NO auditor invocation. truth-grader treats abstain:true cases by requiring that Bash (the auditor) was NOT run AND that the task was still answered (mustMention = task_mentions). There is no scaffold defect and no tool output to verify; the only checks are that the model answered correctly and did not reach for a tool.",
+  "abstain": true,
+  "task_mentions": [
+    "stage 0",
+    "useFetch"
+  ],
+  "clean": true
+}

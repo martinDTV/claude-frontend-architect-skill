@@ -1,0 +1,21 @@
+{
+  "tool": "domain-deps.mjs",
+  "expect": [
+    {
+      "id": "shell-depends-on-domain",
+      "file": "app/layouts/default.vue",
+      "line": 2,
+      "level": "heuristic"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/layouts/default.vue",
+    "app/composables/useReportingSummary.ts",
+    "app/pages/reports/index.vue"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": true
+}

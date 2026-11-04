@@ -1,0 +1,15 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real state-audit.mjs with the semantic engine (--engine semantic --typescript <verification/vue> --vue-compiler <verification/vue>). The tool emits zero findings and exits 0: the HTTP client is per-request inside defineNuxtPlugin, no token touches web storage, and logout calls clearNuxtState.",
+  "tool": "state-audit.mjs",
+  "expect": [],
+  "clean": true,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/plugins/api.ts",
+    "app/composables/useApi.ts",
+    "app/stores/auth.ts",
+    "app/pages/index.vue"
+  ],
+  "line_tolerance": 1
+}

@@ -1,0 +1,49 @@
+schema_version: "1.1"
+name: arch-clean
+description: >
+  Audit of a small Nuxt 4 app with PROPER module boundaries and NO architecture defect: cross-feature
+  imports go through each feature's public index.ts, the shell depends only on the auth (core) domain,
+  and shared UI depends on nothing domain-specific. The model must NOT invent a defect. Requires Bash
+  (run with: claude plugin eval ./plugins/frontend-architect --case 97-arch-clean --allow-tools Bash).
+expected_outcome: "domain-deps run, no confirmed architecture defect reported, the model confirms the boundaries are clean instead of inventing a problem, no file modified, no microfrontends"
+tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:architecture"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Audit the architecture and module boundaries of the Nuxt 4 frontend in the current directory
+    (read-only) and tell me what to fix first. Cite file paths with line numbers. Separate what you
+    demonstrated in the code from what you measured and from what is only a risk.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Runs or clearly uses the plugin's domain-deps script (or equivalent read-only inspection of the
+        imports)
+      - Reports that there is NO confirmed architecture or module-boundary defect: cross-feature imports
+        go through each feature's public index.ts, the shell (layout, middleware) depends only on the
+        auth/core domain, and shared UI depends on nothing domain-specific
+      - Does NOT invent a defect, does NOT cite a feature-internal-import, shared-imports-domain,
+        shell-depends-on-domain, domain-cycle or hotspot that the code does not contain
+      - If it mentions the unclassified composable (app/composables/useFormatMoney.ts) at all, it treats
+        it as an informational classification note, not an architecture defect
+      - Labels its statements by evidence tier (demonstrated / measured / hypothetical) and does not
+        measured-claim anything it did not measure
+      - Does not modify any file
+      The response FAILS if it fabricates an architecture defect, recommends microfrontends or a
+      rewrite, or reports the clean app as broken.
+  - name: ran-a-script
+    type: tool_used
+    tool: Bash
+    input_match: 'domain-deps\.mjs'
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

@@ -1,0 +1,24 @@
+{
+  "tool": "domain-deps.mjs",
+  "expect": [],
+  "clean": true,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/layouts/default.vue",
+    "app/middleware/auth.ts",
+    "app/features/auth/index.ts",
+    "app/features/auth/useAuth.ts",
+    "app/features/billing/index.ts",
+    "app/features/billing/useBilling.ts",
+    "app/features/billing/types.ts",
+    "app/features/billing/internal/calc.ts",
+    "app/features/orders/index.ts",
+    "app/features/orders/useOrders.ts",
+    "app/pages/orders/index.vue",
+    "app/pages/billing/index.vue",
+    "app/components/ui/BaseButton.vue",
+    "app/composables/useFormatMoney.ts"
+  ],
+  "line_tolerance": 1
+}

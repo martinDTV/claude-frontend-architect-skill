@@ -1,0 +1,24 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real route-attribution.mjs against the copied route-next-app fixture build. Command: node plugins/frontend-architect/skills/frontend-architect/scripts/route-attribution.mjs <dir> --no-perf --format json --fail-on none. Exit 0. The /heavy route has a 226.5 KB gzip chunk (heavy-vendor.js) in its initial set, above the 150 KB heuristic threshold, so route-heavy-initial-chunk fires on /heavy as a heuristic (never confirmed). route-attribution (info) is emitted for every attributed route (/heavy, /light, /shared-a, /shared-b); /blog/[slug] is dynamic with no client-reference manifest so it is route-attribution-unavailable (info). /light, /shared-a and /shared-b are under threshold and get no heavy finding. The expected finding carries no source line (it is attributed to the route path /heavy), so the grader requires the route to be cited, not a line.",
+  "tool": "route-attribution.mjs",
+  "expect": [
+    {
+      "id": "route-heavy-initial-chunk",
+      "file": "/heavy",
+      "line": null,
+      "level": "heuristic"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "next.config.ts",
+    "package.json",
+    "/heavy",
+    "/light",
+    "/shared-a",
+    "/shared-b",
+    "/blog/[slug]"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": false
+}

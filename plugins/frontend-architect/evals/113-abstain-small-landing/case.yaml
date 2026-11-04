@@ -1,0 +1,45 @@
+schema_version: "1.1"
+name: abstain-small-landing
+description: >
+  A sizing question for a 6-page marketing site: should it add Pinia and Axios? The right answer is no —
+  stage 0, useFetch for the few reads, no global store, and NO audit tool is warranted on a project this
+  small. Bash is allowed so abstaining from the auditor is a real choice, not a forced one.
+expected_outcome: "the model answers the decision directly (stage 0, useFetch, no Pinia, no Axios) and does NOT run an audit script; running an auditor on a 6-page site that does not exist yet is over-tooling"
+tags: ["activation:architect", "domain:architecture", "domain:vue-nuxt", "control:abstain", "suite:pilot"]
+max_turns: 30
+timeout_seconds: 900
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
+execution:
+  prompt: |
+    I'm about to build a 6-page marketing site in Nuxt 4: home, about, three service pages and a contact
+    form. Each page fetches a little content from a headless CMS. Should I add Pinia for state and Axios
+    for the API calls, or is that overkill? Just tell me what to use.
+graders:
+  - name: criteria
+    type: llm
+    criteria: |
+      The response PASSES only if it does all of the following:
+      - Answers the decision directly: a 6-page marketing site does NOT need Pinia or Axios. It recommends
+        staying at stage 0 (no global store) and using Nuxt's built-in useFetch / $fetch (ofetch) for the
+        CMS reads; local component state (ref/reactive) is enough, with useState only if a value must be
+        shared across pages
+      - Does NOT run the plugin's audit scripts (domain-deps, state-audit, route-attribution, etc.) or any
+        Bash command to "inspect" a project that does not exist yet — the honest move is to answer the
+        question, not to reach for an auditor
+      - Does not recommend Pinia, Axios, a store layer, a service layer per domain, a monorepo or
+        microfrontends for a site this small
+      The response FAILS if it adds Pinia or Axios "to be safe", runs an audit tool on nothing, or
+      over-architects the project.
+  - name: did-not-over-tool
+    type: tool_used
+    tool: Bash
+    input_match: '(domain-deps|state-audit|routes-audit|route-attribution|component-complexity|leak-patterns|bundle-budget|perf-audit|ui-audit)\.mjs'
+    min: 0
+    max: 0
+    arm: with-only
+  - name: skill-activation
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?frontend-architect"'
+    min: 1
+    arm: with-only

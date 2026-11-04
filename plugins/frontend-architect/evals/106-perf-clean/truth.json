@@ -1,0 +1,14 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real perf-audit.mjs on the scaffolded app (node perf-audit.mjs <dir> --json): zero findings, exit 0. The 3D engine is code-split with next/dynamic and loaded with a dynamic import() inside an effect, so there is no top-level static heavy import in the client tree; the list is keyed by a stable id.",
+  "tool": "perf-audit.mjs",
+  "expect": [],
+  "clean": true,
+  "allowed_files": [
+    "next.config.ts",
+    "src/app/page.tsx",
+    "src/components/Storefront.tsx",
+    "src/components/SceneHero.tsx"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": false
+}

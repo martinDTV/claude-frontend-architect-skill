@@ -1,0 +1,39 @@
+{
+  "$comment": "Ground truth VERIFIED by running the real ui-audit.mjs with the semantic engine (--engine semantic --typescript <verification/vue> --vue-compiler <verification/vue>), the same invocation ui-audit.test.mjs uses. Only what the tool actually emits is recorded. All four findings are static -> confirmed and make the tool exit 1.",
+  "tool": "ui-audit.mjs",
+  "expect": [
+    {
+      "id": "dialog-without-name",
+      "file": "app/components/SignupPanel.vue",
+      "line": 5,
+      "level": "confirmed"
+    },
+    {
+      "id": "img-missing-alt",
+      "file": "app/components/SignupPanel.vue",
+      "line": 6,
+      "level": "confirmed"
+    },
+    {
+      "id": "form-control-without-label",
+      "file": "app/components/SignupPanel.vue",
+      "line": 7,
+      "level": "confirmed"
+    },
+    {
+      "id": "button-without-accessible-name",
+      "file": "app/components/SignupPanel.vue",
+      "line": 8,
+      "level": "confirmed"
+    }
+  ],
+  "clean": false,
+  "allowed_files": [
+    "nuxt.config.ts",
+    "app/app.vue",
+    "app/components/SignupPanel.vue",
+    "app/pages/index.vue"
+  ],
+  "line_tolerance": 1,
+  "ambiguous": false
+}
