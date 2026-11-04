@@ -78,7 +78,7 @@ writeFileSync(stepsFile, JSON.stringify([
   { label: 'toggle sidebar', selector: '[aria-label="Toggle sidebar"]', type: 'click' },
   { label: 'focus search', selector: '[aria-label="Search shipments"]', type: 'click' },
 ]))
-const perf = spawnSync(process.execPath, [join(scripts, 'browser-audit.mjs'), url, '--playwright', browserDir, '--paths', '/app/shipments', '--checks', 'interactions,hydration-cost', '--interactions-script', stepsFile, '--interactions-runs', '3', '--interactions-settle', '1200', '--hydration-runs', '3', '--hydration-settle', '1200', '--max-time', '150', '--out', out, '--json', '--fail-on', 'none'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+const perf = spawnSync(process.execPath, [join(scripts, 'browser-audit.mjs'), url, '--playwright', browserDir, '--paths', '/app/shipments', '--checks', 'interactions,hydration-cost', '--interactions-script', stepsFile, '--interactions-runs', '3', '--interactions-settle', '1200', '--hydration-runs', '3', '--hydration-settle', '1200', '--max-time', '240', '--out', out, '--json', '--fail-on', 'none'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
 stop()
 if (audit.status !== 0) {
   console.error(`check-browser: browser-audit exit ${audit.status}\n${audit.stderr.slice(0, 800)}`)
@@ -112,7 +112,14 @@ const hc = page?.checks?.hydrationCost
 expect(ix && ix.ran && ix.support.eventTiming === true, 'the interactions check ran with Event Timing supported')
 expect(ix && ix.steps.some((s) => s.available && s.latency && s.measuredBy === 'event-timing (native)'), 'at least one real interaction produced a native Event Timing latency')
 expect(ix && ix.steps.every((s) => s.available || /no Event Timing entry/.test(s.measuredBy)), 'an unmeasured step is reported unavailable, never fabricated')
-expect(hc && hc.bootProxies && hc.bootProxies.toLoad != null, 'hydration-cost recorded navigation-timing boot proxies')
+// The Atlas route fires the load event, so toLoad must be a real number here. Two distinct failure modes are kept
+// separate so a null is never opaque and never a pass: (a) the hydration check completed zero runs — it ran out of the
+// shared time budget, an INSUFFICIENT measurement, not a value; (b) it completed runs but toLoad is null — the
+// instrument missed loadEventEnd (the race the wait-for-loadEventEnd>0 guard in browser-audit now prevents). Neither is
+// relaxed to a pass; each is reported with its real cause.
+expect(hc && hc.bootProxies, 'hydration-cost produced navigation-timing boot proxies')
+expect(hc && hc.completedRuns > 0, `hydration-cost completed at least one run (completedRuns ${hc?.completedRuns}/${hc?.requestedRuns}; zero means it ran out of the time budget before measuring, not a valid absence)`)
+expect(!(hc && hc.completedRuns > 0) || hc.bootProxies.toLoad != null, `hydration-cost measured toLoad on a page that fires load (got ${hc?.bootProxies?.toLoad} over ${hc?.completedRuns} runs; null with runs completed means the instrument missed loadEventEnd)`)
 expect(hc && hc.hydrationMark && typeof hc.hydrationMark.available === 'boolean', 'hydration-cost reports whether an app hydration marker exists, without inventing a time')
 expect(!perfReport.findings.some((f) => f.level === 'confirmed'), 'no budget -> interactions/hydration-cost raise no confirmed finding')
 const measured = ix?.steps.filter((s) => s.available) ?? []

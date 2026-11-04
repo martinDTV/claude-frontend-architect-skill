@@ -1471,6 +1471,15 @@ async function hydrationCostRun(browser, url, { allowed, viewport, settleMs, blo
   try {
     await page.goto(url, { waitUntil: 'load', timeout: 20000 });
     await page.waitForTimeout(settleMs);
+    // Navigation Timing writes loadEventEnd only when the load event handler has fully completed; goto(waitUntil:'load')
+    // can resolve a tick before that value is populated, so under load the snapshot read it as 0/undefined and toLoad
+    // came out null. Wait until loadEventEnd is populated (it lands within a few hundred ms once load fires, so a short
+    // bound is enough and does not eat the run's time budget); if it genuinely never populates we still snapshot and the
+    // value is recorded honestly as whatever it is, never guessed.
+    await page.waitForFunction(() => {
+      const n = performance.getEntriesByType('navigation')[0];
+      return n && n.loadEventEnd > 0;
+    }, { timeout: 2000 }).catch(() => {});
     return await page.evaluate(() => {
       const s = window.__faBoot || { longTasks: {}, loaf: [], marks: [], support: {} };
       const nav = performance.getEntriesByType('navigation')[0] || null;
