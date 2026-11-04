@@ -1,0 +1,50 @@
+{
+  "id": "enterprise-application",
+  "brief": "An enterprise application shell: sidebar+topbar, data regions with their states, URL table state, destructive actions with confirmation and recovery, preferences, command palette, density and theme, full keyboard support, table-to-cards on small screens.",
+  "reference_app": "verification/next + verification/nuxt (Atlas)",
+  "driver": "check-design.mjs",
+  "required_features": [
+    "app shell with keyboard nav",
+    "destructive action with confirm + recovery",
+    "command palette opens and navigates",
+    "responsive table-to-cards"
+  ],
+  "architecture_constraints": [
+    "core/shell/modules layering",
+    "no browser event bus; communication via navigation/core/contracts"
+  ],
+  "axes": {
+    "functional": {
+      "tier": "E0A+E0B",
+      "accept": "tsc/build pass; required features present in the browser check; domain-deps/state-audit no confirmed",
+      "reject": "does not compile OR a required feature missing OR a confirmed boundary/state defect"
+    },
+    "accessibility": {
+      "tier": "E0A+E0B",
+      "accept": "ui-audit no confirmed; axe no violation; keyboard reachable; reflow@320 and text-scale@200 hold",
+      "reject": "any confirmed a11y defect",
+      "note": "not a WCAG conformance claim"
+    },
+    "performance": {
+      "tier": "E0A+E0B",
+      "accept": "bundle within budget; route-attribution plausible; perf-audit no confirmed",
+      "reject": "a budget breach under a compatible profile",
+      "note": "built/route-associated bytes only; lab not field"
+    },
+    "visual": {
+      "tier": "E0A(mechanical)+E2(human)",
+      "e0a_accept": "design-consistency no confirmed literal-vs-token; reduced-motion honored; the five data-view states present where applicable",
+      "e2": "HUMAN_REVIEW_REQUIRED: hierarchy, composition, density, identity, motion taste judged from the capture set; never auto-passed"
+    }
+  },
+  "negative_control": "verification/impl-quality/negatives/enterprise-application-broken",
+  "human_review": {
+    "rubric": [
+      "is the shell calm and legible",
+      "is the palette discoverable",
+      "do destructive flows feel safe",
+      "is the theme/density coherent across screens"
+    ],
+    "note": "E2 human judgement over the capture set; no automated signal produces a visual PASS"
+  }
+}

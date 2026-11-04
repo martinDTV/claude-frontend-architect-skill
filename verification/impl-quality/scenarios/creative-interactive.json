@@ -1,0 +1,50 @@
+{
+  "id": "creative-interactive",
+  "brief": "A creative/interactive experience: a 3D or motion-led page that stays fast and accessible, with a DOM-equivalent and reduced-motion fallback, resource cleanup, and no keyboard/focus breakage.",
+  "reference_app": "verification/next + verification/nuxt (3D labs)",
+  "driver": "check-lab.mjs",
+  "required_features": [
+    "3D/motion scene that renders",
+    "reduced-motion fallback",
+    "DOM-equivalent for canvas content",
+    "resource cleanup on unmount"
+  ],
+  "architecture_constraints": [
+    "one animation engine; WebGL client-only",
+    "DPR clamped; pause when offscreen/hidden"
+  ],
+  "axes": {
+    "functional": {
+      "tier": "E0A+E0B",
+      "accept": "tsc/build pass; required features present in the browser check; domain-deps/state-audit no confirmed",
+      "reject": "does not compile OR a required feature missing OR a confirmed boundary/state defect"
+    },
+    "accessibility": {
+      "tier": "E0A+E0B",
+      "accept": "ui-audit no confirmed; axe no violation; keyboard reachable; reflow@320 and text-scale@200 hold",
+      "reject": "any confirmed a11y defect",
+      "note": "not a WCAG conformance claim"
+    },
+    "performance": {
+      "tier": "E0A+E0B",
+      "accept": "bundle within budget; route-attribution plausible; perf-audit no confirmed",
+      "reject": "a budget breach under a compatible profile",
+      "note": "built/route-associated bytes only; lab not field"
+    },
+    "visual": {
+      "tier": "E0A(mechanical)+E2(human)",
+      "e0a_accept": "design-consistency no confirmed literal-vs-token; reduced-motion honored; the five data-view states present where applicable",
+      "e2": "HUMAN_REVIEW_REQUIRED: hierarchy, composition, density, identity, motion taste judged from the capture set; never auto-passed"
+    }
+  },
+  "negative_control": "verification/impl-quality/negatives/creative-interactive-broken",
+  "human_review": {
+    "rubric": [
+      "does the effect explain or just impress",
+      "is content readable over the canvas",
+      "does the reduced-motion path stay usable",
+      "does it feel crafted, not gratuitous"
+    ],
+    "note": "E2 human judgement over the capture set; no automated signal produces a visual PASS"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "axis": "accessibility",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "must_fail_axis": "accessibility",
+  "source_of_truth": "app/components/FilterBar.vue has a text <input v-model> with no <label for>, no wrapping label, no aria-label and no aria-labelledby (placeholder is not a name). ui-audit reports form-control-without-label (static/confirmed). The icon button IS correctly named (aria-label) and must not be flagged.",
+  "expected": [ { "id": "form-control-without-label", "file": "app/components/FilterBar.vue", "line": 6, "min_level": "confirmed", "rationale": "a filter input with no accessible name; the a11y axis must FAIL on this artifact." } ],
+  "forbidden": [ { "id": "button-without-accessible-name", "file": "app/components/FilterBar.vue", "why_not_a_defect": "the clear button has an aria-label; flagging it would be an FP." } ],
+  "line_tolerance": 1
+}

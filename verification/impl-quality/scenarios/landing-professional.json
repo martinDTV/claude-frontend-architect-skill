@@ -1,0 +1,50 @@
+{
+  "id": "landing-professional",
+  "brief": "A professional launch/landing page: one clear sentence, three supporting ideas, one primary action; editorial type; motion that explains; no layout shift; dark mode; a working contact/preorder form.",
+  "reference_app": "verification/next (Lumen)",
+  "driver": "check-landing.mjs",
+  "required_features": [
+    "single hero message + primary CTA",
+    "three supporting sections",
+    "a form with pending/error/success states",
+    "no horizontal overflow at 320px"
+  ],
+  "architecture_constraints": [
+    "stage 0/1; no store for one page data",
+    "no CLS from motion"
+  ],
+  "axes": {
+    "functional": {
+      "tier": "E0A+E0B",
+      "accept": "tsc/build pass; required features present in the browser check; domain-deps/state-audit no confirmed",
+      "reject": "does not compile OR a required feature missing OR a confirmed boundary/state defect"
+    },
+    "accessibility": {
+      "tier": "E0A+E0B",
+      "accept": "ui-audit no confirmed; axe no violation; keyboard reachable; reflow@320 and text-scale@200 hold",
+      "reject": "any confirmed a11y defect",
+      "note": "not a WCAG conformance claim"
+    },
+    "performance": {
+      "tier": "E0A+E0B",
+      "accept": "bundle within budget; route-attribution plausible; perf-audit no confirmed",
+      "reject": "a budget breach under a compatible profile",
+      "note": "built/route-associated bytes only; lab not field"
+    },
+    "visual": {
+      "tier": "E0A(mechanical)+E2(human)",
+      "e0a_accept": "design-consistency no confirmed literal-vs-token; reduced-motion honored; the five data-view states present where applicable",
+      "e2": "HUMAN_REVIEW_REQUIRED: hierarchy, composition, density, identity, motion taste judged from the capture set; never auto-passed"
+    }
+  },
+  "negative_control": "verification/impl-quality/negatives/landing-professional-broken",
+  "human_review": {
+    "rubric": [
+      "does the hero read in one glance",
+      "is the one action obvious",
+      "does motion explain or decorate",
+      "does identity feel intentional, not templated"
+    ],
+    "note": "E2 human judgement over the capture set; no automated signal produces a visual PASS"
+  }
+}

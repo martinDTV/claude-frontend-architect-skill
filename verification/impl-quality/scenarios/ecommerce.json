@@ -1,0 +1,50 @@
+{
+  "id": "ecommerce",
+  "brief": "A shop frontend: a catalogue with filters in the URL, a product page with variants, a local versioned bag, stock states; no payments.",
+  "reference_app": "verification/nuxt (Ember)",
+  "driver": "check-shop.mjs",
+  "required_features": [
+    "catalogue with URL filters",
+    "product page with variant selection",
+    "local bag that survives reload",
+    "availability/stock states"
+  ],
+  "architecture_constraints": [
+    "the bag is client-owned state; domain as pure functions",
+    "no payment integration"
+  ],
+  "axes": {
+    "functional": {
+      "tier": "E0A+E0B",
+      "accept": "tsc/build pass; required features present in the browser check; domain-deps/state-audit no confirmed",
+      "reject": "does not compile OR a required feature missing OR a confirmed boundary/state defect"
+    },
+    "accessibility": {
+      "tier": "E0A+E0B",
+      "accept": "ui-audit no confirmed; axe no violation; keyboard reachable; reflow@320 and text-scale@200 hold",
+      "reject": "any confirmed a11y defect",
+      "note": "not a WCAG conformance claim"
+    },
+    "performance": {
+      "tier": "E0A+E0B",
+      "accept": "bundle within budget; route-attribution plausible; perf-audit no confirmed",
+      "reject": "a budget breach under a compatible profile",
+      "note": "built/route-associated bytes only; lab not field"
+    },
+    "visual": {
+      "tier": "E0A(mechanical)+E2(human)",
+      "e0a_accept": "design-consistency no confirmed literal-vs-token; reduced-motion honored; the five data-view states present where applicable",
+      "e2": "HUMAN_REVIEW_REQUIRED: hierarchy, composition, density, identity, motion taste judged from the capture set; never auto-passed"
+    }
+  },
+  "negative_control": "verification/impl-quality/negatives/ecommerce-broken",
+  "human_review": {
+    "rubric": [
+      "is the product the hero",
+      "are variants clear",
+      "is the bag state obvious",
+      "do stock states read at a glance"
+    ],
+    "note": "E2 human judgement over the capture set; no automated signal produces a visual PASS"
+  }
+}
