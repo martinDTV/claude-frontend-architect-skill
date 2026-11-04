@@ -4,6 +4,53 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-04
+
+Evaluation infrastructure and a measurement fix — not a new audit capability. v1.7.0 adds the machinery to
+measure how well the auditors and the skill behave, and fixes one measurement defect in the browser
+auditor. No production audit rule changed; the existing ids, levels, JSON shapes, exit codes, contracts
+and the 1.2.0–1.4.0 frozen baselines are untouched. **Behavioural evaluations (E0B/E1) are NOT_RUN:** no
+model was run, and no claim of behavioural certification, demonstrated superiority over not using the
+skill, generalized precision/recall on real projects, automatic WCAG conformance, absolute sandbox
+safety, or a guaranteed billing cap is made anywhere.
+
+### Added
+- **Evidence contracts and a model-free eval inventory.** Four evidence tiers (E0A local-deterministic,
+  E0B real-agent-run-with-deterministic-grader, E1 model-judge, E2 human) and six states; a deterministic
+  inventory of every eval case; un-foolable E0B graders over recorded transcripts (`verification/evals/`,
+  `docs/evaluation-contracts.md`).
+- **Tool-using eval cases (96–115).** Twenty cases over six areas (architecture, state/SSR, routes,
+  performance, accessibility, bundle) — a planted-defect positive, a clean control and an ambiguous case
+  each, plus abstention cases — with ground truth verified against the real tools, and a truth→grader
+  bridge. Structure-validated only; **NOT RUN**.
+- **Adversarial FP/FN corpus and hold-out.** A deterministic, model-free measurer and 46 development
+  cases with ground truth written independent of the tool (in-sample precision 96.4%, recall 94.6% — a
+  development-set characterization, not a general-performance claim), plus a 21-case hold-out reported
+  separately (4 known-limit reproductions + 17 blind generalization, 100%/100% on the blind set), with
+  methodology corrections from an independent fresh-context audit (`verification/corpus/`,
+  `verification/corpus-holdout/`, `docs/corpus-*.md`).
+- **Implementation-quality contracts.** Four-axis contracts (functional/architecture, accessibility,
+  performance, visual) over the existing reference apps — the visual axis split into an E0A mechanical
+  part and an E2 human judgement that no automated signal can pass (`verification/impl-quality/`).
+- **Behavioural-pilot readiness, hardened.** An eight-case pilot wired for `claude plugin eval`, with the
+  harness requiring an explicit provider (no silent fallback), refusing institutional/government billing,
+  computing a worst-case aggregate budget, and granting Bash least-privilege as `Bash(node *)`; validated
+  offline only (`verification/evals/run-evals.sh`, `docs/review/v1.7.0-*.md`). **The pilot is NOT RUN.**
+
+### Fixed
+- **Browser-audit hydration measurement.** `scripts/browser-audit.mjs` now waits for `loadEventEnd` to be
+  populated before snapshotting Navigation Timing, so `hydration-cost` `toLoad` is measured reliably
+  instead of intermittently reported as null under load; a genuinely unmeasured value is reported
+  honestly, never guessed. This is a measurement fix, not a contract change.
+
+### Notes
+- **No new audit script; still fifteen.** No production rule, finding id, level, JSON field, exit code,
+  reference or baseline changed. A v1.6.0 project behaves identically.
+- **`Bash(node *)` is least-privilege, not an OS sandbox**, and the harness aggregate-budget guard is the
+  script's own check, not a guaranteed billing cap. Eval cases 85–95 and the behavioural pilot remain
+  **NOT_RUN — no personal model provider configured**; the institutional/government provider must not bill
+  this personal project.
+
 ## [1.6.0] - 2026-11-02
 
 Performance intelligence: static patterns, browser measurement, bundle attribution, typed budgets and verified optimization. Every tool is read-only and opt-in; a lab number is never a field percentile, a build byte is never a transferred byte, and a smaller number is never proof of causality.
