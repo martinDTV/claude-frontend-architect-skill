@@ -1,0 +1,20 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "negative-control",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Read by hand from app/components/nav/MediaBar.vue (Vue SFC, semantic engine). Every control is correct and each is a known false-positive trap for a different a11y rule: the icon-only <button> has a static aria-label=\"Open menu\" (named, so button-without-accessible-name must not fire) and its inner <svg aria-hidden=\"true\"> is not focusable; the first <img> is decorative via role=\"presentation\" and the second via alt=\"\" (so img-missing-alt must not fire); the <a href=\"/pricing\"> is a real navigation link with text (so link-without-href must not fire); the hover row pairs @mouseenter with @focus (so mouse-only-handler must not fire); the <table> contains <th scope=\"col\"> header cells (so table-without-headers must not fire). A correct auditor raises no defect-level finding. Truth derived from the source only; the tool was not consulted.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [],
+  "forbidden": [
+    { "id": "button-without-accessible-name", "file": "app/components/nav/MediaBar.vue", "why_not_a_defect": "the icon-only button has a static aria-label (\"Open menu\"), which is its accessible name." },
+    { "id": "img-missing-alt", "file": "app/components/nav/MediaBar.vue", "why_not_a_defect": "one image is role=\"presentation\" (decorative, removed from the a11y tree) and the other has alt=\"\" (explicitly decorative); neither needs a description." },
+    { "id": "link-without-href", "file": "app/components/nav/MediaBar.vue", "why_not_a_defect": "the <a> has a real href and visible text; it is navigation, not a click-handler link." },
+    { "id": "mouse-only-handler", "file": "app/components/nav/MediaBar.vue", "why_not_a_defect": "the hover row has both @mouseenter and @focus, so keyboard users get the same behaviour." },
+    { "id": "table-without-headers", "file": "app/components/nav/MediaBar.vue", "why_not_a_defect": "the table contains <th scope=\"col\"> header cells." },
+    { "id": "aria-hidden-on-focusable", "file": "app/components/nav/MediaBar.vue", "why_not_a_defect": "aria-hidden=\"true\" is on a decorative <svg>, which is not a focusable element." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

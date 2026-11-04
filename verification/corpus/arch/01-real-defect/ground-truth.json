@@ -1,0 +1,31 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "real-defect",
+  "source_of_truth": "Read by hand: catalog/useCatalog.ts imports ~/features/cart/cartStore (a private file of the cart module, not cart's index.ts) and cart/useCart.ts imports ~/features/catalog/pricing (a private file of the catalog module); both are runtime value imports, so each is a boundary break AND together they form a runtime cycle catalog<->cart. Derived from the import lines, not from the tool.",
+  "expected": [
+    {
+      "id": "feature-internal-import",
+      "file": "app/features/catalog/useCatalog.ts",
+      "line": 1,
+      "min_level": "confirmed",
+      "rationale": "imports ~/features/cart/cartStore, a file inside the cart module that is not its public index.ts; the explicit relative/alias import resolves straight to the private file."
+    },
+    {
+      "id": "feature-internal-import",
+      "file": "app/features/cart/useCart.ts",
+      "line": 1,
+      "min_level": "confirmed",
+      "rationale": "imports ~/features/catalog/pricing, a private file of the catalog module, bypassing catalog/index.ts."
+    },
+    {
+      "id": "domain-cycle",
+      "min_level": "heuristic",
+      "rationale": "catalog depends on cart at runtime (cartItems) and cart depends on catalog at runtime (priceOf): a two-way runtime cycle. Lexical engine cannot verify symbol origins semantically, so heuristic is the strongest honest level here; confirmed would require the semantic engine."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

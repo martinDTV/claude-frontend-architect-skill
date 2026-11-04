@@ -1,0 +1,17 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "negative-control",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand: nothing to flag. The /dashboard page and layout are Server Components (no 'use client'); 'use client' lives only on a small leaf component RefreshButton.tsx, which is neither a page nor a layout. POST /api/orders and the renameWorkspace Server Action both read getServerSession() (auth) and parse input with a Zod schema (validation). The proxy matcher '/dashboard/:path*' covers the protected segment. There are no literal role comparisons. A correct auditor reports zero defect-level findings.",
+  "expected": [],
+  "forbidden": [
+    { "id": "client-boundary-too-high", "file": "src/components/RefreshButton.tsx", "why_not_a_defect": "'use client' is on a small leaf component, not a page or layout, which is exactly the recommended pattern." },
+    { "id": "route-handler-without-auth", "file": "src/app/api/orders/route.ts", "why_not_a_defect": "the POST handler reads getServerSession and returns 401 for anonymous callers." },
+    { "id": "server-action-without-auth", "file": "src/app/dashboard/actions.ts", "why_not_a_defect": "renameWorkspace reads getServerSession and throws for anonymous callers." },
+    { "id": "server-action-without-validation", "file": "src/app/dashboard/actions.ts", "why_not_a_defect": "renameWorkspace parses its input with a Zod schema." },
+    { "id": "proxy-matcher-gap", "file": "src/app/dashboard/page.tsx", "why_not_a_defect": "the proxy matcher '/dashboard/:path*' covers the /dashboard segment." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

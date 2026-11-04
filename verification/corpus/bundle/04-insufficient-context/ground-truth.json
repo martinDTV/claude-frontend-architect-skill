@@ -1,0 +1,20 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "category": "insufficient-context",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Derived by hand from the build I wrote: /orphan is listed in routes-manifest.json (staticRoutes) but there is no .next/server/app/orphan/page_client-reference-manifest.js, so the build exposes no client-chunk set for it. route-attribution genuinely cannot attribute initial JS to this route. The honest answer is route-attribution-unavailable [info] with a reason — this is a limit of the artifact, NOT a defect. A correct auditor must raise no defect-level finding here; the initial-weight heuristic cannot and must not fire without an initial set to measure.",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "route-heavy-initial-chunk",
+      "file": "/orphan",
+      "why_not_a_defect": "there is no client-reference manifest, so no initial set exists to measure; any heavy-chunk claim would be invented out of missing data."
+    }
+  ],
+  "out_of_scope": [
+    "route-attribution",
+    "route-attribution-unavailable"
+  ],
+  "line_tolerance": 1
+}

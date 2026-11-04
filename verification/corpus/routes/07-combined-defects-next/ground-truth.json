@@ -1,0 +1,24 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "combined-defects",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand: four independent defects. (1) admin/layout.tsx begins with 'use client', so the whole /admin subtree is forced to client rendering. (2) POST /api/import writes rows to the DB with no session or signature check. (3) the Server Action wipeTenant() mutates tenant data with no auth and no input validation. (4) the /admin page segment is protected-looking but no proxy/middleware matcher covers it (there is no proxy file at all).",
+  "expected": [
+    { "id": "client-boundary-too-high", "file": "src/app/admin/layout.tsx", "line": 1, "min_level": "confirmed",
+      "rationale": "'use client' at the top of a layout ships the entire subtree as client JavaScript; the directive is syntactically present on line 1." },
+    { "id": "route-handler-without-auth", "file": "src/app/api/import/route.ts", "line": 3, "min_level": "heuristic",
+      "rationale": "the POST handler bulk-inserts request.json() with no session, authorization or signature check in its body." },
+    { "id": "server-action-without-auth", "file": "src/app/admin/actions.ts", "line": 5, "min_level": "heuristic",
+      "rationale": "wipeTenant() mutates tenant data with no cookies()/session/authorize call: a public HTTP endpoint." },
+    { "id": "server-action-without-validation", "file": "src/app/admin/actions.ts", "line": 5, "min_level": "heuristic",
+      "rationale": "wipeTenant() casts formData.get('tenantId') straight into a write with no schema parse." },
+    { "id": "proxy-matcher-gap", "file": "src/app/admin/page.tsx", "line": null, "min_level": "heuristic",
+      "rationale": "/admin is protected-looking but there is no proxy matcher covering it (no proxy/middleware file in the project)." }
+  ],
+  "forbidden": [
+    { "id": "client-boundary-too-high", "file": "src/app/admin/page.tsx", "why_not_a_defect": "the admin page itself is a Server Component with no 'use client' directive." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

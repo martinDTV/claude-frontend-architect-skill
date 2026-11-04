@@ -1,0 +1,12 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "category": "correct-suspicious",
+  "source_of_truth": "Derived by hand from the build I wrote: /editor references lazy-editor.js (300000 bytes raw, 227 KB gzip on disk) but its client-reference manifest marks the heavy-editor.tsx module async:true, so that chunk is code-split / lazily loaded and is NOT in the route's initial client set. The initial set is only page-editor.js + base1.js (~21 KB gzip). A large chunk that is deferred is exactly what good code-splitting looks like, so a correct auditor must NOT raise route-heavy-initial-chunk. This is a trap: the chunk is large and present in the build, but it is not initial.",
+  "expected": [],
+  "forbidden": [
+    { "id": "route-heavy-initial-chunk", "file": "/editor", "why_not_a_defect": "the 227 KB chunk is async:true (lazy), excluded from /editor's initial set; the initial set is ~21 KB. Firing here would be a false positive — flagging correct code-splitting as an initial-weight defect." }
+  ],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

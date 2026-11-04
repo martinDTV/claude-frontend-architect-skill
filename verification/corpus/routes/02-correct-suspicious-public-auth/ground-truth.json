@@ -1,0 +1,15 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "correct-suspicious",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand: /auth/login, /register and /forgot-password are authentication pages that MUST be reachable without a session; their route paths match the auditor's DEFAULT_PUBLIC_ROUTE_RE, so a correct auditor classifies them 'public' and reports no page-without-guard. The only private page (/dashboard) declares middleware: 'auth' and is correctly guarded.",
+  "expected": [],
+  "forbidden": [
+    { "id": "page-without-guard", "file": "app/pages/auth/login.vue", "why_not_a_defect": "login must be public; path matches the public-route allowlist." },
+    { "id": "page-without-guard", "file": "app/pages/register.vue", "why_not_a_defect": "registration must be public; /register is a generic public route." },
+    { "id": "page-without-guard", "file": "app/pages/forgot-password.vue", "why_not_a_defect": "password recovery must be public; /forgot-password is a generic public route." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

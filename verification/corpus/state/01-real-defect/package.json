@@ -1,0 +1,1 @@
+{ "name": "corpus-state-real-defect", "private": true, "dependencies": { "nuxt": "^4.6.0" } }

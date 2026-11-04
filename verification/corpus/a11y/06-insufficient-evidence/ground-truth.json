@@ -1,0 +1,18 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "insufficient-evidence",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Read by hand in app/components/base/BaseInput.vue: the native <input> (line 6) forwards all of its parent's attributes with v-bind=\"$attrs\". Whether the control ends up named (an aria-label, an id a <label for> points to, etc.) depends entirely on what each caller spreads in, which this file does not contain. From this source alone you cannot decide whether the control is accessible, so the only honest result is abstention. A correct auditor treats the spread element as unverifiable and reports NO defect; inventing a form-control-without-label finding would be a false positive on evidence that is simply not present. Derived from the presence of the spread, not from the tool.",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "form-control-without-label",
+      "file": "app/components/base/BaseInput.vue",
+      "why_not_a_defect": "the input carries v-bind=\"$attrs\": the label/aria-label/id may be supplied by any caller, so the element is unverifiable; reporting a missing-label defect would be an invented finding on unknowable evidence"
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

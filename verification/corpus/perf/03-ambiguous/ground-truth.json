@@ -1,0 +1,18 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "ambiguous",
+  "source_of_truth": "Read by hand: app/components/ReportChart.vue line 2 is `import * as echarts from 'echarts'`, a static value import of a heavy charting runtime in a client-reachable SFC; the edge and its target are certain. The ambiguity is in impact, not existence: ReportChart is used only by app/pages/admin/reports.vue, an admin-only route reached after login (definePageMeta middleware 'admin'), so the chart runtime is paid on a secondary route, not first paint. Whether that is a real problem is a judgement call about route criticality that static analysis cannot make. A correct auditor surfaces the static heavy import at HEURISTIC level (a bundle signal to confirm with bundle-budget on a real build) and must not escalate it to a confirmed slowdown. confirmed would be wrong here.",
+  "expected": [
+    {
+      "id": "heavy-static-import",
+      "file": "app/components/ReportChart.vue",
+      "line": 2,
+      "min_level": "heuristic",
+      "rationale": "the static value import of echarts is a certain syntactic fact and a real bundle signal; heuristic is exactly right because the source cannot establish whether the admin reports route is on the critical path, which is what would make it a true regression."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

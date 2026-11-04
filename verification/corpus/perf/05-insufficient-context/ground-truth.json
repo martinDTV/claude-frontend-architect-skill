@@ -1,0 +1,19 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "insufficient-context",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand in app/components/Prices.vue: the computed getter at line 9 (`const converted = computed(() => { refreshRate(); return rate.value * 100 })`) calls refreshRate(), defined at lines 4-6, which performs I/O via `$fetch('/api/rate')`. A computed must be a pure derivation; this one triggers a network call on every re-evaluation, so it is a genuine computed-side-effect defect. Deriving this requires FOLLOWING the call from the getter into refreshRate's body — context the static detector lacks, since it inspects only the getter's own body with a balanced-brace scan and matches fetch/$fetch/emit/storage/DOM/router tokens there. The getter body contains only `refreshRate()`, no such token, so a correct full-context auditor would flag computed-side-effect at line 9 while the real tool is expected to MISS it (a false negative driven by insufficient context, not a truth error).",
+  "expected": [
+    {
+      "id": "computed-side-effect",
+      "file": "app/components/Prices.vue",
+      "line": 9,
+      "min_level": "heuristic",
+      "rationale": "the computed getter calls refreshRate(), whose body does `$fetch('/api/rate')`; the computed performs I/O on every re-evaluation, which is the defect. Heuristic is the honest level (static analysis cannot confirm the call always runs the fetch), matching how perf-audit reports a direct in-getter effect; here it is expected to surface as a false negative because the effect is one call-level deeper than the getter body the tool reads."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 2
+}

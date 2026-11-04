@@ -1,0 +1,20 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "real-defect",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand: actions.ts declares file-level 'use server' and exports updateEmail(), which mutates db.user with the submitted email and contains no session read, no authorization check and no schema validation; a correct auditor must flag both the missing auth and the missing validation on that exported action. Separately, /settings is a protected-looking page segment and the project ships no proxy/middleware file, so no matcher covers it: a correct auditor surfaces that gap too.",
+  "expected": [
+    { "id": "server-action-without-auth", "file": "src/app/settings/actions.ts", "line": 5, "min_level": "heuristic",
+      "rationale": "updateEmail is a public HTTP endpoint (Server Action) that writes to the user record with no cookies()/session/authorize call in its body." },
+    { "id": "server-action-without-validation", "file": "src/app/settings/actions.ts", "line": 5, "min_level": "heuristic",
+      "rationale": "the action casts formData.get('email') straight into a DB write with no Zod/Valibot/parse step." },
+    { "id": "proxy-matcher-gap", "file": "src/app/settings/page.tsx", "line": null, "min_level": "heuristic",
+      "rationale": "/settings is a protected-looking segment and the project has no proxy/middleware matcher covering it; worth surfacing as a UX-gate gap even though authorization is enforced server-side." }
+  ],
+  "forbidden": [
+    { "id": "client-boundary-too-high", "file": "src/app/settings/page.tsx", "why_not_a_defect": "the page is a Server Component; there is no 'use client' directive." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

@@ -1,0 +1,18 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "combined-defects",
+  "source_of_truth": "Read by hand in app/components/ui/Toolbar.tsx (JSX, parsed by the semantic engine's TypeScript path): six independent, provable accessibility defects coexist. Line 9: <img src=\"/logo.png\"> has no alt. Line 10: <input type=\"text\"> has no label, aria-label or title. Line 11: <button> is empty, with no aria-label or title. Line 12: a <div onClick> has no interactive role, so keyboard/SR users cannot reach it. Line 13: an <a onClick> has no href, so it is neither focusable nor announced as a link. Line 14: <a href=\"/next\" aria-hidden=\"true\"> is focusable yet hidden from assistive tech. Each is derivable from the markup alone and independent of the others. Derived from the JSX, not from the tool.",
+  "expected": [
+    { "id": "img-missing-alt", "file": "app/components/ui/Toolbar.tsx", "line": 9, "min_level": "confirmed", "rationale": "native <img> with no alt attribute at all; proven from the element." },
+    { "id": "form-control-without-label", "file": "app/components/ui/Toolbar.tsx", "line": 10, "min_level": "confirmed", "rationale": "native <input> with no label by any mechanism; the JSX element tree proves the absence." },
+    { "id": "button-without-accessible-name", "file": "app/components/ui/Toolbar.tsx", "line": 11, "min_level": "confirmed", "rationale": "empty <button> with no text, aria-label, aria-labelledby or title." },
+    { "id": "click-handler-on-non-interactive", "file": "app/components/ui/Toolbar.tsx", "line": 12, "min_level": "confirmed", "rationale": "<div> with an onClick that performs an action but no interactive role, tabindex or key handler." },
+    { "id": "link-without-href", "file": "app/components/ui/Toolbar.tsx", "line": 13, "min_level": "confirmed", "rationale": "<a> with an onClick and no href: not focusable, not announced as a link." },
+    { "id": "aria-hidden-on-focusable", "file": "app/components/ui/Toolbar.tsx", "line": 14, "min_level": "confirmed", "rationale": "aria-hidden=\"true\" on a focusable <a href>: reachable by keyboard but invisible to screen readers." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

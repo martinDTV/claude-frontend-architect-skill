@@ -1,0 +1,15 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "negative-control",
+  "source_of_truth": "Read by hand in a Next.js App Router app. Every cross-module edge is legitimate: checkout imports catalog only through catalog/index.ts (the public entry); shared/money.ts is domain-free and only depended on BY domains (allowed direction); the middleware (shell) depends only on the auth domain, which is a default coreDomain the shell may use; the route lives at src/app/checkout/page.tsx so it classifies as the checkout domain and importing checkout is same-domain. No cross-module import targets a private file, no domain pair depends both ways (no cycle), no file is used by 3+ other domains (no hotspot). A correct auditor reports zero defect-level findings.",
+  "expected": [],
+  "forbidden": [
+    { "id": "shell-depends-on-domain", "file": "src/middleware.ts", "why_not_a_defect": "the middleware depends on auth, a default coreDomain; the shell is explicitly allowed to depend on core domains" },
+    { "id": "shared-imports-domain", "file": "src/features/catalog/internal/repo.ts", "why_not_a_defect": "catalog is a business domain importing shared/money.ts; this is a domain depending on shared code (allowed), not shared depending on a domain" },
+    { "id": "feature-internal-import", "file": "src/features/checkout/useCheckout.ts", "why_not_a_defect": "checkout imports @/features/catalog, which resolves to catalog/index.ts (public entry), not a private file" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

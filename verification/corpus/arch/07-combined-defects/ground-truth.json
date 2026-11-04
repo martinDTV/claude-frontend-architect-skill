@@ -1,0 +1,35 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "combined-defects",
+  "source_of_truth": "Read by hand in a Next.js App Router app. Defect 1: src/shared/format.ts (shared code) imports getPlan (runtime, line 1) and type Plan (type-only, line 2) from @/features/billing; shared code must not depend on a business domain, so each import is shared-imports-domain (the runtime one high severity, the type-only one low). Defect 2: src/features/reports/report.ts imports @/features/users/internal/db, a private file of the users module, bypassing users/index.ts -> feature-internal-import. The reports page importing reports/report.ts is NOT a defect because reports has no index.ts public entry to bypass.",
+  "expected": [
+    {
+      "id": "shared-imports-domain",
+      "file": "src/shared/format.ts",
+      "line": 1,
+      "min_level": "confirmed",
+      "rationale": "runtime import of getPlan from the billing domain by shared code; explicit resolved import => confirmed, high severity."
+    },
+    {
+      "id": "shared-imports-domain",
+      "file": "src/shared/format.ts",
+      "line": 2,
+      "min_level": "confirmed",
+      "rationale": "type-only import of Plan from the billing domain by shared code; still coupling at design time, reported at confirmed confidence, low severity."
+    },
+    {
+      "id": "feature-internal-import",
+      "file": "src/features/reports/report.ts",
+      "line": 1,
+      "min_level": "confirmed",
+      "rationale": "imports @/features/users/internal/db, a private file of the users module, instead of users/index.ts."
+    }
+  ],
+  "forbidden": [
+    { "id": "feature-internal-import", "file": "src/app/reports/page.tsx", "why_not_a_defect": "the page imports reports/report.ts, but the reports module has no index.ts, so there is no public entry being bypassed" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 0
+}

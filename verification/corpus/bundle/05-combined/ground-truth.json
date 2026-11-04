@@ -1,0 +1,21 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "category": "combined-defects",
+  "source_of_truth": "Derived by hand from the build I wrote. Three routes in one build: (1) /heavy lists heavy-vendor.js (300000 raw, 227 KB gzip) async:false -> in the initial set -> a genuine initial-weight defect; (2) /editor lists lazy-editor.js (300000 raw, 227 KB gzip) async:true -> deferred, initial set ~21 KB -> correct code-splitting, not a defect; (3) /orphan is in routes-manifest with no client-reference manifest -> attribution genuinely unavailable [info]. The single defect-level signal expected is route-heavy-initial-chunk on /heavy only; it must not fire on /editor or /orphan.",
+  "expected": [
+    {
+      "id": "route-heavy-initial-chunk",
+      "file": "/heavy",
+      "line": null,
+      "min_level": "heuristic",
+      "rationale": "heavy-vendor.js (221.9 KB gzip) is in /heavy's initial set (async:false) and exceeds the 150 KB single-chunk threshold; line is null as the finding is path-attributed."
+    }
+  ],
+  "forbidden": [
+    { "id": "route-heavy-initial-chunk", "file": "/editor", "why_not_a_defect": "the large editor chunk is async:true (lazy), excluded from /editor's initial set; firing would be a false positive on correct code-splitting." },
+    { "id": "route-heavy-initial-chunk", "file": "/orphan", "why_not_a_defect": "/orphan has no client-reference manifest, so there is no initial set to measure; any heavy claim would be invented." }
+  ],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

@@ -1,0 +1,15 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "correct-suspicious",
+  "source_of_truth": "Read by hand: invoices/index.ts re-exports from its OWN internal/ files (same module, so re-exporting through your own public entry is correct); reports imports invoices only through invoices/index.ts (the public entry, e.to === the index). No cross-module edge targets a private file, so a correct auditor reports nothing.",
+  "expected": [],
+  "forbidden": [
+    { "id": "feature-internal-import", "file": "app/features/invoices/index.ts", "why_not_a_defect": "the index re-exports from its own module's internal/ files; a module publishing its own internals through its own public entry is the intended barrel pattern, not a cross-module leak" },
+    { "id": "feature-internal-import", "file": "app/features/reports/useReports.ts", "why_not_a_defect": "reports imports from ~/features/invoices, which resolves to invoices/index.ts (the public entry), not to any private file" },
+    { "id": "shared-imports-domain", "file": "app/features/invoices/index.ts", "why_not_a_defect": "invoices is a business domain, not shared/ code; re-exporting its own internals is not shared depending on a domain" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

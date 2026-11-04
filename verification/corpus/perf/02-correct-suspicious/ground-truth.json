@@ -1,0 +1,13 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "correct-suspicious",
+  "source_of_truth": "Read by hand: the app depends on two heavy libraries (@tiptap/vue-3 and apexcharts) but neither is statically value-imported into the client tree. In NotesEditor.vue the editor is loaded via defineAsyncComponent(() => import('@tiptap/vue-3')) (a dynamic import) and only its TYPE is imported statically (`import type { Editor }`, erased at build). In ChartPanel.vue apexcharts is loaded with `await import('apexcharts')` inside onMounted (dynamic). The list is keyed by a stable id. A correct auditor reports zero defect-level findings; flagging a heavy-static-import here would be a false positive because no static value import of a heavy module exists.",
+  "expected": [],
+  "forbidden": [
+    { "id": "heavy-static-import", "file": "app/components/NotesEditor.vue", "why_not_a_defect": "the only @tiptap import is `import type { Editor }` (type-only, erased at build) plus a dynamic import() inside defineAsyncComponent; neither is a static value import, so it ships nothing eagerly" },
+    { "id": "heavy-static-import", "file": "app/components/ChartPanel.vue", "why_not_a_defect": "apexcharts is reached only through `await import('apexcharts')` inside onMounted, a dynamic import that stays off the startup bundle" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

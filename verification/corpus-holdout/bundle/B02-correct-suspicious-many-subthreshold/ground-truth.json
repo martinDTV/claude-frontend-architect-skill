@@ -1,0 +1,15 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "engine": "lexical",
+  "category": "correct-suspicious",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Derived by hand from the build I wrote. /reports has four async:false chunks in its initial set: page-reports.js (small), base1.js (small), reports-grid.js and reports-filters.js (130000 raw each, ~95.6 KB gzip each under gzipSync). The route's TOTAL initial JS is ~200 KB gzip, over 150 KB, but route-heavy-initial-chunk keys off the single LARGEST initial chunk, which is only ~95.6 KB gzip, under the 150 KB cutoff. By the heuristic's own stated scope (largest single chunk, not route total) the honest call and the tool's call agree: no defect. Firing on the total would be a false positive outside the metric's scope. Truth derived from the source only; the tool was not consulted.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [],
+  "forbidden": [
+    { "id": "route-heavy-initial-chunk", "file": "/reports", "why_not_a_defect": "the largest single initial chunk is ~95.6 KB gzip, below the 150 KB cutoff; the heuristic measures the largest single chunk, not the ~200 KB route total, so firing here would be a false positive outside its scope." }
+  ],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

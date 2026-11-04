@@ -1,0 +1,20 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "insufficient-evidence",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Reading app/composables/useOnboarding.ts: localStorage.setItem('password-strength-tips-seen', true) uses a credential-sounding key but stores a boolean UI flag (the user dismissed a hint), not a secret. The code alone does not prove this is or is not a credential, so the only honest verdict is a heuristic 'read this key' finding; a confirmed token-in-web-storage would be a false positive. A correct auditor reports token-in-web-storage at heuristic (not confirmed).",
+  "expected": [
+    {
+      "id": "token-in-web-storage",
+      "file": "app/composables/useOnboarding.ts",
+      "line": 7,
+      "min_level": "heuristic",
+      "rationale": "Credential word in the key but a literal boolean value: genuinely ambiguous. Heuristic ('read it') is the correct level; confirming it would over-state the evidence."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

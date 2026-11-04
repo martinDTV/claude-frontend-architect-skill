@@ -1,0 +1,20 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "real-defect",
+  "engine": "lexical",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand in app/components/SalesChart.vue: line 3 is `import * as echarts from 'echarts'`, a static namespace value import (not type-only, not a dynamic import()) of a charting runtime in a client-reachable Vue component, so it ships eagerly on load. Line 7 is `watch(state, () => {...})` where `state` is declared `const state = reactive({...})` on line 5, so Vue deep-traverses the whole reactive object on every change instead of watching a specific getter. Both facts are read directly from the source.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "heavy-static-import", "file": "app/components/SalesChart.vue", "line": 3, "min_level": "heuristic",
+      "rationale": "echarts is a known-heavy charting library imported statically (namespace import) in a client-reachable SFC; it reaches the startup bundle and should be measured/dynamically loaded." },
+    { "id": "reactive-deep-watch", "file": "app/components/SalesChart.vue", "line": 7, "min_level": "heuristic",
+      "rationale": "watch(state, ...) targets the whole reactive() object, causing implicit deep traversal on every change; watching a specific getter () => state.field would be cheaper." }
+  ],
+  "forbidden": [
+    { "id": "computed-side-effect", "file": "app/components/SalesChart.vue", "why_not_a_defect": "there is no computed() in this component; the effect lives in a watch callback, which is the correct place for I/O." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 2
+}

@@ -1,0 +1,16 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "combined-defects",
+  "set": "A-reclassified-from-B",
+  "provenance": "Originally authored as a blind generalization (B) case. On measurement its hand truth proved OBJECTIVELY INCOMPLETE: it modeled only the policy forbidden-dependency and omitted two genuine feature-internal-import findings (orders and catalog both import ~/features/inventory/types while inventory/index.ts re-exports StockLevel, so each bypasses the public index — the same rule the dev corpus arch/02 and arch/04 already establish as correct tool behavior). Because its truth was wrong, not merely divergent, the case cannot measure blind generalization; it is reclassified to set A (non-blind) with the truth corrected and this history recorded, rather than silently edited inside the blind set. The 2 findings are correct tool behavior, not false positives.",
+  "source_of_truth": "Nuxt 4 app, .frontend-audit.json allows only catalog -> inventory. BOTH app/features/orders/useOrders.ts:1 and app/features/catalog/useCatalog.ts:2 import from ~/features/inventory/types, an internal file, while app/features/inventory/index.ts re-exports StockLevel — so each is a feature-internal-import (bypasses the public index), confirmed. Severity differs by import kind: orders' is `import type` (compile-time), catalog's is a runtime import.",
+  "expected": [
+    { "id": "feature-internal-import", "file": "app/features/orders/useOrders.ts", "line": 1, "min_level": "confirmed", "rationale": "imports inventory's internal types file, not its public index.ts (type-only; compile-time coupling)." },
+    { "id": "feature-internal-import", "file": "app/features/catalog/useCatalog.ts", "line": 2, "min_level": "confirmed", "rationale": "imports inventory's internal types file at runtime, bypassing the public index.ts." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [ "forbidden-dependency" ],
+  "line_tolerance": 1
+}

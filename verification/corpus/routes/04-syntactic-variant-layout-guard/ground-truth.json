@@ -1,0 +1,14 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "syntactic-variant",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand: this is the same 'private page with no guard' defect as the straightforward missing-middleware case, but expressed through a different routing shape: a dynamic segment pages/orders/[id].vue whose only route meta is layout: 'secure'. A Vue layout is rendering, not a route guard; the one global middleware present (tenant.global.ts) only sets a tenant header and is not auth-like. So the order-detail page runs with no guard and a correct auditor must report page-without-guard for it (page-without-guard carries no line).",
+  "expected": [
+    { "id": "page-without-guard", "file": "app/pages/orders/[id].vue", "line": null, "min_level": "heuristic",
+      "rationale": "the page declares only layout: 'secure' and relies on a non-auth global middleware; it has no page middleware and no global auth guard, so the route is unguarded." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

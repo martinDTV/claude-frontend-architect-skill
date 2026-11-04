@@ -1,0 +1,20 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "real-defect",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand from src/components/panel/InfoPanel.tsx (a React function component in a Next.js App Router app, parsed by ui-audit's TypeScript/JSX path). Two independent, provable defects. (1) The <div onMouseEnter={preview}> at line 10 reacts to the pointer (mouseenter) but the file has no onFocus/onFocusIn handler anywhere, so keyboard users never get the preview behaviour: mouse-only-handler, which ui-audit emits at review/heuristic level. (2) The native <dialog> at line 12 carries no aria-label and no aria-labelledby attribute (open is a boolean state, not a name), so a screen reader announces an unnamed dialog: dialog-without-name, provable from the markup (static/confirmed). The two <button>s both have visible text and must not be flagged. Truth derived from the source only; the tool was not consulted while writing it.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "mouse-only-handler", "file": "src/components/panel/InfoPanel.tsx", "line": 10, "min_level": "heuristic",
+      "rationale": "the <div> has onMouseEnter and there is no onFocus/onFocusIn handler in the component; hover behaviour is unreachable by keyboard. ui-audit emits this rule at review (heuristic) level by design, so heuristic is the strongest honest level." },
+    { "id": "dialog-without-name", "file": "src/components/panel/InfoPanel.tsx", "line": 12, "min_level": "confirmed",
+      "rationale": "a native <dialog> with no aria-label and no aria-labelledby is an unnamed dialog, provable from the markup; ui-audit reports it at static/confirmed level." }
+  ],
+  "forbidden": [
+    { "id": "button-without-accessible-name", "file": "src/components/panel/InfoPanel.tsx", "why_not_a_defect": "both <button>s have visible text content (Details, Close), so each has an accessible name; flagging either would be a false positive." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

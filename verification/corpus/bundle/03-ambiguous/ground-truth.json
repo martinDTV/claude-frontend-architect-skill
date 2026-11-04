@@ -1,0 +1,12 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "category": "ambiguous",
+  "source_of_truth": "Derived by hand from the build I wrote: /catalog's largest initial chunk, near-threshold.js, is 202500 bytes raw of high-entropy base64 and gzips to 153418 bytes = 149.8 KB on disk — a hair UNDER route-attribution's 150 KB cutoff for the single largest initial chunk. At exactly this size the honest human call and the tool's call agree: not a defect yet, it is right at budget. Documented knife-edge: ~0.2 KB more raw entropy would push the chunk over 150 KB and flip the finding on. Note the heuristic keys off the LARGEST single chunk (149.8 KB), not the route's total initial JS (169.6 KB gzip over 3 files), so a route can exceed 150 KB in total without firing — an intentional, documentable property of this auditor.",
+  "expected": [],
+  "forbidden": [
+    { "id": "route-heavy-initial-chunk", "file": "/catalog", "why_not_a_defect": "the largest initial chunk is 149.8 KB gzip, below the 150 KB cutoff; at this exact size a human agrees it is borderline-acceptable, not a defect. Firing would be a false positive by the tool's own stated threshold." }
+  ],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

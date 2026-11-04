@@ -1,0 +1,14 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "engine": "lexical",
+  "category": "insufficient-context",
+  "scenario_polarity": "trap",
+  "set": "A-known-limit",
+  "provenance": "known-limit reproduction: reproduces the routes-audit FP (dev routes/05) where auth lives in an imported helper, with a DIFFERENT helper name (guardRequest, not ensureLoggedIn) and a different route.",
+  "source_of_truth": "src/app/api/billing/route.ts POST calls guardRequest() which (src/lib/guard.ts) reads the sid cookie and throws 401 — authorization IS enforced. routes-audit matches auth by a name vocabulary in the handler body and cannot follow the import, so it is expected to over-fire route-handler-without-auth. A correct cross-file auditor would stay silent.",
+  "expected": [],
+  "forbidden": [ { "id": "route-handler-without-auth", "file": "src/app/api/billing/route.ts", "why_not_a_defect": "auth is enforced via the imported guardRequest() helper; flagging it is the known single-file FP." } ],
+  "out_of_scope": [],
+  "line_tolerance": 2
+}

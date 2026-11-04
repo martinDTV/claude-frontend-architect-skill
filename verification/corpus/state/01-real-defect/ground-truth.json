@@ -1,0 +1,13 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "real-defect",
+  "source_of_truth": "Reading app/composables/useSession.ts: the JWT returned by the login request is written into document.cookie from client JavaScript with no HttpOnly flag, so any script on the page can read the session token (XSS exfiltration). A correct auditor must report a token-in-web-storage finding on the document.cookie write; the credential-named value interpolates a response field, so the correct level is confirmed.",
+  "expected": [
+    { "id": "token-in-web-storage", "file": "app/composables/useSession.ts", "line": 10, "min_level": "confirmed", "rationale": "A real, exploitable defect: the session token is placed in a JS-readable cookie instead of an HttpOnly one. Value references data.accessToken, a response field with a token-like name, so confirmed (not heuristic)." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

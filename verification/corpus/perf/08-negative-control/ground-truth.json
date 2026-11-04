@@ -1,0 +1,15 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "negative-control",
+  "source_of_truth": "Read by hand: every pattern that could be a defect is done correctly. In Dashboard.vue the v-for is keyed by a stable id (r.id), the computed `total` is a pure reduce over state with no fetch/emit/storage/DOM/router call, and the watch targets a specific getter `() => state.filter` rather than the whole reactive object (no implicit deep traversal). In CodeView.vue the only heavy dependency @codemirror/view is reached via `import type { EditorView }` (erased at build) and `await import('@codemirror/view')` inside onMounted (dynamic), so there is no static value import of a heavy module anywhere in the client tree. A correct auditor reports zero defect-level findings; any finding here would be a false positive.",
+  "expected": [],
+  "forbidden": [
+    { "id": "heavy-static-import", "file": "app/components/CodeView.vue", "why_not_a_defect": "@codemirror/view is only type-imported (erased at build) and dynamically imported inside onMounted; no static value import exists" },
+    { "id": "computed-side-effect", "file": "app/components/Dashboard.vue", "why_not_a_defect": "the computed getter is a pure reduce over state.rows with no I/O, navigation, emit or DOM access" },
+    { "id": "reactive-deep-watch", "file": "app/components/Dashboard.vue", "why_not_a_defect": "the watch targets a specific getter () => state.filter, not the whole reactive object, so Vue does not deep-traverse" },
+    { "id": "list-key-unstable", "file": "app/components/Dashboard.vue", "why_not_a_defect": "the v-for is keyed by a stable id r.id, not the index and not a fresh value" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

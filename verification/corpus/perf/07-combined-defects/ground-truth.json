@@ -1,0 +1,39 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "combined-defects",
+  "source_of_truth": "Read by hand in src/components/DocViewer.tsx, a 'use client' component rendered by the initial src/app/page.tsx. Four independent defects coexist: line 2 `import * as pdfjsLib from 'pdfjs-dist'` is a static value import of a heavy PDF runtime (bundle signal, heuristic); line 12 `<ThemeCtx.Provider value={{ theme, user }}>` passes a fresh object literal as the context value on every render, so every consumer re-renders (heuristic, no React Compiler is configured); line 14 `key={i}` keys a list by the array index (heuristic: safe for a static list, wrong on reorder/insert/delete); line 17 `key={Date.now()}` is a fresh value every render, remounting every row (confirmed). Each line was read individually; the levels follow the evidence contract (confirmed = certain syntactic fact, heuristic = plausible risk to measure), not the tool.",
+  "expected": [
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/DocViewer.tsx",
+      "line": 2,
+      "min_level": "heuristic",
+      "rationale": "static value import of pdfjs-dist, a heavy document runtime, in a client-reachable component; reaches the startup bundle."
+    },
+    {
+      "id": "provider-inline-value",
+      "file": "src/components/DocViewer.tsx",
+      "line": 12,
+      "min_level": "heuristic",
+      "rationale": "the Provider value is a fresh { theme, user } object literal each render; its identity changes every render, re-rendering all consumers. No React Compiler dependency or config is present, so heuristic (a fix-by-hand risk), not info."
+    },
+    {
+      "id": "list-key-unstable",
+      "file": "src/components/DocViewer.tsx",
+      "line": 14,
+      "min_level": "heuristic",
+      "rationale": "list keyed by the array index: correct only for a never-reordering list; a reorder/insert/delete reuses the wrong DOM/state. Heuristic because static analysis cannot know whether this list changes shape."
+    },
+    {
+      "id": "list-key-unstable",
+      "file": "src/components/DocViewer.tsx",
+      "line": 17,
+      "min_level": "confirmed",
+      "rationale": "key={Date.now()} is a fresh value on every render, forcing every item to remount; a certain syntactic fact (confirmed)."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

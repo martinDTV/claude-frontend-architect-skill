@@ -1,0 +1,24 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "semantic",
+  "category": "correct-suspicious",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Reading app/composables/useViewport.ts in a Nuxt app with SSR on: window.innerWidth is read only inside an onMounted callback (a client-only lifecycle that never runs on the server), and localStorage.getItem is read only inside an `if (import.meta.client)` guard. The setup top level touches no browser API. Server rendering therefore never evaluates window or localStorage, so there is no SSR crash and no hydration risk: the code already applies the prescribed fix (defer to the client / guard with import.meta.client). A naive 'window appears in a composable' reading would over-flag it; the correct verdict is clean.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "browser-api-in-setup",
+      "file": "app/composables/useViewport.ts",
+      "why_not_a_defect": "window is read inside onMounted (client lifecycle) and localStorage behind an import.meta.client guard; neither runs during server rendering, so there is nothing to flag."
+    },
+    {
+      "id": "nondeterministic-render",
+      "file": "app/composables/useViewport.ts",
+      "why_not_a_defect": "no Date.now/Math.random/crypto.randomUUID is used anywhere; the file only reads guarded browser APIs."
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

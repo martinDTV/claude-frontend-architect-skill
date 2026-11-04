@@ -1,0 +1,1 @@
+{ "name": "corpus-state-negative-control", "private": true, "dependencies": { "nuxt": "^4.6.0", "@pinia/nuxt": "^1.0.0", "pinia": "^4.1.0" } }

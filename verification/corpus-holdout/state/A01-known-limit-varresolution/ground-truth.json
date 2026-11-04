@@ -1,0 +1,16 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "semantic",
+  "category": "insufficient-context",
+  "scenario_polarity": "miss",
+  "set": "A-known-limit",
+  "provenance": "known-limit reproduction: derived from the code; reproduces the state-audit variable-resolution FN (dev state/05) in a DIFFERENT shape (reassigned let key + a renamed plain value binding). An initial draft left the value named 'bearer' and the tool caught it on the value-name heuristic — corrected so BOTH key and value are generic, faithfully reproducing the limit (documented honestly rather than left as a mis-built case).",
+  "source_of_truth": "app/composables/useSession.ts persists a login token to localStorage. The key k is a local string reassigned to 'app:v2:k' and the value v is a plain binding of resp.data.v; neither identifier in setItem(k, v) contains a secret word, so a non-dataflow scan sees no signal. A correct dataflow-aware auditor should report token-in-web-storage at the setItem line.",
+  "expected": [
+    { "id": "token-in-web-storage", "file": "app/composables/useSession.ts", "line": 7, "min_level": "confirmed", "rationale": "a login bearer token persisted to localStorage (XSS-readable); a real credential-in-web-storage defect visible only by resolving the key/value bindings." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 2
+}

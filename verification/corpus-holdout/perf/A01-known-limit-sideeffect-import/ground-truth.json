@@ -1,0 +1,15 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "insufficient-context",
+  "scenario_polarity": "miss",
+  "set": "A-known-limit",
+  "provenance": "known-limit reproduction: reproduces the perf-audit heavy-import FN (dev perf/04 re-export) via a DIFFERENT carrier — a bare side-effect import 'echarts/dist/echarts.min.js'.",
+  "source_of_truth": "src/components/Dashboard.tsx does a bare side-effect import of echarts' full build into a client component, pulling a large module into the initial bundle. A correct auditor should flag heavy-static-import; perf-audit iterates only imports whose parsed kind is 'static' and a bare import is kind 'side-effect', so it is expected to miss it.",
+  "expected": [
+    { "id": "heavy-static-import", "file": "src/components/Dashboard.tsx", "line": 2, "min_level": "heuristic", "rationale": "echarts full build pulled into the initial client bundle via a side-effect import; same bundle cost as a static import, different import kind." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 2
+}

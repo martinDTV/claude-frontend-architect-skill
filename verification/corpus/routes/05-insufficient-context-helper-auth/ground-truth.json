@@ -1,0 +1,18 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "insufficient-context",
+  "scenario_polarity": "trap",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand across two files: DELETE /api/account calls ensureLoggedIn(request), and gate.ts shows ensureLoggedIn reads the session cookie and throws 401 for anonymous callers. So authorization IS enforced; the route is correctly guarded. Whether the handler is safe cannot be decided from route.ts alone — the auditor only sees the handler body, where the helper name (ensureLoggedIn) is outside its auth-name vocabulary. A correct auditor that followed the import would not flag this; the single-file heuristic has insufficient context to judge it.",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "route-handler-without-auth",
+      "file": "src/app/api/account/route.ts",
+      "why_not_a_defect": "the handler delegates the session check to ensureLoggedIn(), which reads the session cookie and throws 401; authorization is enforced, the auditor just cannot see it from the handler body."
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

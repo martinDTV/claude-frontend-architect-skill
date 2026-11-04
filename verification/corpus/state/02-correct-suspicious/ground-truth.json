@@ -1,0 +1,13 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "correct-suspicious",
+  "source_of_truth": "Reading app/composables/useLocale.ts: SUPPORTED, CURRENCY_BY_LOCALE and FALLBACK_LOCALE are module-level const bindings holding frozen/immutable config. They are read-only, never mutated, and carry no per-user data, so under SSR they cannot leak between requests. This is precisely the case the auditor's own fix text calls safe (\"module-level is fine only for immutable config\"), so a correct auditor must report NO defect here.",
+  "expected": [],
+  "forbidden": [
+    { "id": "module-level-mutable-state", "file": "app/composables/useLocale.ts", "why_not_a_defect": "const bound to a frozen array/object; immutable shared config cannot leak across SSR requests." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

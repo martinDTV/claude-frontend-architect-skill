@@ -1,0 +1,20 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "semantic",
+  "category": "real-defect",
+  "source_of_truth": "Reading src/app/promo/PromoBanner.tsx: Math.random() is evaluated directly in the component's render body (line 2) to build `fieldId`, used for the input's id and the label's htmlFor. It is not inside useEffect, an event handler, or any guard, so it runs during server rendering and again on the client; the two produce different ids, which is a hydration mismatch. Next.js renders Server Components on the server by default, so this executes server-side. The code alone proves the nondeterminism, but the actual visual impact depends on how React reconciles, so the honest level is heuristic.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    {
+      "id": "nondeterministic-render",
+      "file": "src/app/promo/PromoBanner.tsx",
+      "line": 2,
+      "min_level": "heuristic",
+      "rationale": "Math.random() in the render body of a React component (not in useEffect or a guard) produces different markup on server and client: a hydration mismatch. Heuristic is correct; the ids should be derived with useId or computed on the client."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

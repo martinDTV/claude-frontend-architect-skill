@@ -1,0 +1,20 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "insufficient-context",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand: layouts/default.vue (shell) renders <SalesWidget/>, which Nuxt auto-imports from components/sales/ (a business domain). There is no explicit import line and no .nuxt/ generated metadata in the project, so the auditor must re-implement Nuxt's component naming to even know this edge exists. The boundary break (shell depending on the sales domain) is real, but WITHOUT Nuxt's own catalog the resolution is inferred, so heuristic is the only honest confidence; `nuxt prepare` would make the same edge verified/confirmed.",
+  "expected": [
+    {
+      "id": "shell-depends-on-domain",
+      "file": "app/layouts/default.vue",
+      "line": 3,
+      "min_level": "heuristic",
+      "rationale": "the shell layout uses the sales-domain component SalesWidget; confirmed would require Nuxt's generated components.d.ts, which is absent, so the correct level is heuristic (inferred auto-import edge)."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 2
+}

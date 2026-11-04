@@ -1,0 +1,28 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "syntactic-variant",
+  "source_of_truth": "Read by hand. The 01-class defect (a module reaching into billing's private internal/calc) is written two ways: (A) fulfillment/useFulfillment.ts imports it with an `as` alias, and (B) fulfillment/index.ts re-exports it with `export { priceLines } from '~/features/billing/internal/calc'`. Both lines carry a specifier that points straight at billing's private file, so both are cross-module internal imports regardless of the surface syntax. The consumer page imports only through fulfillment/index.ts (the public entry), so the page is not at fault; the laundering is on the index line.",
+  "expected": [
+    {
+      "id": "feature-internal-import",
+      "file": "app/features/fulfillment/useFulfillment.ts",
+      "line": 1,
+      "min_level": "confirmed",
+      "rationale": "Variant A: the `as calc` alias does not change the specifier; it resolves to billing/internal/calc.ts, a private file, not billing/index.ts."
+    },
+    {
+      "id": "feature-internal-import",
+      "file": "app/features/fulfillment/index.ts",
+      "line": 2,
+      "min_level": "confirmed",
+      "rationale": "Variant B: the re-export line is itself a cross-module edge whose specifier points at billing/internal/calc.ts; re-exporting another module's private symbol through your own index is still a boundary break, pinned on the index line that does it."
+    }
+  ],
+  "forbidden": [
+    { "id": "feature-internal-import", "file": "app/pages/ops/index.vue", "why_not_a_defect": "the page imports from ~/features/fulfillment, which resolves to fulfillment/index.ts (public entry); the page cannot be blamed for fulfillment laundering a private symbol, that fault is on fulfillment/index.ts" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

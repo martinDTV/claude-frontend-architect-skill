@@ -1,0 +1,14 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "correct-suspicious",
+  "source_of_truth": "Read by hand in app/components/forms/ProfilePanel.vue: both native controls have an accessible name even though neither has a <label for> or local text. (1) The email <input> (line 9) is nested inside a custom <FormField label=\"Email address\"> component that owns the label; its name is rendered by the component. (2) The search <input> (line 12) carries aria-labelledby=\"filters-title\" which points at the visible <h2 id=\"filters-title\"> above it. A correct auditor reports NO defect here. Derived from the markup and ARIA relationships, not from the tool.",
+  "expected": [],
+  "forbidden": [
+    { "id": "form-control-without-label", "file": "app/components/forms/ProfilePanel.vue", "why_not_a_defect": "the email input (line 9) is encapsulated: its nearest custom-component ancestor <FormField> declares a label-like prop (label=\"Email address\"), so the component provides the accessible name; flagging it would be a false positive" },
+    { "id": "form-control-without-label", "file": "app/components/forms/ProfilePanel.vue", "why_not_a_defect": "the search input (line 12) is named by aria-labelledby=\"filters-title\", a valid accessible-name mechanism pointing at the visible heading id; flagging it would be a false positive" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

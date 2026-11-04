@@ -1,0 +1,1 @@
+{ "name": "corpus-routes-syntactic-variant", "private": true, "dependencies": { "nuxt": "^4.6.0" } }

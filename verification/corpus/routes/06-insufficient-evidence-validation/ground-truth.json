@@ -1,0 +1,23 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "insufficient-evidence",
+  "scenario_polarity": "trap",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand across two files: addComment() reads getSession() (so authorization is visible and present) and runs its input through assertValid(), whose body in check.ts rejects a non-string, empty, or over-long body. So the action both authorizes and validates. The action's own body does not contain any token from the auditor's validation vocabulary (no z./safeParse/schema/validate), so the single-file heuristic has insufficient evidence to assert that validation is missing; a correct auditor must not claim server-action-without-validation here.",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "server-action-without-auth",
+      "file": "src/app/comments/actions.ts",
+      "why_not_a_defect": "the action awaits getSession() before using the identity; authorization is visible and present."
+    },
+    {
+      "id": "server-action-without-validation",
+      "file": "src/app/comments/actions.ts",
+      "why_not_a_defect": "input is validated by assertValid(), which enforces type and length; the file just does not use a recognizable validation-library token."
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

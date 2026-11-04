@@ -1,0 +1,16 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "combined-defects",
+  "source_of_truth": "Reading the three files: (A) app/lib/http.ts creates one module-level Axios instance whose Authorization default is mutated globally - a cross-request token leak under SSR. (B) app/stores/account.ts fetches invoices via http.get/post and keeps them as a ref<Invoice[]> entity array (server data duplicated outside the query cache) while also holding an accessToken, and the whole store is persist:true (tokens + server data persisted to storage). (D) its logout clears only the in-memory token, not query caches or app state. Four distinct real defects derived from the code, independent of the tool.",
+  "expected": [
+    { "id": "module-level-http-client-mutable-auth", "file": "app/lib/http.ts", "line": 4, "min_level": "confirmed", "rationale": "Module-level axios.create whose defaults.headers.common.Authorization is mutated: one user's token can serve another's SSR request." },
+    { "id": "server-data-in-store", "file": "app/stores/account.ts", "min_level": "heuristic", "rationale": "Store fetches (http.get/post) and keeps an entity array (ref<Invoice[]>): server data belongs in a query cache, not duplicated in a store." },
+    { "id": "store-persists-everything", "file": "app/stores/account.ts", "min_level": "heuristic", "rationale": "persist:true on a whole store that holds accessToken: never persist tokens or server data wholesale." },
+    { "id": "logout-without-cache-clear", "file": "app/stores/account.ts", "min_level": "heuristic", "rationale": "logout resets only accessToken; it clears no store/query cache/persisted state, so stale user data and the persisted token survive logout." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

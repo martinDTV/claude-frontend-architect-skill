@@ -1,0 +1,19 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "ambiguous",
+  "source_of_truth": "Read by hand: shipping/useShipping.ts has exactly one cross-module import, `import type { OrderLine } from '~/features/orders/internal/model'`. It is TYPE-ONLY: erased at build, no runtime code, no cycle. It still couples shipping's source to an orders internal type. A correct auditor should surface it (the edge and its target are certain), but at reduced severity because it is compile-time-only; it must not be presented as a high-severity runtime leak.",
+  "expected": [
+    {
+      "id": "feature-internal-import",
+      "file": "app/features/shipping/useShipping.ts",
+      "line": 1,
+      "min_level": "confirmed",
+      "rationale": "the specifier resolves with certainty to orders/internal/model.ts, a private file of the orders module, not its index.ts; confidence is confirmed. The ambiguity is in severity (type-only = medium, not the high of a runtime break), not in whether the edge exists."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

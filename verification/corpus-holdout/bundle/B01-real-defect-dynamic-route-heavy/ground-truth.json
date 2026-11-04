@@ -1,0 +1,16 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "engine": "lexical",
+  "category": "real-defect",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Derived by hand from the build I wrote, not from the tool. The dynamic route /blog/[slug] (manifest key \"/blog/[slug]/page\") lists static/chunks/vendor-charting.js in clientModules with async:false, so it is in the route's INITIAL client set. That chunk is 300000 bytes raw of high-entropy base64; under gzipSync it is ~227 KB gzip, the single largest initial chunk and far above route-attribution's 150 KB cutoff. A dynamic route shipping a ~227 KB gzip chunk on first load is a genuine initial-weight defect. route-heavy-initial-chunk is HEURISTIC by design (hashed names hide the library), so heuristic is the strongest honest level. The finding is attributed to the route PATH, so line is null.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "route-heavy-initial-chunk", "file": "/blog/[slug]", "line": null, "min_level": "heuristic",
+      "rationale": "vendor-charting.js (~227 KB gzip) is in /blog/[slug]'s initial set (async:false) and is the largest initial chunk, over the 150 KB threshold; this is the defect-level signal route-attribution emits for route initial weight." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

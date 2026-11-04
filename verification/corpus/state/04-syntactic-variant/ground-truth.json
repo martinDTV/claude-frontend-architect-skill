@@ -1,0 +1,14 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "syntactic-variant",
+  "source_of_truth": "Reading app/composables/useAuth.ts: the login response's tokens are persisted in web storage through two syntactic variants of the same defect - sessionStorage.setItem('refresh_token', data.refreshToken) and the VueUse useLocalStorage('auth_token') wrapper later assigned the access token. Both put a readable credential in web storage rather than an HttpOnly cookie. A correct auditor must flag token-in-web-storage for BOTH variants at confirmed (token-like key names; the refresh value comes from a response field).",
+  "expected": [
+    { "id": "token-in-web-storage", "file": "app/composables/useAuth.ts", "line": 8, "min_level": "confirmed", "rationale": "useLocalStorage('auth_token') wrapper persists a token-like key in localStorage; a credential in web storage is XSS-readable." },
+    { "id": "token-in-web-storage", "file": "app/composables/useAuth.ts", "line": 14, "min_level": "confirmed", "rationale": "sessionStorage.setItem('refresh_token', data.refreshToken): token-like key, response-sourced value, written to web storage instead of an HttpOnly cookie." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

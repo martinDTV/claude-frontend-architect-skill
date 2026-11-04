@@ -1,0 +1,28 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "real-defect",
+  "source_of_truth": "Read by hand in app/components/auth/LoginForm.vue: the password <input id=\"password\"> (line 10) has no <label for=\"password\"> anywhere, is not wrapped in a <label>, and carries no aria-label / aria-labelledby / title. A screen-reader user reaches an unnamed edit field. The username <input> above it is correctly labelled by a <label for=\"username\"> + matching id, so it is NOT a defect. Separately, the <form> (line 7) has a submit handler but no pending/loading flag in the script and no disabled/loading binding on its submit button, which a correct auditor flags at heuristic level. Derived from the markup, not from the tool.",
+  "expected": [
+    {
+      "id": "form-control-without-label",
+      "file": "app/components/auth/LoginForm.vue",
+      "line": 10,
+      "min_level": "confirmed",
+      "rationale": "the password input has no associated label by any mechanism (for/id, wrapping label, aria-label, aria-labelledby, title); the semantic engine knows the full element tree, so the absence is proven and the correct level is confirmed."
+    },
+    {
+      "id": "form-without-pending-state",
+      "file": "app/components/auth/LoginForm.vue",
+      "line": 7,
+      "min_level": "heuristic",
+      "rationale": "the form has a @submit handler but no pending/loading identifier in <script setup> and no disabled/loading/aria-busy binding on the submit button; a re-entrant submit is possible. Static analysis cannot prove a guard is truly absent at runtime, so heuristic is the honest level."
+    }
+  ],
+  "forbidden": [
+    { "id": "form-control-without-label", "file": "app/components/auth/LoginForm.vue", "why_not_a_defect": "the username input (line 9) is correctly labelled by <label for=\"username\"> with a matching id; flagging it would be a false positive" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

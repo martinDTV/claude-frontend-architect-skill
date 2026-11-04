@@ -1,0 +1,19 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "insufficient-evidence",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand from src/components/search/CountryPicker.tsx (React/Next .tsx, semantic engine). The custom combobox is a plain <div role=\"combobox\" aria-expanded tabindex=\"0\"> with no aria-label, no aria-labelledby and no associated visible label text: a real accessibility defect (a screen reader announces an unnamed combobox). But ui-audit judges only NATIVE HTML elements and does not model the accessible name of a custom ARIA widget, so this is a known coverage gap, declared in coverage_gaps[] and excluded from recall — not an FN of a rule the tool has. The native <input id=\"q\"> is correctly associated with <label for=\"q\">, so form-control-without-label must not fire on it. Truth derived from the source only; the tool was not consulted.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [],
+  "coverage_gaps": [
+    { "id": "custom-combobox-without-name", "file": "src/components/search/CountryPicker.tsx", "line": 10,
+      "what": "custom <div role=\"combobox\"> with aria-expanded and tabindex but no accessible name (no aria-label / aria-labelledby / associated label); ui-audit's native-element scope does not cover custom-widget names" }
+  ],
+  "forbidden": [
+    { "id": "form-control-without-label", "file": "src/components/search/CountryPicker.tsx", "why_not_a_defect": "the native <input id=\"q\"> is associated with <label for=\"q\">, so it has a label." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

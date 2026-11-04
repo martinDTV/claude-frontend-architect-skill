@@ -1,0 +1,17 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "insufficient-evidence",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Read by hand in app/components/AdaptiveChart.tsx: the only path to a heavy module is `import(rendererFor(kind))`, a dynamic import whose specifier is a COMPUTED, non-literal value. rendererFor returns either 'echarts' (heavy) or './light-sparkline' (a tiny local module) depending on a runtime argument, so static analysis cannot decide whether echarts is ever loaded, and even if it were, a dynamic import stays off the startup bundle. The literal 'echarts' appears only as a return value inside rendererFor, not in an import clause. The honest result is abstention: a correct auditor reports NO heavy-static-import here and does not invent one from the bare presence of the string. (It may legitimately note the unresolved dynamic import at info level, which is not a defect-level finding.) Derived from reading the control flow, not from the tool.",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/AdaptiveChart.tsx",
+      "why_not_a_defect": "the only reference to a heavy module is a dynamic import() with a non-literal specifier computed at runtime; it is neither static nor statically resolvable to echarts, so flagging a heavy-static-import would be an invented finding on unknowable evidence"
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

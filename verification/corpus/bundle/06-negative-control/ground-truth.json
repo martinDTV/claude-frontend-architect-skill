@@ -1,0 +1,14 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "category": "negative-control",
+  "source_of_truth": "Derived by hand from the build I wrote: three routes (/home, /about, /pricing), each with a single async:false page chunk whose gzip size is well under the 150 KB cutoff (largest is page-home.js at 66.6 KB gzip; about 37.0 KB, pricing 51.8 KB). Nothing is lazy, nothing is missing; every route attributes with build-manifest confidence. A correct auditor fires zero defect-level findings — only route-attribution [info] per route. This is the clean baseline the heuristic must stay quiet on.",
+  "expected": [],
+  "forbidden": [
+    { "id": "route-heavy-initial-chunk", "file": "/home", "why_not_a_defect": "largest initial chunk is 66.6 KB gzip, far below 150 KB." },
+    { "id": "route-heavy-initial-chunk", "file": "/about", "why_not_a_defect": "largest initial chunk is 37.0 KB gzip." },
+    { "id": "route-heavy-initial-chunk", "file": "/pricing", "why_not_a_defect": "largest initial chunk is 51.8 KB gzip." }
+  ],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

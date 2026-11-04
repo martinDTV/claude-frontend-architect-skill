@@ -1,0 +1,19 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "negative-control",
+  "source_of_truth": "Read by hand in app/components/forms/AccessibleForm.vue: every control and pattern is correct and each is a known false-positive trap for the a11y rules. The email <input> is labelled by <label for=\"email\"> + matching id, and its aria-invalid is linked to the error text by aria-describedby=\"email-error\" (no form-error-not-associated). The <select> is wrapped in a <label> (no form-control-without-label). The icon <button> is named by aria-label and its <svg> is aria-hidden (no button-without-accessible-name). The submit <button> has visible text. The team <img> has a descriptive alt and the decorative <img> has alt=\"\" (no img-missing-alt). The <dialog> has aria-labelledby pointing at its <h2> (no dialog-without-name). The heading outline is sequential h1 -> h2 (no heading-level-skipped). The form has a pending flag in <script setup> and a :disabled submit button (no form-without-pending-state). A correct auditor reports ZERO defect-level findings. Derived from the markup, not from the tool.",
+  "expected": [],
+  "forbidden": [
+    { "id": "form-control-without-label", "file": "app/components/forms/AccessibleForm.vue", "why_not_a_defect": "the email input is labelled by <label for=\"email\"> and the select is wrapped in a <label>; both have accessible names" },
+    { "id": "form-error-not-associated", "file": "app/components/forms/AccessibleForm.vue", "why_not_a_defect": "the aria-invalid input links its error via aria-describedby=\"email-error\"" },
+    { "id": "button-without-accessible-name", "file": "app/components/forms/AccessibleForm.vue", "why_not_a_defect": "the icon button has aria-label=\"Open help\" and the submit button has visible text" },
+    { "id": "img-missing-alt", "file": "app/components/forms/AccessibleForm.vue", "why_not_a_defect": "the informative image has a descriptive alt and the decorative image has alt=\"\"" },
+    { "id": "dialog-without-name", "file": "app/components/forms/AccessibleForm.vue", "why_not_a_defect": "the <dialog> is named by aria-labelledby=\"dlg-title\" pointing at its heading" },
+    { "id": "heading-level-skipped", "file": "app/components/forms/AccessibleForm.vue", "why_not_a_defect": "the outline is sequential: h1 then h2, no level skipped" },
+    { "id": "form-without-pending-state", "file": "app/components/forms/AccessibleForm.vue", "why_not_a_defect": "a pending ref guards re-entrant submits and the submit button is :disabled while pending" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

@@ -1,0 +1,32 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "syntactic-variant",
+  "source_of_truth": "Read by hand: the same heavy module (highcharts) is brought into the client bundle three ways, all reachable from the home page's client component Charts.tsx. chart-default.tsx line 2 `import Highcharts from 'highcharts'`; chart-namespace.tsx line 2 `import * as Highcharts from 'highcharts'`; chart-reexport.tsx line 2 `export { default as Highcharts } from 'highcharts'`. A re-export binds and re-emits the module just like an import: wherever ReExported is imported (it is, via Charts.tsx), highcharts is bundled. So all three are the same heavy-static-import defect in terms of bundle cost, and a correct auditor reasoning about what reaches the bundle should flag all three at heuristic. I derived this from the module-resolution semantics (a re-export is a runtime binding to highcharts), not from the tool.",
+  "expected": [
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/chart-default.tsx",
+      "line": 2,
+      "min_level": "heuristic",
+      "rationale": "default import of highcharts, a heavy charting runtime, client-reachable; ships to the startup bundle."
+    },
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/chart-namespace.tsx",
+      "line": 2,
+      "min_level": "heuristic",
+      "rationale": "namespace import of the same heavy module; identical bundle cost to the default import."
+    },
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/chart-reexport.tsx",
+      "line": 2,
+      "min_level": "heuristic",
+      "rationale": "`export { default as Highcharts } from 'highcharts'` is a runtime re-export: it binds highcharts and re-emits it, so importing ReExported pulls the full highcharts runtime into the bundle exactly like the other two. The same heavy-static-import defect, just expressed with export...from syntax. A correct auditor should flag it; the real perf-audit only matches imports whose parsed kind is 'static' and a re-export is classified as kind 're-export', so this is expected to surface as a FALSE NEGATIVE divergence (a real tool limitation, not a truth error)."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

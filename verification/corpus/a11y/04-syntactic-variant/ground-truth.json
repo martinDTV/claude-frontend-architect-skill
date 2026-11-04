@@ -1,0 +1,42 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "syntactic-variant",
+  "source_of_truth": "Read by hand in app/components/forms/SearchControls.vue: the same semantic defect -- a form control with no accessible name -- appears in four markup forms. The native <input> (line 8), <select> (line 9) and <textarea> (line 10) each have no <label for>, no wrapping <label>, no aria-label, no aria-labelledby and no title, so each is a confirmed form-control-without-label that the semantic engine proves. The fourth control is a custom <div role=\"textbox\" contenteditable> (line 11) with no name: the identical defect in a non-native syntax. ui-audit deliberately judges only native elements for names, so it does not cover custom ARIA widgets; that control's missing name is listed out_of_scope (a documented blind spot, not an unfair miss). Derived from the markup, not from the tool.",
+  "expected": [
+    {
+      "id": "form-control-without-label",
+      "file": "app/components/forms/SearchControls.vue",
+      "line": 8,
+      "min_level": "confirmed",
+      "rationale": "native <input type=\"text\"> with no accessible name by any mechanism; proven by the semantic element tree."
+    },
+    {
+      "id": "form-control-without-label",
+      "file": "app/components/forms/SearchControls.vue",
+      "line": 9,
+      "min_level": "confirmed",
+      "rationale": "native <select> with no accessible name; same defect as the input, different tag, so the rule must fire identically."
+    },
+    {
+      "id": "form-control-without-label",
+      "file": "app/components/forms/SearchControls.vue",
+      "line": 10,
+      "min_level": "confirmed",
+      "rationale": "native <textarea> with no accessible name; same defect, third syntactic form."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "coverage_gaps": [
+    {
+      "id": "custom-widget-without-name",
+      "file": "app/components/forms/SearchControls.vue",
+      "line": 11,
+      "what": "custom <div role=\"textbox\" contenteditable> with no accessible name",
+      "why_out_of_scope": "ui-audit judges accessible names only on native HTML elements (it iterates !e.isComponent and its header scopes to native markup), so it does not cover custom ARIA widgets. This is a real accessibility defect the tool does not claim to catch: surfaced here as a known coverage gap (counted in cov-gap, excluded from recall) so the miss is visible rather than hidden."
+    }
+  ],
+  "line_tolerance": 1
+}

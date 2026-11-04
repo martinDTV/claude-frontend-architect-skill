@@ -1,0 +1,21 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "syntactic-variant",
+  "engine": "lexical",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand from the Nuxt project: pages/billing.vue names middleware: 'subscription-guard' in definePageMeta, but middleware/ holds only analytics.global.ts and staff.ts; no file, layer or addRouteMiddleware registers 'subscription-guard' and no auth module is installed, so this is a confirmed unknown-middleware (Nuxt throws at runtime). analytics.global.ts is not auth-like by name and its body only logs (no user/session/navigateTo), so it is not a global auth guard. pages/reports.vue carries no middleware, is not a public/auth route, and there is no global auth middleware, so it is an unguarded private-looking page. pages/login.vue is a public route by the default regex and must not be flagged.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "unknown-middleware", "file": null, "line": null, "min_level": "confirmed",
+      "rationale": "billing.vue references 'subscription-guard', which exists in no middleware file, no Nuxt layer and no addRouteMiddleware call, and no auth module could register it; the project-level finding carries no file/line." },
+    { "id": "page-without-guard", "file": "pages/reports.vue", "line": null, "min_level": "heuristic",
+      "rationale": "/reports has no page middleware, is not a public/auth route, and there is no global auth middleware; it is an unguarded private-looking page (heuristic, no line)." }
+  ],
+  "forbidden": [
+    { "id": "page-without-guard", "file": "pages/billing.vue", "why_not_a_defect": "billing.vue declares middleware in definePageMeta, so it is guarded even though the named middleware is missing (that is the unknown-middleware finding, not a missing-guard finding)." },
+    { "id": "page-without-guard", "file": "pages/login.vue", "why_not_a_defect": "/login matches the default public-route regex, so it is intentionally public and must not be flagged as unguarded." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

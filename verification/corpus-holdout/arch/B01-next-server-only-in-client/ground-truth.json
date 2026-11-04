@@ -1,0 +1,26 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "real-defect",
+  "source_of_truth": "Read by hand in a Next.js App Router app. src/features/billing/invoiceToken.ts begins with `import 'server-only'`, so the module (and the INVOICE_SIGNING_SECRET it reads) must never be bundled for the browser. src/features/billing/InvoiceBadge.tsx declares 'use client' and statically imports { signInvoice } from './invoiceToken'. A 'use client' module that imports a 'server-only' module pulls server-only code into the client bundle; Next's build rejects it. The import is explicit and static (a verified runtime edge), so confirmed is the correct level.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    {
+      "id": "server-only-in-client",
+      "file": "src/features/billing/InvoiceBadge.tsx",
+      "line": 2,
+      "min_level": "confirmed",
+      "rationale": "A 'use client' component statically imports a module marked 'server-only'; this is exactly the boundary the marker forbids and Next fails the build on it. The edge is an explicit import (verified), so confirmed is the honest level."
+    }
+  ],
+  "forbidden": [
+    {
+      "id": "server-only-in-client",
+      "file": "src/app/billing/page.tsx",
+      "why_not_a_defect": "page.tsx is a Server Component (no 'use client'); it may import the client component, and it never imports the server-only module, so no boundary is crossed here."
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

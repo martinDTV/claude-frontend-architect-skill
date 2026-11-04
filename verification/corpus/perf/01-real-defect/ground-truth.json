@@ -1,0 +1,32 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "real-defect",
+  "source_of_truth": "Read by hand from src/components/InvoiceScreen.tsx (a 'use client' component rendered directly by the initial src/app/page.tsx): line 2 is a static value import of jsPDF from jspdf (a PDF runtime, large and client-reachable) and line 3 a static value import of EditorContent from @tiptap/react (an editor runtime); both ship to the startup bundle though the features are click/below-the-fold. Line 12 renders a list with key={crypto.randomUUID()}, a fresh value on every render, so every row remounts each render. Derived from the import and JSX lines, not from the tool. The two heavy imports are bundle SIGNALS (heuristic, confirm with bundle-budget); the randomUUID key is a certain syntactic fact (confirmed).",
+  "expected": [
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/InvoiceScreen.tsx",
+      "line": 2,
+      "min_level": "heuristic",
+      "rationale": "static (non-dynamic, non-type-only) import of jspdf, a heavy document library, in a client-reachable file; it reaches the startup bundle. Static analysis cannot confirm the slowdown, so heuristic is the correct, strongest honest level."
+    },
+    {
+      "id": "heavy-static-import",
+      "file": "src/components/InvoiceScreen.tsx",
+      "line": 3,
+      "min_level": "heuristic",
+      "rationale": "static import of @tiptap/react, an editor runtime, in the same client component; a second heavy module on the critical path. Heuristic for the same reason."
+    },
+    {
+      "id": "list-key-unstable",
+      "file": "src/components/InvoiceScreen.tsx",
+      "line": 12,
+      "min_level": "confirmed",
+      "rationale": "key={crypto.randomUUID()} produces a new key on every render, forcing every list item to remount; this is a certain syntactic fact (confirmed), independent of any measurement."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

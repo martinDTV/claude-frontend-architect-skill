@@ -1,0 +1,20 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "combined-defects",
+  "engine": "lexical",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand in src/components/EditorPanel.tsx (a 'use client' component on the initial route): line 2 is `import * as monaco from 'monaco-editor'`, a static value import of an editor runtime, client-reachable; line 10 renders <ToolbarContext.Provider value={() => monaco.editor.getModels()}>, a fresh function literal as the context value on every render (new identity each render); line 12 keys the list by Date.now(), a fresh value on every render, so every row remounts. React Compiler is not configured, so the provider finding is a real heuristic, not downgraded to info.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "heavy-static-import", "file": "src/components/EditorPanel.tsx", "line": 2, "min_level": "heuristic",
+      "rationale": "monaco-editor is a heavy editor runtime imported statically in a client component; it reaches the startup bundle and should be dynamically loaded/measured." },
+    { "id": "provider-inline-value", "file": "src/components/EditorPanel.tsx", "line": 10, "min_level": "heuristic",
+      "rationale": "the Provider value is a fresh arrow-function literal each render, giving every consumer a new identity and re-rendering them; it should be wrapped in useCallback." },
+    { "id": "list-key-unstable", "file": "src/components/EditorPanel.tsx", "line": 12, "min_level": "confirmed",
+      "rationale": "key={Date.now()} is a fresh value on every render, so each row remounts every render; a stable id from the data is required." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

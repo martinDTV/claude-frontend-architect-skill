@@ -1,0 +1,17 @@
+{
+  "area": "perf",
+  "tool": "perf-audit.mjs",
+  "category": "correct-suspicious",
+  "engine": "lexical",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Read by hand in app/components/ExportTable.vue: (A) the computed getter builds a LOCAL object `row` and mutates its own fields before returning it, a pure derivation with no fetch/$fetch/emit/storage/DOM/router token in its body, so it is not a computed side effect; (B) xlsx appears only as `import type { WorkBook }` (type-only, erased at build) and `await import('xlsx')` inside an event handler (dynamic), so there is no static value import of xlsx; (C) the watch target is the getter `() => state.filter`, not the whole reactive object, so there is no implicit deep traversal. Every pattern is correct code; a correct auditor reports nothing.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [],
+  "forbidden": [
+    { "id": "computed-side-effect", "file": "app/components/ExportTable.vue", "why_not_a_defect": "the getter mutates a local object it just created and returns it; there is no I/O, navigation, emit or DOM access, which is a pure, idiomatic derivation." },
+    { "id": "heavy-static-import", "file": "app/components/ExportTable.vue", "why_not_a_defect": "xlsx is imported type-only (erased at build) and otherwise reached only via a dynamic await import() inside an event handler; no static value import ships it on load." },
+    { "id": "reactive-deep-watch", "file": "app/components/ExportTable.vue", "why_not_a_defect": "watch targets the specific getter () => state.filter, not the whole reactive object, so Vue does not deep-traverse." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

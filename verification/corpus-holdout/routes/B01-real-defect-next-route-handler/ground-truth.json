@@ -1,0 +1,18 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "real-defect",
+  "engine": "lexical",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand from route.ts: the exported DELETE handler for /api/posts/:id awaits params, calls removePost(id) (a mutation of the store) and returns JSON, with no session read, no authorization call and no webhook-signature verification anywhere in its body; a mutating Route Handler with no visible auth is a real authorization hole. The GET handler in the same file is read-only and must not be flagged.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "route-handler-without-auth", "file": "src/app/api/posts/[id]/route.ts", "line": 8, "min_level": "heuristic",
+      "rationale": "DELETE mutates the post store (removePost) and its body contains no session/auth/authorize/verifySignature call; it is an unauthenticated mutation endpoint." }
+  ],
+  "forbidden": [
+    { "id": "route-handler-without-auth", "file": "src/app/api/posts/[id]/route.ts", "why_not_a_defect": "the GET handler is read-only; the detector targets only mutating verbs (POST/PUT/PATCH/DELETE), and a second finding for the same file/line would be the read-only GET, which is not a mutation." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

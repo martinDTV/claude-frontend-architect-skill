@@ -1,0 +1,21 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "combined-defects",
+  "engine": "lexical",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Read by hand: src/app/(workspace)/layout.tsx begins with the 'use client' directive, so the whole workspace subtree ships and renders as client JavaScript (a confirmed client-boundary-too-high on a layout). The same file gates UI with the literal comparison user.role === 'owner', a hardcoded role check in client UI code. src/components/Nav.tsx compares role === 'tablist', an ARIA role value, which is not a permission and must not be flagged.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "client-boundary-too-high", "file": "src/app/(workspace)/layout.tsx", "line": 1, "min_level": "confirmed",
+      "rationale": "'use client' at the top of a layout forces the entire workspace subtree onto the client; the directive is syntactically present on line 1." },
+    { "id": "hardcoded-role-check", "file": "src/app/(workspace)/layout.tsx", "line": 6, "min_level": "heuristic",
+      "rationale": "user.role === 'owner' is a literal role comparison in UI code; permissions should come from a server-provided matrix, not a role string baked into the client." }
+  ],
+  "forbidden": [
+    { "id": "hardcoded-role-check", "file": "src/components/Nav.tsx", "why_not_a_defect": "role === 'tablist' compares an ARIA role value, not a permission; it is UI semantics, not authorization." },
+    { "id": "client-boundary-too-high", "file": "src/app/(workspace)/page.tsx", "why_not_a_defect": "the page is a Server Component with no 'use client' directive." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

@@ -1,0 +1,23 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "insufficient-context",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Read by hand in app/components/search/SearchBox.vue: whether each control has an accessible name cannot be decided from the markup. The search <input> (line 7) has a BOUND :aria-label whose value is `query ? 'Clear search' : ''` -- empty when query is falsy, so the rendered name may be absent. The icon <button> (line 8) also takes its name from a bound :aria-label. Only a rendered page (the browser tier) can tell whether the names are ever empty. A correct auditor must NOT raise a confirmed/heuristic defect here and must not stay silent either: the honest output is a browser-tier (info) check, which is excluded from the defect counts. Derived from the bindings in the markup, not from the tool.",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "form-control-without-label",
+      "file": "app/components/search/SearchBox.vue",
+      "why_not_a_defect": "the input carries an :aria-label; a static 'missing label' defect would be wrong because an attribute is present -- only the rendered value (possibly empty) decides, which is a browser-tier info check, not a defect"
+    },
+    {
+      "id": "button-without-accessible-name",
+      "file": "app/components/search/SearchBox.vue",
+      "why_not_a_defect": "the button's name comes from a bound :aria-label; reporting a confirmed defect would overclaim, since the rendered name depends on runtime state -- a browser-tier info check is the correct response"
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

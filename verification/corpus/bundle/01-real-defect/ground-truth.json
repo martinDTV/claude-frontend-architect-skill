@@ -1,0 +1,18 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "category": "real-defect",
+  "source_of_truth": "Derived by hand from the build I wrote, not from the tool: the /app route's client-reference manifest lists static/chunks/heavy-vendor.js in clientModules with async:false, so it is part of the route's INITIAL client set (not a lazy chunk). That chunk is 300000 bytes raw of high-entropy base64; gzip on disk is 227272 bytes = 221.9 KB, far above route-attribution's 150 KB heuristic for a single initial chunk. A route shipping a ~222 KB gzip chunk on first load is a genuine initial-weight defect worth confirming. route-heavy-initial-chunk is HEURISTIC by design (hashed chunk names hide the library), so heuristic is the strongest honest level.",
+  "expected": [
+    {
+      "id": "route-heavy-initial-chunk",
+      "file": "/app",
+      "line": null,
+      "min_level": "heuristic",
+      "rationale": "heavy-vendor.js (221.9 KB gzip) sits in /app's initial client set (async:false in the client-reference manifest) and is the largest initial chunk, over the 150 KB threshold; this is the defect-level signal this auditor emits for bundle weight. line is null because the finding is attributed to a route PATH, not a source line."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

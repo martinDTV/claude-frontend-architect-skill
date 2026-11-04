@@ -1,0 +1,16 @@
+{
+  "area": "routes",
+  "tool": "routes-audit.mjs",
+  "category": "ambiguous",
+  "engine": "lexical",
+  "source_of_truth": "Read by hand: PostToolbar.tsx is client UI that compares user.role === 'editor' only to hide the Publish control; the real authorization lives in POST /api/posts, which reads getServerSession and rejects non-editors with 403. A correct auditor surfaces the literal role check as a heuristic to verify, but it is legitimate UX, not the security boundary, so it must be framed as 'confirm the server enforces this', never as 'the app is insecure' nor dismissed.",
+  "expected": [
+    { "id": "hardcoded-role-check", "file": "src/components/PostToolbar.tsx", "line": 8, "min_level": "heuristic",
+      "rationale": "a literal role comparison in UI code; correct to surface for verification, but it drives only a UI affordance and the route handler enforces the real check." }
+  ],
+  "forbidden": [
+    { "id": "route-handler-without-auth", "file": "src/app/api/posts/route.ts", "why_not_a_defect": "the POST handler calls getServerSession and checks role before mutating, so it has a visible auth check." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

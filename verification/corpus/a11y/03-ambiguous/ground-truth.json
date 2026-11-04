@@ -1,0 +1,21 @@
+{
+  "area": "a11y",
+  "tool": "ui-audit.mjs",
+  "engine": "semantic",
+  "category": "ambiguous",
+  "source_of_truth": "Read by hand in app/components/content/Article.vue: the outline goes <h1> then <h3> (line 4), skipping <h2>. This is genuinely ambiguous: it may be a real outline gap that breaks screen-reader heading navigation, or the author may have chosen <h3> only for its smaller default rendering while treating the two sections as equal siblings. Static markup cannot reveal intent, so the only honest classification is a heuristic worth a human read, never a confirmed defect. The second <h3> (line 6) is at the same level as the first, so it is NOT a skip and must not be flagged. Derived from the heading sequence in the markup, not from the tool.",
+  "expected": [
+    {
+      "id": "heading-level-skipped",
+      "file": "app/components/content/Article.vue",
+      "line": 4,
+      "min_level": "heuristic",
+      "rationale": "the first <h3> follows <h1> with no <h2> between them; a correct auditor surfaces this at heuristic/review level precisely because intent is undecidable from markup. Confirmed would overclaim; silence would miss a likely outline defect."
+    }
+  ],
+  "forbidden": [
+    { "id": "heading-level-skipped", "file": "app/components/content/Article.vue", "why_not_a_defect": "the second <h3> (line 6) is at the same level as the preceding heading, not a skip; flagging it would be a false positive" }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

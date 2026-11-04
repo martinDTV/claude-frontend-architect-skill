@@ -1,0 +1,23 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "correct-suspicious",
+  "source_of_truth": "Read by hand in a Nuxt 4 app with an explicit .frontend-audit.json. app/shared/money/format.ts is a pure, domain-free currency formatter classified as shared. Four business domains (pricing, billing, shipping, tax) each import it via `~/shared/money/format`. A superficial 'a file used by 4 domains is a hotspot' reading would flag it, but (a) the file is shared-kind, not a business domain, so it is correct for many domains to depend on it, and (b) it imports nothing from any domain, so shared-imports-domain does not apply. No boundary is broken; this is a correctly placed shared utility.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "cross-domain-hotspot",
+      "file": "app/shared/money/format.ts",
+      "why_not_a_defect": "the file is shared-kind (app/shared/**), the exact home for code many domains use; a shared utility used widely is its purpose, not a coupling defect."
+    },
+    {
+      "id": "shared-imports-domain",
+      "file": "app/shared/money/format.ts",
+      "why_not_a_defect": "the helper imports nothing from any business domain (only the Intl built-in); shared-imports-domain fires when shared code depends on a domain, which never happens here."
+    }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

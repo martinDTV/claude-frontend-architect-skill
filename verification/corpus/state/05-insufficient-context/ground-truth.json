@@ -1,0 +1,20 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "insufficient-context",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Reading app/composables/useCredentials.ts and resolving two local bindings: KEY = 'auth:jwt' and t = data.accessToken. localStorage.setItem(KEY, t) therefore persists the login JWT in web storage, a real credential leak. A human sees it by following the variables; it is a genuine defect, so a correct auditor SHOULD report token-in-web-storage on line 13. This is marked insufficient-context because grading it correctly requires variable resolution that a lexical, non-dataflow auditor lacks.",
+  "expected": [
+    {
+      "id": "token-in-web-storage",
+      "file": "app/composables/useCredentials.ts",
+      "line": 13,
+      "min_level": "confirmed",
+      "rationale": "KEY is the credential key 'auth:jwt' and t is data.accessToken; setItem(KEY, t) stores a JWT in localStorage - the same XSS-readable-token defect, just reached through indirection."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

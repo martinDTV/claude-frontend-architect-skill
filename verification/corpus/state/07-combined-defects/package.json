@@ -1,0 +1,1 @@
+{ "name": "corpus-state-combined", "private": true, "dependencies": { "nuxt": "^4.6.0", "@pinia/nuxt": "^1.0.0", "pinia": "^4.1.0", "pinia-plugin-persistedstate": "^4.0.0", "axios": "^1.21.0" } }

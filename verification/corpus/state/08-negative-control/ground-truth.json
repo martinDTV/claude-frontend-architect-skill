@@ -1,0 +1,15 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "negative-control",
+  "source_of_truth": "Reading all files: the HTTP client is created per request inside defineNuxtPlugin (never at module scope) with credentials:'include', so the session rides an HttpOnly cookie the server set and no token reaches JavaScript or web storage; the Pinia session store holds only client-owned state (no fetch, no entity array, no token, not persisted); and logout calls clearNuxtState and clearNuxtData. There is no module-level mutable state, no token in storage, no server data duplicated in a store, and no logout-without-cache-clear. A correct auditor reports zero defects.",
+  "expected": [],
+  "forbidden": [
+    { "id": "module-level-http-client-mutable-auth", "file": "app/plugins/api.ts", "why_not_a_defect": "the instance is created per request inside defineNuxtPlugin, not at module scope, and no auth header is mutated." },
+    { "id": "logout-without-cache-clear", "file": "app/stores/session.ts", "why_not_a_defect": "logout calls clearNuxtState and clearNuxtData." },
+    { "id": "token-in-web-storage", "file": "app/stores/session.ts", "why_not_a_defect": "no token is written to any web storage; the session is an HttpOnly cookie." }
+  ],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}

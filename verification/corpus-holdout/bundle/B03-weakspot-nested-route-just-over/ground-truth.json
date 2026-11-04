@@ -1,0 +1,16 @@
+{
+  "area": "bundle",
+  "tool": "route-attribution.mjs",
+  "engine": "lexical",
+  "category": "real-defect",
+  "scenario_polarity": "miss",
+  "source_of_truth": "Derived by hand from the build I wrote. The NESTED route /settings/billing (manifest key \"/settings/billing/page\") lists static/chunks/billing-tables.js in clientModules with async:false, so it is in the route's INITIAL set. That chunk is 210000 bytes raw of high-entropy base64; under gzipSync it is ~158192 bytes, which kb() rounds to ~154.5 KB gzip -- just over route-attribution's 150 KB cutoff, and it is the single largest initial chunk. A nested route shipping a ~154 KB gzip chunk on first load is a genuine initial-weight defect just over threshold. route-heavy-initial-chunk is HEURISTIC by design, so heuristic is the strongest honest level; the finding is path-attributed, so line is null.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output",
+  "expected": [
+    { "id": "route-heavy-initial-chunk", "file": "/settings/billing", "line": null, "min_level": "heuristic",
+      "rationale": "billing-tables.js (~154.5 KB gzip) is in /settings/billing's initial set (async:false) and is the largest initial chunk, just over the 150 KB threshold; this is the defect-level signal route-attribution emits for route initial weight." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [ "route-attribution", "route-attribution-unavailable" ],
+  "line_tolerance": 1
+}

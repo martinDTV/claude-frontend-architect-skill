@@ -1,0 +1,19 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "ambiguous",
+  "source_of_truth": "Reading two composables in two business domains: app/features/checkout/useCheckoutWizard.ts and app/features/onboarding/useOnboardingWizard.ts both call useState('wizardStep', () => 0). Nuxt's useState key is a process-global string, so both composables alias the SAME shared state: advancing the checkout wizard mutates the onboarding wizard. The literal appears in 2 files across 2 domains, which is a real cross-domain coupling smell with no typed owner. It is genuinely ambiguous (accidental key collision vs deliberate shared value), so heuristic is the honest level, raised because the key spans domains. The finding is emitted once per key; the tool reports it against one of the two owner files (it records the key's owners and lists all files as evidence), and it carries no line number.",
+  "provenance": "blind generalization: truth derived from source without consulting tool output. The single per-key finding's reported file is one of the two owners; truth lists the owner derived from source (checkout) and notes the file choice is an implementation detail of the tool, not part of the defect.",
+  "expected": [
+    {
+      "id": "raw-state-key-shared",
+      "file": "app/features/checkout/useCheckoutWizard.ts",
+      "min_level": "heuristic",
+      "rationale": "useState('wizardStep') is declared with an initializer (an owner) in two domains; the same global key backs both wizards. One heuristic raw-state-key-shared finding for the key is correct; wrapping the key in one typed composable is the fix. If the tool attributes the finding to the onboarding owner instead, it is the same correct finding on the sibling owner file, not a miss."
+    }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 2
+}

@@ -1,0 +1,1 @@
+{ "name": "corpus-state-syntactic-variant", "private": true, "dependencies": { "nuxt": "^4.6.0", "@vueuse/core": "^11.0.0" } }

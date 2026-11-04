@@ -1,0 +1,20 @@
+{
+  "area": "arch",
+  "tool": "domain-deps.mjs",
+  "engine": "lexical",
+  "category": "insufficient-evidence",
+  "scenario_polarity": "trap",
+  "source_of_truth": "Read by hand: the admin page's only cross-module access is `await import(`~/features/metrics/${which}`)`, a dynamic import whose specifier is a template literal computed from a runtime value. Statically it could resolve to metrics/index (fine) or metrics/internal/secret (a boundary break) depending on Math.random at runtime. No static analysis can decide which. The honest result is abstention: a correct auditor reports no boundary defect here and does not invent one. (It may legitimately note the unresolved dynamic import at info level, which is not a defect-level finding.)",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "feature-internal-import",
+      "file": "app/pages/admin/index.vue",
+      "why_not_a_defect": "the specifier is non-literal; the tool cannot know it reaches metrics/internal/secret, so reporting a boundary break would be an invented finding on unknowable evidence"
+    }
+  ],
+  "out_of_scope": [
+    "unresolved-import"
+  ],
+  "line_tolerance": 1
+}

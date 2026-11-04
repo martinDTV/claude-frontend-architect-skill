@@ -1,0 +1,13 @@
+{
+  "area": "state",
+  "tool": "state-audit.mjs",
+  "engine": "lexical",
+  "category": "ambiguous",
+  "source_of_truth": "Reading app/composables/useTenant.ts: activeTenantId is a module-level `let` reassigned by setActiveTenant. Under SSR (ssr defaults to true in nuxt.config.ts) module scope is shared by every request on the server process, so this is a cross-request tenant leak; with ssr:false it would be per-browser and safe. Because the real risk is conditional on the rendering mode, the correct verdict is a heuristic flag that names the SSR dependency, not a confirmed leak. A correct auditor reports module-level-mutable-state at heuristic.",
+  "expected": [
+    { "id": "module-level-mutable-state", "file": "app/composables/useTenant.ts", "line": 5, "min_level": "heuristic", "rationale": "Module-level mutable `let` holding per-tenant data; leaks across SSR requests but only if the app server-renders, so heuristic is the correct (and strongest honest) level." }
+  ],
+  "forbidden": [],
+  "out_of_scope": [],
+  "line_tolerance": 1
+}
