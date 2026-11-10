@@ -20,6 +20,8 @@
 #                       (the CLI's own claude.ai subscription login; needs EVAL_EXPECTED_ORG_ID=<org id from
 #                       `claude auth status`>, passed by the operator, never committed)
 #   MAX_TOTAL_USD=<usd> ceiling on the worst-case aggregate (cases x runs x arms x BUDGET), default 5
+#   CASE=<glob>         pilot only: run just the cases whose directory matches (for example CASE='96-*' to measure
+#                       one case's real consumption first); the aggregate estimate counts only the matching cases
 #
 # Results (JSON, HTML report, aggregate) go under plugins/frontend-architect/evals/results/<mode>-<timestamp>/,
 # which is gitignored. Summarize with: node verification/evals/summarize.mjs <that dir>
@@ -124,7 +126,12 @@ esac
 # replace watching the real spend — Google Cloud / Anthropic budget *alerts* are notifications, not hard caps.
 arms=2
 pilot_cases=$(grep -rl 'suite:pilot' "$PLUGIN/evals"/*/case.yaml 2>/dev/null | wc -l | tr -d ' ')
-[ "$MODE" = "pilot" ] && est_cases="$pilot_cases" || est_cases=1
+if [ "$MODE" = "pilot" ] && [ -n "${CASE:-}" ]; then
+  # only the pilot cases whose directory matches CASE count toward the estimate (a non-pilot match would not run)
+  est_cases=0
+  for d in "$PLUGIN/evals"/$CASE; do [ -f "$d/case.yaml" ] && grep -q 'suite:pilot' "$d/case.yaml" && est_cases=$((est_cases + 1)); done
+  [ "$est_cases" -gt 0 ] || { echo "refusing: CASE=$CASE matches no suite:pilot case" >&2; exit 2; }
+elif [ "$MODE" = "pilot" ]; then est_cases="$pilot_cases"; else est_cases=1; fi
 worst_total=$(( BUDGET * RUNS * arms * est_cases ))
 MAX_TOTAL_USD="${MAX_TOTAL_USD:-5}"
 if [ "$worst_total" -gt "$MAX_TOTAL_USD" ]; then
@@ -151,7 +158,7 @@ case "$MODE" in
   # The real containment is that each case runs in a throwaway scaffold cwd and the prompts are read-only;
   # treat Bash(node *) as least-privilege, not isolation. See docs/review/v1.7.0-pilot-plan.md.
   audit) cmd+=(--case '39-*' --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit MultiEdit WebFetch WebSearch) ;;
-  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit MultiEdit WebFetch WebSearch) ;;
+  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit MultiEdit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$CASE") ;;
   full) ;;
 esac
 

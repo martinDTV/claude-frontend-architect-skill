@@ -58,3 +58,21 @@ test('every pilot case has a verifiable ground truth and a scaffold or is an abs
     assert.equal(existsSync(join(evalsDir, c, 'scaffold.sh')), !isAbstain, `${c}: positives have a scaffold, abstentions do not`)
   }
 })
+
+// CASE=<glob> (post-5B): run a single pilot case first to measure real consumption; the aggregate estimate must count
+// only the matching pilot cases, and a glob that matches no pilot case must refuse rather than run everything.
+test('CASE=<glob> selects one pilot case and the aggregate estimate counts only it', () => {
+  const out = dry({ CASE: '96-*', MAX_TOTAL_USD: '2' }) // 1 x 1 x 2 x 1 = 2 <= 2; the full pilot (16) would refuse
+  assert.match(out, /--case 96-\\?\*/) // printf %q escapes the glob
+  assert.match(out, /worst-case aggregate 2 USD <= MAX_TOTAL_USD 2/)
+})
+test('CASE that matches no suite:pilot case refuses (never silently runs the whole suite)', () => {
+  let threw = false
+  try { dry({ CASE: '01-*' }) } catch (e) { threw = true; assert.match(String(e.stderr || e.message), /matches no suite:pilot case/) }
+  assert.ok(threw)
+})
+test('without CASE the pilot command carries no --case and estimates all eight', () => {
+  const out = dry({})
+  assert.doesNotMatch(out, /--case/)
+  assert.match(out, /worst-case aggregate 16 USD/)
+})
