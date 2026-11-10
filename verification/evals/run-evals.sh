@@ -201,7 +201,12 @@ echo "results: $OUT"
     dirs.add(path.dirname(path.dirname(r.tracePath)))
   })
   console.log(`traces copied: ${n} -> ${path.join(out, "traces")}`)
-  if (keep !== "1") for (const dir of dirs) if (/^\/(private\/)?tmp\/e-/.test(dir)) fs.rmSync(dir, { recursive: true, force: true })
+  // The CLI seals parts of the scaffold dir (0 permissions); restore u+rwx first and never fail the run on cleanup.
+  const { execFileSync } = require("child_process")
+  if (keep !== "1") for (const dir of dirs) if (/^\/(private\/)?tmp\/e-/.test(dir)) {
+    try { execFileSync("chmod", ["-R", "u+rwX", dir]); fs.rmSync(dir, { recursive: true, force: true }) }
+    catch (e) { console.log(`scaffold dir not removed (${e.code || e.message}): ${dir} — remove it by hand`) }
+  }
   else console.log(`scaffold dirs kept (KEEP_TEMP=1): ${[...dirs].join(" ")}`)
 ' "$OUT" "${KEEP_TEMP:-0}" || true
 [ -f "$OUT/result.json" ] && node "$ROOT/verification/evals/summarize.mjs" "$OUT" || true
