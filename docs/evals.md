@@ -144,7 +144,16 @@ Never run the suite without a cost ceiling. `verification/evals/run-evals.sh` al
 | `audit` | 39 only, scaffold and Bash enabled | `ALLOW_SCAFFOLD=1 ./verification/evals/run-evals.sh audit` |
 | `full` | all 48 | `BUDGET=<usd> CONFIRM=1 ./verification/evals/run-evals.sh full` |
 
-Defaults: one run per case and arm (`RUNS=1`), agent model `claude-haiku-5-5` (`MODEL=` to override), judge `haiku`, concurrency 1 so a budget overrun is bounded to one run, `--threshold 0` so the exit code reports budget and structure rather than scores (`THRESHOLD=` to override), `--no-publish`. `DRY=1` prints the command without running. Results go to `plugins/frontend-architect/evals/results/<mode>-<timestamp>/` (gitignored); `node verification/evals/summarize.mjs <dir>` prints per-case scores per arm, activation indicators, failed graders and cost fields.
+Provider (required, no default): `EVAL_PROVIDER=anthropic` (a personal `ANTHROPIC_API_KEY`), `vertex` (a personal
+GCP project, `ALLOW_VERTEX=1`, government-looking ids refused) or `claude-ai` (the CLI's own claude.ai subscription
+login; `EVAL_EXPECTED_ORG_ID=<orgId from `claude auth status`>`, no key/flag/endpoint of any other provider set).
+The script refuses to run without one and never falls back to inherited credentials. Under a subscription
+`--max-cost-usd` bounds the cost the CLI *estimates*, not an invoice — consumption is plan usage. Run under a clean
+environment (`env -i HOME=… PATH=… USER=…`; `USER` is needed for the macOS Keychain login to resolve).
+`MAX_TOTAL_USD` (default 5) caps the worst-case aggregate (cases × runs × arms × `BUDGET`), because
+`--max-cost-usd` is per run. `DRY=1` needs no `claude` CLI — only a real run does.
+
+Defaults: one run per case and arm (`RUNS=1`), agent model `claude-haiku-5-5` (`MODEL=` to override), judge `haiku`, concurrency 1 so a budget overrun is bounded to one run, `--threshold 0` so the exit code reports budget and structure rather than scores (`THRESHOLD=` to override), `--no-publish`. Results go to `plugins/frontend-architect/evals/results/<mode>-<timestamp>/` (gitignored); `node verification/evals/summarize.mjs <dir>` prints per-case scores per arm, activation indicators, failed graders and cost fields.
 
 Smoke subset rationale: one stage-0 "say no" (01), one microfrontends refusal (08), one creative activation (21), the 80k-line modular monolith decision (23), one Three.js refusal (34), two out-of-scope prompts (44, 45) and one case that needs both skills (48). Eight cases, both arms, one run each.
 

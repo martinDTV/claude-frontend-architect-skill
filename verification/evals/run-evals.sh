@@ -15,7 +15,11 @@
 #   JUDGE_MODEL=<id>    LLM grader model (default haiku)
 #   RUNS=<n>            runs per case and arm (default 1)
 #   THRESHOLD=<0..1>    exit 1 below this case score (default 0: exit code reports budget and structure, not scores)
-#   DRY=1               print the command and exit
+#   DRY=1               print the command and exit (needs no claude CLI: the CLI is only required to run)
+#   EVAL_PROVIDER=<p>   REQUIRED, no default: anthropic (ANTHROPIC_API_KEY) | vertex (personal project) | claude-ai
+#                       (the CLI's own claude.ai subscription login; needs EVAL_EXPECTED_ORG_ID=<org id from
+#                       `claude auth status`>, passed by the operator, never committed)
+#   MAX_TOTAL_USD=<usd> ceiling on the worst-case aggregate (cases x runs x arms x BUDGET), default 5
 #
 # Results (JSON, HTML report, aggregate) go under plugins/frontend-architect/evals/results/<mode>-<timestamp>/,
 # which is gitignored. Summarize with: node verification/evals/summarize.mjs <that dir>
@@ -47,14 +51,13 @@ case "$MODE" in
   *) echo "unknown mode: $MODE"; usage; exit 2 ;;
 esac
 
-command -v claude >/dev/null || { echo "claude CLI not found"; exit 2; }
-
 # ---- provider selection (5A.1 hardening) ---------------------------------------------------------------
 # The caller MUST choose the provider explicitly with EVAL_PROVIDER; the script never falls back silently to
 # whatever credentials the shell happens to carry (this environment, for instance, has CLAUDE_CODE_USE_VERTEX=1
 # and a government ADC in ~/.config/gcloud — running without this guard would bill that project). There is no
 # default: an unset or unknown EVAL_PROVIDER refuses to run. The script does NOT itself authorize any provider;
 # it only enforces that exactly one intended provider is active and that no other provider's config leaks in.
+# Order inside each branch: cheap environment checks first, then (claude-ai only) a live probe of the CLI login.
 case "${EVAL_PROVIDER:-}" in
   anthropic)
     # Personal Anthropic API. Require a key and forbid any Vertex/Bedrock flags from leaking in.
@@ -80,8 +83,36 @@ case "${EVAL_PROVIDER:-}" in
     [ "${ALLOW_VERTEX:-}" = "1" ] || { echo "refusing: Vertex needs ALLOW_VERTEX=1 to confirm this is a personal project you are authorized to bill" >&2; exit 2; }
     [ "${CLAUDE_CODE_USE_BEDROCK:-}" = "1" ] && { echo "refusing: both Vertex and Bedrock flags are set" >&2; exit 2; }
     ;;
+  claude-ai)
+    # The CLI's own claude.ai login (a personal subscription). No key, no cloud flag and no alternative endpoint may
+    # be set: any of them would make the CLI bill a different provider than the one the operator named. The login is
+    # then probed live (`claude auth status`, JSON; exit code is 0 even when logged out, so fields are parsed) and
+    # must be a first-party claude.ai login for exactly the org the operator expects. EVAL_EXPECTED_ORG_ID is passed
+    # by the operator (it is a personal identifier and is never committed). EVAL_AUTH_PROBE is a test seam: the
+    # offline tests point it at a fixture that prints a status document; it does not weaken the checks themselves.
+    for v in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_FOUNDRY_API_KEY ANTHROPIC_VERTEX_PROJECT_ID; do
+      [ -n "${!v:-}" ] && { echo "refusing: EVAL_PROVIDER=claude-ai but $v is set (another provider would be billed)" >&2; exit 2; }
+    done
+    [ "${CLAUDE_CODE_USE_VERTEX:-}" = "1" ] && { echo "refusing: EVAL_PROVIDER=claude-ai but CLAUDE_CODE_USE_VERTEX=1 is set (run under env -i to clear it)" >&2; exit 2; }
+    [ "${CLAUDE_CODE_USE_BEDROCK:-}" = "1" ] && { echo "refusing: EVAL_PROVIDER=claude-ai but CLAUDE_CODE_USE_BEDROCK=1 is set" >&2; exit 2; }
+    [ -n "${EVAL_EXPECTED_ORG_ID:-}" ] || { echo "EVAL_PROVIDER=claude-ai needs EVAL_EXPECTED_ORG_ID=<orgId reported by: claude auth status>" >&2; exit 2; }
+    probe="${EVAL_AUTH_PROBE:-claude auth status}"
+    status="$($probe 2>/dev/null)" || { echo "refusing: the login probe ($probe) failed (under env -i, carry USER: the macOS Keychain login is resolved by user name)" >&2; exit 2; }
+    verdict="$(printf '%s' "$status" | node -e '
+      let d; try { d = JSON.parse(require("fs").readFileSync(0, "utf8")) } catch { console.log("unparseable status"); process.exit(0) }
+      const want = process.argv[1]
+      if (d.loggedIn !== true) console.log("not logged in")
+      else if (d.authMethod !== "claude.ai") console.log("authMethod is " + d.authMethod + ", not claude.ai")
+      else if (d.apiProvider !== "firstParty") console.log("apiProvider is " + d.apiProvider + ", not firstParty")
+      else if (d.orgId !== want) console.log("orgId " + d.orgId + " != EVAL_EXPECTED_ORG_ID")
+      else console.log("ok")
+    ' "$EVAL_EXPECTED_ORG_ID")"
+    [ "$verdict" = "ok" ] || { echo "refusing: claude.ai login check: $verdict" >&2; exit 2; }
+    echo "provider: claude-ai subscription login (org $EVAL_EXPECTED_ORG_ID). NOTE: under a subscription --max-cost-usd bounds the"
+    echo "  cost the CLI ESTIMATES, not an invoice; real consumption is plan usage. Watch it in the account's usage view."
+    ;;
   *)
-    echo "EVAL_PROVIDER must be set explicitly (anthropic | vertex). No default, no silent fallback." >&2
+    echo "EVAL_PROVIDER must be set explicitly (anthropic | vertex | claude-ai). No default, no silent fallback." >&2
     echo "This environment currently has CLAUDE_CODE_USE_VERTEX=${CLAUDE_CODE_USE_VERTEX:-unset}; run the pilot under a clean env (env -i) with a personal provider." >&2
     exit 2
     ;;
@@ -127,6 +158,8 @@ esac
 echo "budget ceiling: $BUDGET USD (checked before each run; with -j 1 the overrun is bounded to one run)"
 printf 'command:'; printf ' %q' "${cmd[@]}"; echo
 [ "${DRY:-}" = "1" ] && exit 0
+# The CLI is needed only from here on (DRY and the guards above must work on a machine without it, e.g. CI).
+command -v claude >/dev/null || { echo "claude CLI not found"; exit 2; }
 mkdir -p "$OUT"
 set +e
 "${cmd[@]}"

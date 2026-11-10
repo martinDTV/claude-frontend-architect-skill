@@ -4,6 +4,21 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 
 ## [Unreleased]
 
+Harness only (5B). No production script, rule, contract or manifest changed; the published version stays 1.7.0.
+
+### Fixed
+- CI: `verify-examples` was red on the 1.7.0 tip because `verification/evals/run-evals.sh` required the `claude`
+  CLI before honouring `DRY=1`, and that job does not install the CLI; 11 offline pilot tests failed on the runner
+  while passing locally. The CLI is now required only for a real run; `DRY` and every guard work without it, and a
+  regression test runs the harness on a PATH with no `claude`.
+
+### Added
+- `EVAL_PROVIDER=claude-ai`: run the evals with the CLI's own claude.ai subscription login. Accepted only when
+  `claude auth status` (parsed, not trusted by exit code) reports a logged-in, first-party claude.ai login of
+  exactly the org the operator names in `EVAL_EXPECTED_ORG_ID` (never committed), and no key, flag or endpoint of
+  another provider is set. The script states plainly that under a subscription `--max-cost-usd` bounds the cost the
+  CLI *estimates*, not an invoice. Eleven adversarial tests. Behavioural evals remain **NOT_RUN**.
+
 ## [1.7.0] - 2026-11-04
 
 Evaluation infrastructure and a measurement fix — not a new audit capability. v1.7.0 adds the machinery to
