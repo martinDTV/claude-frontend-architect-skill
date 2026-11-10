@@ -151,14 +151,17 @@ case "$MODE" in
   smoke) cmd+=(--tag suite:smoke) ;;
   activation) cmd+=(--tag suite:activation) ;;
   tag) cmd+=(--tag "$ARG") ;;
+  # The disallow list names only tools the CLI can remove: `claude plugin eval` refuses to start ("cannot be
+  # disallowed ... No case was run") if a name is not a built-in of the running version — MultiEdit was removed
+  # in CLI 2.1.x and the first pilot attempt (2026-11-10) did not run for that reason (0 cost). Keep bare names.
   # 5A.1 hardening: the audit/pilot cases need Bash ONLY to run the plugin's Node audit scripts, so grant
   # Bash(node *) rather than full Bash, and disallow the tools a read-only audit never needs (Write/Edit/
   # Web/MCP). This SHRINKS the surface — it does NOT sandbox: the CLI runs scaffolds and tools as you,
   # outside the OS sandbox, and Bash(node *) still runs node, which can itself read/write files via fs.
   # The real containment is that each case runs in a throwaway scaffold cwd and the prompts are read-only;
   # treat Bash(node *) as least-privilege, not isolation. See docs/review/v1.7.0-pilot-plan.md.
-  audit) cmd+=(--case '39-*' --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit MultiEdit WebFetch WebSearch) ;;
-  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit MultiEdit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$CASE") ;;
+  audit) cmd+=(--case '39-*' --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit WebFetch WebSearch) ;;
+  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$CASE") ;;
   full) ;;
 esac
 

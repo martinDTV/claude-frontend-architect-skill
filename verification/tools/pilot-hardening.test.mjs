@@ -83,7 +83,7 @@ test('a safe anthropic config assembles the command with least-privilege Bash an
   assert.match(r.out, /^command:/m)
   // printf %q escapes the pattern, so match tolerant of backslash-escaping: Bash(node *) in any escaped form
   assert.match(r.out, /--allow-tools Bash\\?\(node\\?[ \\]+\\?\*\\?\)/, 'Bash is granted only for node, not full Bash')
-  assert.match(r.out, /--disallow-tools Write Edit MultiEdit WebFetch WebSearch/, 'write/web tools are disallowed')
+  assert.match(r.out, /--disallow-tools Write Edit WebFetch WebSearch/, 'write/web tools are disallowed')
   assert.match(r.out, /--no-publish/, 'results stay local')
   assert.match(r.out, /--max-cost-usd 1/, 'the per-run ceiling is passed')
 })
@@ -193,11 +193,17 @@ test('claude-ai: a first-party login of the expected org assembles the same leas
   assert.match(r.out, /^command:/m)
   assert.match(r.out, /--max-cost-usd 1/)
   assert.match(r.out, /--no-publish/)
-  assert.match(r.out, /--disallow-tools Write Edit MultiEdit WebFetch WebSearch/)
+  assert.match(r.out, /--disallow-tools Write Edit WebFetch WebSearch/)
   assert.match(r.out, /bounds the\s+cost the CLI ESTIMATES, not an invoice/, 'under a subscription the ceiling is an estimate bound, stated as such')
 })
 
 test('claude-ai: the unknown-provider message lists all three providers', () => {
   const r = dryNoCli({ BUDGET: '1' })
   assert.match(r.out, /anthropic \| vertex \| claude-ai/)
+})
+
+test('the disallow list names only tools the running CLI can remove (MultiEdit made the first pilot refuse to start)', () => {
+  const r = dryNoCli({ BUDGET: '1', MAX_TOTAL_USD: '20', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
+  assert.equal(r.code, 0, r.out)
+  assert.doesNotMatch(r.out, /MultiEdit/, 'MultiEdit is not a built-in tool of CLI 2.1.x; naming it aborts the whole eval with 0 cases run')
 })
