@@ -19,7 +19,7 @@ Harness only (5B). No production script, rule, contract or manifest changed; the
 - Eval harness: `--disallow-tools` no longer names `MultiEdit` (not a built-in of CLI 2.1.x; naming it aborted the
   run with 0 cases); `CASE=<glob>` runs one pilot case, translating the directory glob to the `name:` the CLI
   filters on; every run's `trace.jsonl` is copied to `results/<run>/traces/` (the scaffold temp dirs are then
-  removed unless `KEEP_TEMP=1`); the Bash grant is written as `Bash(node:*)`.
+  removed unless `KEEP_TEMP=1`); the Bash grant is a read-only allowlist (`Bash(node:*)` plus ls/cat/pwd/find/grep/head/tail/wc/tree): the first real run granted only `node:*`, the agent's first call was `pwd && ls && cat`, and after the denial it never tried a script.
 
 ### Added
 - `EVAL_PROVIDER=claude-ai`: run the evals with the CLI's own claude.ai subscription login. Accepted only when

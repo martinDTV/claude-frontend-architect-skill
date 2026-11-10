@@ -152,6 +152,11 @@ OUT="$PLUGIN/evals/results/$MODE-$STAMP"
 
 # --keep-temp so each run's trace.jsonl survives long enough to be copied next to the results (below); the scaffold
 # dirs are then removed unless KEEP_TEMP=1 asks to keep them for debugging. Without the traces a run cannot be audited.
+# Read-only Bash grant (decided 2026-11-10 after the first real run): node for the plugin's scripts plus the shell
+# commands an auditor reads with. The first run granted only Bash(node:*); the agent's first call was `pwd && ls &&
+# cat`, the denial message does not say "only node", and the model concluded Bash was unavailable and never ran a
+# script. Every subcommand of a compound command must match a rule. Still no write, no network, NOT a sandbox.
+READ_ONLY_BASH=('Bash(node:*)' 'Bash(ls:*)' 'Bash(ls)' 'Bash(cat:*)' 'Bash(pwd)' 'Bash(find:*)' 'Bash(grep:*)' 'Bash(head:*)' 'Bash(tail:*)' 'Bash(wc:*)' 'Bash(tree:*)' 'Bash(tree)')
 cmd=(claude plugin eval "$PLUGIN"
   --runs "$RUNS" -j 1 --no-publish --trust-plugin --keep-temp
   --model "$MODEL" --judge-model "$JUDGE_MODEL"
@@ -170,8 +175,8 @@ case "$MODE" in
   # outside the OS sandbox, and Bash(node:*) still runs node, which can itself read/write files via fs.
   # The real containment is that each case runs in a throwaway scaffold cwd and the prompts are read-only;
   # treat Bash(node:*) as least-privilege, not isolation. See docs/review/v1.7.0-pilot-plan.md.
-  audit) cmd+=(--case '39-*' --scaffold --allow-tools 'Bash(node:*)' --disallow-tools Write Edit WebFetch WebSearch) ;;
-  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node:*)' --disallow-tools Write Edit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$case_name") ;;
+  audit) cmd+=(--case '39-*' --scaffold --allow-tools "${READ_ONLY_BASH[@]}" --disallow-tools Write Edit WebFetch WebSearch) ;;
+  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools "${READ_ONLY_BASH[@]}" --disallow-tools Write Edit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$case_name") ;;
   full) ;;
 esac
 

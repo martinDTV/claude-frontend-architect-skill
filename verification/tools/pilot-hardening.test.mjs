@@ -211,3 +211,13 @@ test('the disallow list names only tools the running CLI can remove (MultiEdit m
   assert.equal(r.code, 0, r.out)
   assert.doesNotMatch(r.out, /MultiEdit/, 'MultiEdit is not a built-in tool of CLI 2.1.x; naming it aborts the whole eval with 0 cases run')
 })
+
+test('the Bash grant is a read-only allowlist: node plus reading commands, never a bare Bash, write, package or network command', () => {
+  const r = dryNoCli({ BUDGET: '1', MAX_TOTAL_USD: '20', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
+  assert.equal(r.code, 0, r.out)
+  const cmd = r.out.split('\n').find((l) => l.startsWith('command:')) || ''
+  const grants = [...cmd.matchAll(/Bash\\?\(([a-z]+)/g)].map((m) => m[1])
+  for (const want of ['node', 'ls', 'cat', 'pwd', 'find', 'grep']) assert.ok(grants.includes(want), `grants ${want}`)
+  for (const never of ['rm', 'npm', 'npx', 'pnpm', 'curl', 'wget', 'git', 'mv', 'cp', 'chmod', 'sh', 'bash']) assert.ok(!grants.includes(never), `never grants ${never}`)
+  assert.doesNotMatch(cmd, /--allow-tools(?: Bash\\?\([^)]*\\?\))* Bash(?: |$)/, 'no bare Bash grant')
+})
