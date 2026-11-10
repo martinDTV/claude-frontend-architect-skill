@@ -8,7 +8,7 @@
 // operator names, with no key/flag/endpoint of any other provider set. The login probe is a test seam (EVAL_AUTH_PROBE).
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, chmodSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, chmodSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -95,8 +95,16 @@ test('the Bash grant is documented as least-privilege, NOT a sandbox (honesty of
 })
 
 // ---- 5B: CI condition — no claude CLI on PATH ----------------------------------------------------------------------
-// A PATH with only the system dirs and node's own dir: `claude` is absent, exactly like the verify-examples CI job.
-const barePath = `${dirname(process.execPath)}:/usr/bin:/bin`
+// A PATH where `claude` is guaranteed absent: a temp dir holding ONLY a symlink to node, plus the system dirs.
+// NOT node's own bin dir — `npm install -g` puts `claude` there (the validate-plugin CI job does exactly that), and a
+// test that can reach the CLI could launch a real `claude plugin eval`. The precondition below makes that impossible.
+const bareBin = mkdtempSync(join(tmpdir(), 'fa-bare-bin-'))
+symlinkSync(process.execPath, join(bareBin, 'node'))
+const barePath = `${bareBin}:/usr/bin:/bin`
+test('precondition: the bare PATH cannot reach a claude CLI (so no test below can launch a real run)', () => {
+  const r = (() => { try { execFileSync('bash', ['-c', 'command -v claude'], { encoding: 'utf8', env: { PATH: barePath } }); return 0 } catch (e) { return e.status ?? 1 } })()
+  assert.notEqual(r, 0, `claude is reachable on the bare PATH (${barePath}); refusing to run the no-CLI tests`)
+})
 function dryNoCli(env) {
   try {
     const out = execFileSync('bash', [runEvals, 'pilot'], { cwd: root, encoding: 'utf8', env: { PATH: barePath, HOME: process.env.HOME, DRY: '1', ALLOW_SCAFFOLD: '1', ...env } })
@@ -119,6 +127,9 @@ test('the guards refuse with their OWN message on a machine without the CLI (not
 })
 
 test('a real (non-DRY) run still requires the CLI and stops before running anything', () => {
+  let reachable = true
+  try { execFileSync('bash', ['-c', 'command -v claude'], { encoding: 'utf8', env: { PATH: barePath } }) } catch { reachable = false }
+  assert.equal(reachable, false, 'precondition: claude must be unreachable, otherwise this test would launch a real run')
   const r = dryNoCli({ DRY: '', BUDGET: '1', MAX_TOTAL_USD: '20', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
   assert.equal(r.code, 2)
   assert.match(r.out, /claude CLI not found/)
