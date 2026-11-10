@@ -113,7 +113,7 @@ function run(s) {
     '-p', '--output-format', 'stream-json', '--verbose', '--max-turns', '14', '--permission-mode', 'default', '--model', model,
     '--plugin-dir', pluginDir,
     ...pluginDirs.flatMap((d) => ['--plugin-dir', d]),
-    '--allowedTools', 'Read,Glob,Grep,Skill,Bash(node *)',
+    '--allowedTools', 'Read,Glob,Grep,Skill,Bash(node:*)',
     '--disallowedTools', 'Bash(npx *),Bash(npm *),Bash(pnpm *),Bash(curl *),Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Agent',
   ]
   // the tool lists are variadic options: the prompt travels through stdin so it is never read as a tool name

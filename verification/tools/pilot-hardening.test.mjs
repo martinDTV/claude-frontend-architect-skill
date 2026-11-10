@@ -2,7 +2,7 @@
 // DRY mode (prints the command, invokes NO model, spends NO tokens) and assert the controls REFUSE unsafe configurations
 // and only assemble a command for a safe one. They encode, and prove, the honest limits: the provider guard forbids a
 // silent fallback and the government project; the aggregate-budget guard refuses a worst-case over the cap; the Bash
-// grant is least-privilege (Bash(node *)) with Write/Edit/Web disallowed — a surface reduction, NOT an OS sandbox.
+// grant is least-privilege (Bash(node:*)) with Write/Edit/Web disallowed — a surface reduction, NOT an OS sandbox.
 // 5B adds: DRY and every guard must work on a machine WITHOUT the claude CLI (the CI runner — the 1.7.0 CI failure), and
 // the claude-ai provider (the CLI's own subscription login) is accepted only for a first-party login of the org the
 // operator names, with no key/flag/endpoint of any other provider set. The login probe is a test seam (EVAL_AUTH_PROBE).
@@ -81,8 +81,12 @@ test('a safe anthropic config assembles the command with least-privilege Bash an
   const r = dry({ BUDGET: '1', MAX_TOTAL_USD: '20', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
   assert.equal(r.code, 0, r.out)
   assert.match(r.out, /^command:/m)
-  // printf %q escapes the pattern, so match tolerant of backslash-escaping: Bash(node *) in any escaped form
-  assert.match(r.out, /--allow-tools Bash\\?\(node\\?[ \\]+\\?\*\\?\)/, 'Bash is granted only for node, not full Bash')
+  // printf %q escapes the pattern, so match tolerant of backslash-escaping: Bash(node:*) in any escaped form
+  assert.match(r.out, /--allow-tools Bash\\?\(node:\\?\*\\?\)/, 'Bash is granted only for node, not full Bash')
+  // The grant is written in the `Tool(prefix:*)` form the eval CLI's help documents. (The permissions docs say
+  // `Bash(node *)` is equivalent; the first pilot run's Bash denial was NOT this — the case's allowed_tools sat at the
+  // top level of case.yaml and was ignored, see eval-case-schema.test.mjs. The colon form is kept for consistency.)
+  assert.doesNotMatch(r.out, /Bash\\?\(node\\?[ ]/, 'the grant uses the Tool(prefix:*) form the eval CLI documents')
   assert.match(r.out, /--disallow-tools Write Edit WebFetch WebSearch/, 'write/web tools are disallowed')
   assert.match(r.out, /--no-publish/, 'results stay local')
   assert.match(r.out, /--max-cost-usd 1/, 'the per-run ceiling is passed')
@@ -90,7 +94,7 @@ test('a safe anthropic config assembles the command with least-privilege Bash an
 
 test('the Bash grant is documented as least-privilege, NOT a sandbox (honesty of the control)', () => {
   const src = execFileSync('cat', [runEvals], { encoding: 'utf8' })
-  assert.match(src, /does NOT sandbox/, 'the script states Bash(node *) is not isolation')
+  assert.match(src, /does NOT sandbox/, 'the script states Bash(node:*) is not isolation')
   assert.match(src, /node, which can itself read\/write files/, 'it states node can still touch the fs')
 })
 

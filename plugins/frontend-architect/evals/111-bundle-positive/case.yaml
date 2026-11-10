@@ -7,12 +7,12 @@ description: >
   (run with: claude plugin eval ./plugins/frontend-architect --case 111-bundle-positive --allow-tools Bash).
 expected_outcome: "route-attribution run against the build; the /heavy route reported with a heavy initial chunk (route-heavy-initial-chunk, heuristic); framed as a lead to confirm in the analyzer, build-associated size not bytes transferred; no file modified"
 tags: ["activation:architect", "domain:audit", "domain:performance", "domain:bundle", "suite:pilot"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     This Next.js app has a production build (.next) in the current directory. Attribute the client JavaScript
     to each route and tell me which route ships the most on initial load. Separate what the build demonstrates

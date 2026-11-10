@@ -6,12 +6,12 @@ description: >
   (run with: claude plugin eval ./plugins/frontend-architect --case 102-routes-positive --allow-tools Bash).
 expected_outcome: "routes-audit run; the unguarded /billing/invoices page found with its path; guard framed as a UX gate, not a security guarantee; no file modified"
 tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:security", "suite:pilot"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Audit the routes and guards of the Nuxt 4 frontend in the current directory (read-only) and tell me
     which pages are not protected. Separate what you demonstrated in the code from what is only a risk.

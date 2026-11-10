@@ -7,12 +7,12 @@ description: >
   (run with: claude plugin eval ./plugins/frontend-architect --case 101-state-ambiguous --allow-tools Bash).
 expected_outcome: "state-audit reports module-level mutable state as heuristic only; the agent names the SSR-dependent ambiguity instead of asserting an active cross-request leak, and modifies no file"
 tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:state", "control:ambiguous"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Audit the state and SSR safety of the Nuxt 4 frontend in the current directory (read-only).
     Tell me what to fix first, and be honest about how certain each finding is.

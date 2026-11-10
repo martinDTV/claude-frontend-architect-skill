@@ -12,6 +12,15 @@ Harness only (5B). No production script, rule, contract or manifest changed; the
   while passing locally. The CLI is now required only for a real run; `DRY` and every guard work without it, and a
   regression test runs the harness on a PATH with no `claude`.
 
+- Eval cases: the 21 tool-using cases (39, 96–115) declared `allowed_tools`, `max_turns` and `timeout_seconds` at
+  the top level of `case.yaml`; schema 1.1 reads them under `execution:` and ignored them silently (no validator
+  objects), so the first real pilot run (2026-11-10) executed with the defaults — no Bash, 10 turns, 300 s — and
+  the plugin arm could not run an auditor. Moved under `execution:`; a test pins the placement.
+- Eval harness: `--disallow-tools` no longer names `MultiEdit` (not a built-in of CLI 2.1.x; naming it aborted the
+  run with 0 cases); `CASE=<glob>` runs one pilot case, translating the directory glob to the `name:` the CLI
+  filters on; every run's `trace.jsonl` is copied to `results/<run>/traces/` (the scaffold temp dirs are then
+  removed unless `KEEP_TEMP=1`); the Bash grant is written as `Bash(node:*)`.
+
 ### Added
 - `EVAL_PROVIDER=claude-ai`: run the evals with the CLI's own claude.ai subscription login. Accepted only when
   `claude auth status` (parsed, not trusted by exit code) reports a logged-in, first-party claude.ai login of
@@ -49,7 +58,7 @@ safety, or a guaranteed billing cap is made anywhere.
   part and an E2 human judgement that no automated signal can pass (`verification/impl-quality/`).
 - **Behavioural-pilot readiness, hardened.** An eight-case pilot wired for `claude plugin eval`, with the
   harness requiring an explicit provider (no silent fallback), refusing institutional/government billing,
-  computing a worst-case aggregate budget, and granting Bash least-privilege as `Bash(node *)`; validated
+  computing a worst-case aggregate budget, and granting Bash least-privilege as `Bash(node:*)`; validated
   offline only (`verification/evals/run-evals.sh`, `docs/review/v1.7.0-*.md`). **The pilot is NOT RUN.**
 
 ### Fixed
@@ -61,7 +70,7 @@ safety, or a guaranteed billing cap is made anywhere.
 ### Notes
 - **No new audit script; still fifteen.** No production rule, finding id, level, JSON field, exit code,
   reference or baseline changed. A v1.6.0 project behaves identically.
-- **`Bash(node *)` is least-privilege, not an OS sandbox**, and the harness aggregate-budget guard is the
+- **`Bash(node:*)` is least-privilege, not an OS sandbox**, and the harness aggregate-budget guard is the
   script's own check, not a guaranteed billing cap. Eval cases 85–95 and the behavioural pilot remain
   **NOT_RUN — no personal model provider configured**; the institutional/government provider must not bill
   this personal project.

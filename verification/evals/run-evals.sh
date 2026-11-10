@@ -16,6 +16,7 @@
 #   RUNS=<n>            runs per case and arm (default 1)
 #   THRESHOLD=<0..1>    exit 1 below this case score (default 0: exit code reports budget and structure, not scores)
 #   DRY=1               print the command and exit (needs no claude CLI: the CLI is only required to run)
+#   KEEP_TEMP=1         keep the scaffold temp dirs after the traces were copied to results/<run>/traces/
 #   EVAL_PROVIDER=<p>   REQUIRED, no default: anthropic (ANTHROPIC_API_KEY) | vertex (personal project) | claude-ai
 #                       (the CLI's own claude.ai subscription login; needs EVAL_EXPECTED_ORG_ID=<org id from
 #                       `claude auth status`>, passed by the operator, never committed)
@@ -149,8 +150,10 @@ fi
 echo "budget: per-run ceiling $BUDGET USD; worst-case aggregate $worst_total USD <= MAX_TOTAL_USD $MAX_TOTAL_USD (alerts are not hard caps; watch real spend)"
 OUT="$PLUGIN/evals/results/$MODE-$STAMP"
 
+# --keep-temp so each run's trace.jsonl survives long enough to be copied next to the results (below); the scaffold
+# dirs are then removed unless KEEP_TEMP=1 asks to keep them for debugging. Without the traces a run cannot be audited.
 cmd=(claude plugin eval "$PLUGIN"
-  --runs "$RUNS" -j 1 --no-publish --trust-plugin
+  --runs "$RUNS" -j 1 --no-publish --trust-plugin --keep-temp
   --model "$MODEL" --judge-model "$JUDGE_MODEL"
   --max-cost-usd "$BUDGET" --threshold "$THRESHOLD"
   --output-dir "$OUT" --json "$OUT/result.json" --report "$OUT/report.html")
@@ -162,13 +165,13 @@ case "$MODE" in
   # disallowed ... No case was run") if a name is not a built-in of the running version — MultiEdit was removed
   # in CLI 2.1.x and the first pilot attempt (2026-11-10) did not run for that reason (0 cost). Keep bare names.
   # 5A.1 hardening: the audit/pilot cases need Bash ONLY to run the plugin's Node audit scripts, so grant
-  # Bash(node *) rather than full Bash, and disallow the tools a read-only audit never needs (Write/Edit/
+  # Bash(node:*) rather than full Bash, and disallow the tools a read-only audit never needs (Write/Edit/
   # Web/MCP). This SHRINKS the surface — it does NOT sandbox: the CLI runs scaffolds and tools as you,
-  # outside the OS sandbox, and Bash(node *) still runs node, which can itself read/write files via fs.
+  # outside the OS sandbox, and Bash(node:*) still runs node, which can itself read/write files via fs.
   # The real containment is that each case runs in a throwaway scaffold cwd and the prompts are read-only;
-  # treat Bash(node *) as least-privilege, not isolation. See docs/review/v1.7.0-pilot-plan.md.
-  audit) cmd+=(--case '39-*' --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit WebFetch WebSearch) ;;
-  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$case_name") ;;
+  # treat Bash(node:*) as least-privilege, not isolation. See docs/review/v1.7.0-pilot-plan.md.
+  audit) cmd+=(--case '39-*' --scaffold --allow-tools 'Bash(node:*)' --disallow-tools Write Edit WebFetch WebSearch) ;;
+  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node:*)' --disallow-tools Write Edit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$case_name") ;;
   full) ;;
 esac
 
@@ -184,5 +187,22 @@ code=$?
 set -e
 echo "exit code: $code (0 ok, 1 below threshold, 2 budget hit or partial)"
 echo "results: $OUT"
+# Preserve the evidence: copy every run's trace.jsonl under $OUT/traces/<case>-<arm>-<n>.jsonl, then drop the scaffold
+# temp dirs (only the ones the result names) unless KEEP_TEMP=1.
+[ -f "$OUT/result.json" ] && node -e '
+  const fs = require("fs"), path = require("path")
+  const [out, keep] = process.argv.slice(1)
+  const d = JSON.parse(fs.readFileSync(path.join(out, "result.json"), "utf8"))
+  const dirs = new Set(); let n = 0
+  for (const c of d.cases || []) for (const [arm, runs] of Object.entries(c.arms || {})) (runs || []).forEach((r, i) => {
+    if (!r.tracePath || !fs.existsSync(r.tracePath)) return
+    fs.mkdirSync(path.join(out, "traces"), { recursive: true })
+    fs.copyFileSync(r.tracePath, path.join(out, "traces", `${c.name}-${arm}-${i}.jsonl`)); n++
+    dirs.add(path.dirname(path.dirname(r.tracePath)))
+  })
+  console.log(`traces copied: ${n} -> ${path.join(out, "traces")}`)
+  if (keep !== "1") for (const dir of dirs) if (/^\/(private\/)?tmp\/e-/.test(dir)) fs.rmSync(dir, { recursive: true, force: true })
+  else console.log(`scaffold dirs kept (KEEP_TEMP=1): ${[...dirs].join(" ")}`)
+' "$OUT" "${KEEP_TEMP:-0}" || true
 [ -f "$OUT/result.json" ] && node "$ROOT/verification/evals/summarize.mjs" "$OUT" || true
 exit $code

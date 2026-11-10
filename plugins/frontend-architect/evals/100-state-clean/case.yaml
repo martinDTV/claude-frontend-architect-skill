@@ -7,12 +7,12 @@ description: >
   plugin's scripts (run with: claude plugin eval ./plugins/frontend-architect --case 100-state-clean --allow-tools Bash).
 expected_outcome: "state-audit runs and finds no confirmed state defect; the agent does not invent one and does not modify any file"
 tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:state", "control:negative"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Audit the state and SSR safety of the Nuxt 4 frontend in the current directory (read-only).
     Tell me what, if anything, is a real state or cross-request risk, and separate demonstrated issues from risks.

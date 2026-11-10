@@ -6,10 +6,10 @@ description: >
   so declining the auditor is a genuine choice.
 expected_outcome: "the model writes (or specifies) the small presentational component directly and does NOT run an audit script; auditing a single new stateless component is over-kill"
 tags: ["activation:architect", "domain:architecture", "domain:vue-nuxt", "control:abstain", "suite:pilot"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Write me a small Vue 3 presentational Badge component: it takes a `label` string and a `variant`
     ('info' | 'success' | 'warning' | 'danger') and renders a styled pill. No data fetching, no store,

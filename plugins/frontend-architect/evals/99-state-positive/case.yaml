@@ -7,12 +7,12 @@ description: >
   (run with: claude plugin eval ./plugins/frontend-architect --case 99-state-positive --allow-tools Bash).
 expected_outcome: "state-audit runs, the module-level mutable-auth client and the localStorage tokens are reported with path:line as confirmed, no file modified"
 tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:security", "domain:state", "suite:pilot"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Audit the state and SSR safety of the Nuxt 4 frontend in the current directory (read-only).
     Tell me what to fix first and separate what you demonstrated in the code from what is only a risk.

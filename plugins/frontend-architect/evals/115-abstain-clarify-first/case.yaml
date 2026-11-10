@@ -7,10 +7,10 @@ description: >
   declining the auditor is a real choice.
 expected_outcome: "the model asks the deciding clarifying question (or names the assumption that resolves it) and gives the conditional answer; it does NOT run an audit script on a project that is not described"
 tags: ["activation:architect", "domain:architecture", "domain:vue-nuxt", "control:abstain"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     We're starting a new Nuxt app. Should we use SSR or just ship it as an SPA? Give me the right call.
 graders:

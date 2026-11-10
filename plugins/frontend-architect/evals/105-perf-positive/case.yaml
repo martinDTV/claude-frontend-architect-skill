@@ -8,12 +8,12 @@ description: >
   (run with: claude plugin eval ./plugins/frontend-architect --case 105-perf-positive --allow-tools Bash).
 expected_outcome: "perf-audit run; the heavy static three import and the Math.random() list key both found with path:line; the random key treated as a confirmed syntactic fact and the heavy import as a bundle signal to measure; no file modified"
 tags: ["activation:architect", "domain:audit", "domain:react-next", "domain:performance", "suite:pilot"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Audit the performance of the Next.js frontend in the current directory (read-only) and tell me what
     to fix first. Cite file paths with line numbers. Separate what you demonstrated in the code from what

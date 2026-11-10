@@ -6,12 +6,12 @@ description: >
   (run with: claude plugin eval ./plugins/frontend-architect --case 103-routes-clean --allow-tools Bash).
 expected_outcome: "routes-audit run; no page-without-guard and no confirmed finding reported; the agent does not invent a defect to look thorough; no file modified"
 tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:security"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Audit the routes and guards of the Nuxt 4 frontend in the current directory (read-only). Tell me
     whether any page is left unprotected, and do not manufacture problems that are not there.

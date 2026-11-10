@@ -8,12 +8,12 @@ description: >
   (run with: claude plugin eval ./plugins/frontend-architect --case 110-a11y-ambiguous --allow-tools Bash).
 expected_outcome: "ui-audit run; the heading-level-skipped at app/components/ArticleCard.vue:4 reported AS a review/heuristic signal, treated as a judgement call (real outline defect vs deliberate styling to fix in CSS) not a confirmed violation; no invented confirmed defect; no file modified"
 tags: ["activation:architect", "domain:audit", "domain:vue-nuxt", "domain:accessibility"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 context:
   scaffold_script: scaffold.sh
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     Audit the accessibility of the Nuxt 4 frontend in the current directory (read-only) and tell me what
     to fix first. Cite file paths with line numbers. Separate what you demonstrated in the code from what

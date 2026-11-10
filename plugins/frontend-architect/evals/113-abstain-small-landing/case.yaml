@@ -6,10 +6,10 @@ description: >
   small. Bash is allowed so abstaining from the auditor is a real choice, not a forced one.
 expected_outcome: "the model answers the decision directly (stage 0, useFetch, no Pinia, no Axios) and does NOT run an audit script; running an auditor on a 6-page site that does not exist yet is over-tooling"
 tags: ["activation:architect", "domain:architecture", "domain:vue-nuxt", "control:abstain", "suite:pilot"]
-max_turns: 30
-timeout_seconds: 900
-allowed_tools: [Read, Glob, Grep, Skill, Bash]
 execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
   prompt: |
     I'm about to build a 6-page marketing site in Nuxt 4: home, about, three service pages and a contact
     form. Each page fetches a little content from a headless CMS. Should I add Pinia for state and Axios
