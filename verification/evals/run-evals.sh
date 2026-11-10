@@ -127,10 +127,17 @@ esac
 arms=2
 pilot_cases=$(grep -rl 'suite:pilot' "$PLUGIN/evals"/*/case.yaml 2>/dev/null | wc -l | tr -d ' ')
 if [ "$MODE" = "pilot" ] && [ -n "${CASE:-}" ]; then
-  # only the pilot cases whose directory matches CASE count toward the estimate (a non-pilot match would not run)
-  est_cases=0
-  for d in "$PLUGIN/evals"/$CASE; do [ -f "$d/case.yaml" ] && grep -q 'suite:pilot' "$d/case.yaml" && est_cases=$((est_cases + 1)); done
+  # CASE is a glob over the case DIRECTORY (e.g. 96-*). The CLI's --case filters by the case's `name:` field, not
+  # the directory (the second pilot attempt, 2026-11-10, found 0 cases with --case 96-*), so the matching directory's
+  # name is read and passed instead. Exactly one pilot case must match; for several, run the pilot without CASE.
+  est_cases=0; case_name=""
+  for d in "$PLUGIN/evals"/$CASE; do
+    [ -f "$d/case.yaml" ] && grep -q 'suite:pilot' "$d/case.yaml" || continue
+    est_cases=$((est_cases + 1)); case_name="$(sed -nE 's/^name:[[:space:]]*"?([^"]+)"?[[:space:]]*$/\1/p' "$d/case.yaml" | head -1)"
+  done
   [ "$est_cases" -gt 0 ] || { echo "refusing: CASE=$CASE matches no suite:pilot case" >&2; exit 2; }
+  [ "$est_cases" -eq 1 ] || { echo "refusing: CASE=$CASE matches $est_cases pilot cases; CASE selects exactly one (drop CASE for the whole pilot)" >&2; exit 2; }
+  [ -n "$case_name" ] || { echo "refusing: could not read the name: field of the case matched by CASE=$CASE" >&2; exit 2; }
 elif [ "$MODE" = "pilot" ]; then est_cases="$pilot_cases"; else est_cases=1; fi
 worst_total=$(( BUDGET * RUNS * arms * est_cases ))
 MAX_TOTAL_USD="${MAX_TOTAL_USD:-5}"
@@ -161,7 +168,7 @@ case "$MODE" in
   # The real containment is that each case runs in a throwaway scaffold cwd and the prompts are read-only;
   # treat Bash(node *) as least-privilege, not isolation. See docs/review/v1.7.0-pilot-plan.md.
   audit) cmd+=(--case '39-*' --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit WebFetch WebSearch) ;;
-  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$CASE") ;;
+  pilot) cmd+=(--tag suite:pilot --scaffold --allow-tools 'Bash(node *)' --disallow-tools Write Edit WebFetch WebSearch); [ -n "${CASE:-}" ] && cmd+=(--case "$case_name") ;;
   full) ;;
 esac
 

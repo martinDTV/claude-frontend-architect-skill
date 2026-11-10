@@ -63,7 +63,7 @@ test('every pilot case has a verifiable ground truth and a scaffold or is an abs
 // only the matching pilot cases, and a glob that matches no pilot case must refuse rather than run everything.
 test('CASE=<glob> selects one pilot case and the aggregate estimate counts only it', () => {
   const out = dry({ CASE: '96-*', MAX_TOTAL_USD: '2' }) // 1 x 1 x 2 x 1 = 2 <= 2; the full pilot (16) would refuse
-  assert.match(out, /--case 96-\\?\*/) // printf %q escapes the glob
+  assert.match(out, /--case arch-positive(\s|$)/m, 'the CLI filters by the case name: field, not the directory; the harness translates') // not 96-*
   assert.match(out, /worst-case aggregate 2 USD <= MAX_TOTAL_USD 2/)
 })
 test('CASE that matches no suite:pilot case refuses (never silently runs the whole suite)', () => {
@@ -75,4 +75,10 @@ test('without CASE the pilot command carries no --case and estimates all eight',
   const out = dry({})
   assert.doesNotMatch(out, /--case/)
   assert.match(out, /worst-case aggregate 16 USD/)
+})
+
+test('CASE matching several pilot cases refuses (CASE selects exactly one)', () => {
+  let threw = false
+  try { dry({ CASE: '*-positive', MAX_TOTAL_USD: '20' }) } catch (e) { threw = true; assert.match(String(e.stderr || e.message), /matches 6 pilot cases; CASE selects exactly one/) }
+  assert.ok(threw)
 })
