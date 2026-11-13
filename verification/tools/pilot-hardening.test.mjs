@@ -77,17 +77,14 @@ test('refuses when the worst-case AGGREGATE budget exceeds MAX_TOTAL_USD (per-ru
   assert.match(r.out, /worst-case aggregate = BUDGET\(5\).*= 80 USD > MAX_TOTAL_USD\(5\)/)
 })
 
-test('a safe anthropic config assembles the command with least-privilege Bash and no publish', () => {
+test('a safe anthropic config assembles the command: full Bash granted, write/web tools removed, never published', () => {
   const r = dry({ BUDGET: '1', MAX_TOTAL_USD: '20', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
   assert.equal(r.code, 0, r.out)
   assert.match(r.out, /^command:/m)
-  // printf %q escapes the pattern, so match tolerant of backslash-escaping: Bash(node:*) in any escaped form
-  assert.match(r.out, /--allow-tools Bash\\?\(node:\\?\*\\?\)/, 'Bash is granted only for node, not full Bash')
-  // The grant is written in the `Tool(prefix:*)` form the eval CLI's help documents. (The permissions docs say
-  // `Bash(node *)` is equivalent; the first pilot run's Bash denial was NOT this — the case's allowed_tools sat at the
-  // top level of case.yaml and was ignored, see eval-case-schema.test.mjs. The colon form is kept for consistency.)
-  assert.doesNotMatch(r.out, /Bash\\?\(node\\?[ ]/, 'the grant uses the Tool(prefix:*) form the eval CLI documents')
-  assert.match(r.out, /--disallow-tools Write Edit WebFetch WebSearch/, 'write/web tools are disallowed')
+  // Full Bash (decided 2026-11-13 after three real runs): Bash(node:*) and a read-only allowlist both denied the very
+  // call the pilot measures (`cd …; S=…; node $S/domain-deps.mjs`), because a rule must match every subcommand and
+  // never matches an expanded variable. The grant is the bare tool name, followed directly by --disallow-tools.
+  assert.match(r.out, /--allow-tools Bash --disallow-tools Write Edit WebFetch WebSearch/, 'full Bash, then the write/web tools removed')
   assert.match(r.out, /--no-publish/, 'results stay local')
   assert.match(r.out, /--max-cost-usd 1/, 'the per-run ceiling is passed')
 })
@@ -212,12 +209,10 @@ test('the disallow list names only tools the running CLI can remove (MultiEdit m
   assert.doesNotMatch(r.out, /MultiEdit/, 'MultiEdit is not a built-in tool of CLI 2.1.x; naming it aborts the whole eval with 0 cases run')
 })
 
-test('the Bash grant is a read-only allowlist: node plus reading commands, never a bare Bash, write, package or network command', () => {
-  const r = dryNoCli({ BUDGET: '1', MAX_TOTAL_USD: '20', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
-  assert.equal(r.code, 0, r.out)
-  const cmd = r.out.split('\n').find((l) => l.startsWith('command:')) || ''
-  const grants = [...cmd.matchAll(/Bash\\?\(([a-z]+)/g)].map((m) => m[1])
-  for (const want of ['node', 'ls', 'cat', 'pwd', 'find', 'grep']) assert.ok(grants.includes(want), `grants ${want}`)
-  for (const never of ['rm', 'npm', 'npx', 'pnpm', 'curl', 'wget', 'git', 'mv', 'cp', 'chmod', 'sh', 'bash']) assert.ok(!grants.includes(never), `never grants ${never}`)
-  assert.doesNotMatch(cmd, /--allow-tools(?: Bash\\?\([^)]*\\?\))* Bash(?: |$)/, 'no bare Bash grant')
+test('the Bash grant is stated honestly: why it is full, what contains it, and that it is NOT a sandbox', () => {
+  const src = execFileSync('cat', [runEvals], { encoding: 'utf8' })
+  assert.match(src, /PILOT_BASH=\('Bash'\)/, 'the grant is the bare tool')
+  assert.match(src, /no\s+#?\s*prefix allowlist can measure/, 'the script records why the narrower grants failed')
+  assert.match(src, /NOT an OS sandbox/, 'the script says full Bash is not isolation')
+  assert.match(src, /throwaway scaffold cwd/, 'the script names the real containment')
 })

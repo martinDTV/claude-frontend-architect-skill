@@ -19,7 +19,7 @@ Harness only (5B). No production script, rule, contract or manifest changed; the
 - Eval harness: `--disallow-tools` no longer names `MultiEdit` (not a built-in of CLI 2.1.x; naming it aborted the
   run with 0 cases); `CASE=<glob>` runs one pilot case, translating the directory glob to the `name:` the CLI
   filters on; every run's `trace.jsonl` is copied to `results/<run>/traces/` (the scaffold temp dirs are then
-  removed unless `KEEP_TEMP=1`); the Bash grant is a read-only allowlist (`Bash(node:*)` plus ls/cat/pwd/find/grep/head/tail/wc/tree): the first real run granted only `node:*`, the agent's first call was `pwd && ls && cat`, and after the denial it never tried a script.
+  removed unless `KEEP_TEMP=1`); the audit/pilot grant is **full `Bash`** (Write/Edit/WebFetch/WebSearch still removed): three real runs of case 96 showed that `Bash(node:*)` and then a read-only allowlist both denied the exact call the pilot measures (`cd …; S=…; node $S/domain-deps.mjs`), since a rule must match every subcommand and never matches an expanded variable, and the models then gave Bash up; the containment is the throwaway cwd and read-only prompts, stated as not a sandbox. Every tool-using case gains a `subagent-activation` indicator (`Agent` with a `frontend-architect:*` subagent), because Sonnet activated the plugin through `frontend-reviewer`, which the `Skill`-only indicator missed; `summarize.mjs` reports both.
 
 ### Added
 - `EVAL_PROVIDER=claude-ai`: run the evals with the CLI's own claude.ai subscription login. Accepted only when

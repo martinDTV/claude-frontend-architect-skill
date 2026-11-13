@@ -77,7 +77,7 @@ for (const c of cases) {
     byArm[arm] = byArm[arm] ?? s.value
   }
   const gs = graders(c)
-  const activation = gs.filter((g) => /skill-activation|no-frontend-skill|skill-used/.test(g.name))
+  const activation = gs.filter((g) => /skill-activation|subagent-activation|no-frontend-skill|skill-used/.test(g.name))
   const failed = gs.filter((g) => g.passed === false && !activation.includes(g)).map((g) => g.name)
   const cost = numbers(c, /cost/i).reduce((n, x) => n + x.value, 0)
   // per-run turns and errors: a zero score with an error is a run that never produced an answer
