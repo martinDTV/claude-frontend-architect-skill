@@ -9,7 +9,9 @@
 #   full          every case; needs BUDGET and CONFIRM=1
 #
 # Environment:
-#   BUDGET=<usd>        hard ceiling passed as --max-cost-usd (default 5 for smoke/activation/tag/audit; required for full)
+#   BUDGET=<usd>        hard ceiling passed as --max-cost-usd: the ceiling for the WHOLE invocation (all cases, both
+#                       arms), checked before each run launches, so the overrun is bounded to one run (verified
+#                       2026-11-13: an 8-case Sonnet pilot stopped after 7 cases at 1.00 USD with BUDGET=1, exit 2)
 #   MODEL=<id>          agent model for all cases (default: the `haiku` alias, which resolves to the cheapest Haiku
 #                       your deployment offers; pinned ids such as claude-haiku-5-5 may not be enabled on Vertex)
 #   JUDGE_MODEL=<id>    LLM grader model (default haiku)
@@ -20,9 +22,9 @@
 #   EVAL_PROVIDER=<p>   REQUIRED, no default: anthropic (ANTHROPIC_API_KEY) | vertex (personal project) | claude-ai
 #                       (the CLI's own claude.ai subscription login; needs EVAL_EXPECTED_ORG_ID=<org id from
 #                       `claude auth status`>, passed by the operator, never committed)
-#   MAX_TOTAL_USD=<usd> ceiling on the worst-case aggregate (cases x runs x arms x BUDGET), default 5
+#   MAX_TOTAL_USD=<usd> sanity cap on BUDGET itself (refuses a BUDGET above it), default 5
 #   CASE=<glob>         pilot only: run just the cases whose directory matches (for example CASE='96-*' to measure
-#                       one case's real consumption first); the aggregate estimate counts only the matching cases
+#                       one case's real consumption first)
 #
 # Results (JSON, HTML report, aggregate) go under plugins/frontend-architect/evals/results/<mode>-<timestamp>/,
 # which is gitignored. Summarize with: node verification/evals/summarize.mjs <that dir>
@@ -121,10 +123,13 @@ case "${EVAL_PROVIDER:-}" in
     ;;
 esac
 
-# ---- aggregate budget (5A.1 hardening) ----------------------------------------------------------------
-# --max-cost-usd is PER RUN, not aggregate. Compute the worst-case aggregate (cases x runs x arms x per-run
-# ceiling) and refuse if it exceeds MAX_TOTAL_USD (default 5). This is the script's own guard; it does NOT
-# replace watching the real spend — Google Cloud / Anthropic budget *alerts* are notifications, not hard caps.
+# ---- budget (5A.1 hardening, corrected 2026-11-13) --------------------------------------------------------
+# --max-cost-usd is the ceiling for the WHOLE invocation: the CLI checks the running total before each run launches
+# and aborts with exit 2 and partial results when it would be exceeded, so the overrun is bounded to one run. (5A.1
+# had documented it as per-run and multiplied it by cases x arms; the first real Sonnet pilot refuted that: with
+# BUDGET=1 the eight-case run stopped after seven cases at 1.00 USD.) MAX_TOTAL_USD (default 5) is the script's own
+# sanity cap on BUDGET; neither replaces watching the real spend — budget *alerts* are notifications, not hard caps,
+# and under a subscription the CLI's figure is an estimate.
 arms=2
 pilot_cases=$(grep -rl 'suite:pilot' "$PLUGIN/evals"/*/case.yaml 2>/dev/null | wc -l | tr -d ' ')
 if [ "$MODE" = "pilot" ] && [ -n "${CASE:-}" ]; then
@@ -140,14 +145,12 @@ if [ "$MODE" = "pilot" ] && [ -n "${CASE:-}" ]; then
   [ "$est_cases" -eq 1 ] || { echo "refusing: CASE=$CASE matches $est_cases pilot cases; CASE selects exactly one (drop CASE for the whole pilot)" >&2; exit 2; }
   [ -n "$case_name" ] || { echo "refusing: could not read the name: field of the case matched by CASE=$CASE" >&2; exit 2; }
 elif [ "$MODE" = "pilot" ]; then est_cases="$pilot_cases"; else est_cases=1; fi
-worst_total=$(( BUDGET * RUNS * arms * est_cases ))
 MAX_TOTAL_USD="${MAX_TOTAL_USD:-5}"
-if [ "$worst_total" -gt "$MAX_TOTAL_USD" ]; then
-  echo "refusing: worst-case aggregate = BUDGET($BUDGET) x RUNS($RUNS) x arms($arms) x cases($est_cases) = $worst_total USD > MAX_TOTAL_USD($MAX_TOTAL_USD)." >&2
-  echo "lower BUDGET (per-run ceiling) or raise MAX_TOTAL_USD deliberately. Note: --max-cost-usd bounds ONE run, not the total." >&2
+if [ "$BUDGET" -gt "$MAX_TOTAL_USD" ]; then
+  echo "refusing: BUDGET($BUDGET) > MAX_TOTAL_USD($MAX_TOTAL_USD). BUDGET is the ceiling for the whole invocation ($est_cases case(s) x $RUNS run(s) x $arms arms); raise MAX_TOTAL_USD deliberately if that is what you want." >&2
   exit 2
 fi
-echo "budget: per-run ceiling $BUDGET USD; worst-case aggregate $worst_total USD <= MAX_TOTAL_USD $MAX_TOTAL_USD (alerts are not hard caps; watch real spend)"
+echo "budget: ceiling for the whole invocation $BUDGET USD (<= MAX_TOTAL_USD $MAX_TOTAL_USD); $est_cases case(s) x $RUNS run(s) x $arms arms; the CLI stops before the run that would exceed it, so the overrun is bounded to one run (alerts are not hard caps; under a subscription the figure is an estimate)"
 OUT="$PLUGIN/evals/results/$MODE-$STAMP"
 
 # --keep-temp so each run's trace.jsonl survives long enough to be copied next to the results (below); the scaffold
@@ -183,7 +186,6 @@ case "$MODE" in
   full) ;;
 esac
 
-echo "budget ceiling: $BUDGET USD (checked before each run; with -j 1 the overrun is bounded to one run)"
 printf 'command:'; printf ' %q' "${cmd[@]}"; echo
 [ "${DRY:-}" = "1" ] && exit 0
 # The CLI is needed only from here on (DRY and the guards above must work on a machine without it, e.g. CI).

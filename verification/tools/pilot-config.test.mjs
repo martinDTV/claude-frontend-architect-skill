@@ -14,8 +14,8 @@ const root = join(here, '..', '..')
 const evalsDir = join(root, 'plugins', 'frontend-architect', 'evals')
 const runEvals = join(root, 'verification', 'evals', 'run-evals.sh')
 
-// A clean env (no inherited provider flags) with a safe personal-provider config and a per-run ceiling whose
-// worst-case aggregate (1 x 1 x 2 x 8 = 16) stays under MAX_TOTAL_USD, so these structural tests exercise the
+// A clean env (no inherited provider flags) with a safe personal-provider config and a BUDGET under MAX_TOTAL_USD
+// (BUDGET is the ceiling for the whole invocation), so these structural tests exercise the
 // assembled command, not the security guards (those are covered by pilot-hardening.test.mjs).
 const dry = (env) => execFileSync('bash', [runEvals, 'pilot'], { cwd: root, encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME, DRY: '1', ALLOW_SCAFFOLD: '1', BUDGET: '1', MAX_TOTAL_USD: '20', MODEL: 'haiku', RUNS: '1', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'dryrun-placeholder', ...env } })
 
@@ -59,22 +59,22 @@ test('every pilot case has a verifiable ground truth and a scaffold or is an abs
   }
 })
 
-// CASE=<glob> (post-5B): run a single pilot case first to measure real consumption; the aggregate estimate must count
-// only the matching pilot cases, and a glob that matches no pilot case must refuse rather than run everything.
-test('CASE=<glob> selects one pilot case and the aggregate estimate counts only it', () => {
-  const out = dry({ CASE: '96-*', MAX_TOTAL_USD: '2' }) // 1 x 1 x 2 x 1 = 2 <= 2; the full pilot (16) would refuse
+// CASE=<glob> (post-5B): run a single pilot case first to measure real consumption; the budget line names the matching
+// case count, and a glob that matches no pilot case must refuse rather than run everything.
+test('CASE=<glob> selects one pilot case and the budget line counts only it', () => {
+  const out = dry({ CASE: '96-*', MAX_TOTAL_USD: '2' })
   assert.match(out, /--case arch-positive(\s|$)/m, 'the CLI filters by the case name: field, not the directory; the harness translates') // not 96-*
-  assert.match(out, /worst-case aggregate 2 USD <= MAX_TOTAL_USD 2/)
+  assert.match(out, /1 case\(s\) x 1 run\(s\) x 2 arms/)
 })
 test('CASE that matches no suite:pilot case refuses (never silently runs the whole suite)', () => {
   let threw = false
   try { dry({ CASE: '01-*' }) } catch (e) { threw = true; assert.match(String(e.stderr || e.message), /matches no suite:pilot case/) }
   assert.ok(threw)
 })
-test('without CASE the pilot command carries no --case and estimates all eight', () => {
+test('without CASE the pilot command carries no --case and names all eight', () => {
   const out = dry({})
   assert.doesNotMatch(out, /--case/)
-  assert.match(out, /worst-case aggregate 16 USD/)
+  assert.match(out, /8 case\(s\) x 1 run\(s\) x 2 arms/)
 })
 
 test('CASE matching several pilot cases refuses (CASE selects exactly one)', () => {

@@ -1,7 +1,7 @@
 // pilot hardening (1.7 increment 5A.1): adversarial tests of the eval-harness security controls. All run the harness in
 // DRY mode (prints the command, invokes NO model, spends NO tokens) and assert the controls REFUSE unsafe configurations
 // and only assemble a command for a safe one. They encode, and prove, the honest limits: the provider guard forbids a
-// silent fallback and the government project; the aggregate-budget guard refuses a worst-case over the cap; the Bash
+// silent fallback and the government project; the budget guard refuses a BUDGET above the sanity cap (BUDGET is the ceiling for the whole invocation); the Bash
 // grant is least-privilege (Bash(node:*)) with Write/Edit/Web disallowed — a surface reduction, NOT an OS sandbox.
 // 5B adds: DRY and every guard must work on a machine WITHOUT the claude CLI (the CI runner — the 1.7.0 CI failure), and
 // the claude-ai provider (the CLI's own subscription login) is accepted only for a first-party login of the org the
@@ -70,11 +70,15 @@ test('refuses Vertex without the explicit ALLOW_VERTEX personal-project confirma
   assert.match(r.out, /needs ALLOW_VERTEX=1/)
 })
 
-test('refuses when the worst-case AGGREGATE budget exceeds MAX_TOTAL_USD (per-run ceiling is not the total)', () => {
-  // BUDGET 5 per run x 1 run x 2 arms x 8 cases = 80 > default MAX_TOTAL_USD 5
-  const r = dry({ BUDGET: '5', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
+test('refuses a BUDGET above MAX_TOTAL_USD, and states that BUDGET is the ceiling for the whole invocation', () => {
+  // --max-cost-usd is the ceiling for the WHOLE run, checked before each case launches (verified 2026-11-13: an
+  // eight-case Sonnet pilot with BUDGET=1 stopped after seven cases at 1.00 USD, exit 2). 5A.1 had it as per-run.
+  const r = dry({ BUDGET: '6', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
   assert.notEqual(r.code, 0)
-  assert.match(r.out, /worst-case aggregate = BUDGET\(5\).*= 80 USD > MAX_TOTAL_USD\(5\)/)
+  assert.match(r.out, /refusing: BUDGET\(6\) > MAX_TOTAL_USD\(5\)\. BUDGET is the ceiling for the whole invocation/)
+  const ok = dry({ BUDGET: '5', EVAL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'x' })
+  assert.equal(ok.code, 0, ok.out)
+  assert.match(ok.out, /ceiling for the whole invocation 5 USD \(<= MAX_TOTAL_USD 5\); 8 case\(s\) x 1 run\(s\) x 2 arms/)
 })
 
 test('a safe anthropic config assembles the command: full Bash granted, write/web tools removed, never published', () => {
@@ -86,7 +90,7 @@ test('a safe anthropic config assembles the command: full Bash granted, write/we
   // never matches an expanded variable. The grant is the bare tool name, followed directly by --disallow-tools.
   assert.match(r.out, /--allow-tools Bash --disallow-tools Write Edit WebFetch WebSearch/, 'full Bash, then the write/web tools removed')
   assert.match(r.out, /--no-publish/, 'results stay local')
-  assert.match(r.out, /--max-cost-usd 1/, 'the per-run ceiling is passed')
+  assert.match(r.out, /--max-cost-usd 1/, 'the ceiling is passed')
 })
 
 test('the Bash grant is documented as least-privilege, NOT a sandbox (honesty of the control)', () => {

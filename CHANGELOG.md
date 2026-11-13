@@ -59,6 +59,9 @@ once on Haiku; nothing here claims the skill measured-better than 1.7.0 (`docs/r
   removed unless `KEEP_TEMP=1`); the audit/pilot grant is **full `Bash`** (Write/Edit/WebFetch/WebSearch still removed): three real runs of case 96 showed that `Bash(node:*)` and then a read-only allowlist both denied the exact call the pilot measures (`cd …; S=…; node $S/domain-deps.mjs`), since a rule must match every subcommand and never matches an expanded variable, and the models then gave Bash up; the containment is the throwaway cwd and read-only prompts, stated as not a sandbox. Every tool-using case gains a `subagent-activation` indicator (`Agent` with a `frontend-architect:*` subagent), because Sonnet activated the plugin through `frontend-reviewer`, which the `Skill`-only indicator missed; `summarize.mjs` reports both.
 
 ### Notes
+- Budget semantics corrected: `--max-cost-usd` is the ceiling for the **whole** `claude plugin eval` invocation,
+  checked before each run (5A.1 had documented it as per-run); the harness, its tests and `docs/evals.md` now say so.
+  Verified by the Sonnet pilot, which stopped after seven of eight cases at 1.00 USD with `BUDGET=1`.
 - First real behavioural runs (E0B) of one pilot case under a personal provider, exploratory: the machinery works
   end to end, the plugin activates (via `Skill` or the `frontend-reviewer` subagent) and runs its auditors when
   Bash is available, and case 96 does not discriminate between arms (Δ = 0). Seven other pilot cases NOT_RUN;

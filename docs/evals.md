@@ -150,8 +150,10 @@ login; `EVAL_EXPECTED_ORG_ID=<orgId from `claude auth status`>`, no key/flag/end
 The script refuses to run without one and never falls back to inherited credentials. Under a subscription
 `--max-cost-usd` bounds the cost the CLI *estimates*, not an invoice — consumption is plan usage. Run under a clean
 environment (`env -i HOME=… PATH=… USER=…`; `USER` is needed for the macOS Keychain login to resolve).
-`MAX_TOTAL_USD` (default 5) caps the worst-case aggregate (cases × runs × arms × `BUDGET`), because
-`--max-cost-usd` is per run. `DRY=1` needs no `claude` CLI — only a real run does.
+`BUDGET` (`--max-cost-usd`) is the ceiling for the **whole invocation** — all cases, both arms — checked before each
+run launches, so the overrun is bounded to one run (verified 2026-11-13: an eight-case Sonnet pilot with `BUDGET=1`
+stopped after seven cases at 1.00 USD, exit 2, partial results kept). `MAX_TOTAL_USD` (default 5) is a sanity cap on
+`BUDGET`. `DRY=1` needs no `claude` CLI — only a real run does.
 
 Defaults: one run per case and arm (`RUNS=1`), agent model `claude-haiku-5-5` (`MODEL=` to override), judge `haiku`, concurrency 1 so a budget overrun is bounded to one run, `--threshold 0` so the exit code reports budget and structure rather than scores (`THRESHOLD=` to override), `--no-publish`. Results go to `plugins/frontend-architect/evals/results/<mode>-<timestamp>/` (gitignored); `node verification/evals/summarize.mjs <dir>` prints per-case scores per arm, activation indicators, failed graders and cost fields.
 
