@@ -21,6 +21,12 @@ Harness only (5B). No production script, rule, contract or manifest changed; the
   filters on; every run's `trace.jsonl` is copied to `results/<run>/traces/` (the scaffold temp dirs are then
   removed unless `KEEP_TEMP=1`); the audit/pilot grant is **full `Bash`** (Write/Edit/WebFetch/WebSearch still removed): three real runs of case 96 showed that `Bash(node:*)` and then a read-only allowlist both denied the exact call the pilot measures (`cd …; S=…; node $S/domain-deps.mjs`), since a rule must match every subcommand and never matches an expanded variable, and the models then gave Bash up; the containment is the throwaway cwd and read-only prompts, stated as not a sandbox. Every tool-using case gains a `subagent-activation` indicator (`Agent` with a `frontend-architect:*` subagent), because Sonnet activated the plugin through `frontend-reviewer`, which the `Skill`-only indicator missed; `summarize.mjs` reports both.
 
+### Notes
+- First real behavioural runs (E0B) of one pilot case under a personal provider, exploratory: the machinery works
+  end to end, the plugin activates (via `Skill` or the `frontend-reviewer` subagent) and runs its auditors when
+  Bash is available, and case 96 does not discriminate between arms (Δ = 0). Seven other pilot cases NOT_RUN;
+  no behavioural claim about v1.7.0 follows. `docs/review/v1.7.0-pilot-results.md`.
+
 ### Added
 - `EVAL_PROVIDER=claude-ai`: run the evals with the CLI's own claude.ai subscription login. Accepted only when
   `claude auth status` (parsed, not trusted by exit code) reports a logged-in, first-party claude.ai login of
