@@ -1,0 +1,12 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "clean",
+  "source_of_truth": "Read by hand: three public components, each with a leading doc comment; AppButton wraps UButton but adds a loading rule (props, emit, behaviour); AppTable renders all five states; AppBadge's marker hash matches its body. No literal colours. Nothing to report at defect level.",
+  "expected": [],
+  "forbidden": [
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppButton.vue", "why_not_a_defect": "adds a prop, an emit and behaviour" },
+    { "id": "data-view-missing-states", "file": "app/components/ui/AppTable.vue", "why_not_a_defect": "five states rendered" },
+    { "id": "ejected-copy-drifted", "file": "app/components/ui/AppBadge.vue", "why_not_a_defect": "hash matches" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppButton.vue", "why_not_a_defect": "documented" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

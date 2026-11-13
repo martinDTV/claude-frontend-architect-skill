@@ -1,0 +1,30 @@
+{
+  "area": "ds",
+  "tool": "design-system-inventory.mjs",
+  "engine": "lexical",
+  "category": "insufficient-context",
+  "source_of_truth": "Read by hand: AppField spreads fieldProps from a sibling module; statically only `required` is declared inline. The inventory must say the list is partial (info) and must not turn the gap into a defect. Documented, native root, no fetched data. scenario_polarity=trap: there is no defect to miss; the trap is inventing one from the unresolved prop list.",
+  "expected": [],
+  "forbidden": [
+    {
+      "id": "undocumented-public-component",
+      "file": "app/components/ui/AppField.vue",
+      "why_not_a_defect": "leading doc comment"
+    },
+    {
+      "id": "pass-through-wrapper",
+      "file": "app/components/ui/AppField.vue",
+      "why_not_a_defect": "native root with its own props"
+    },
+    {
+      "id": "data-view-missing-states",
+      "file": "app/components/ui/AppField.vue",
+      "why_not_a_defect": "no loop over fetched data"
+    }
+  ],
+  "out_of_scope": [
+    "props-partially-resolved"
+  ],
+  "line_tolerance": 1,
+  "scenario_polarity": "trap"
+}

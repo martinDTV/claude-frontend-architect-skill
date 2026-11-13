@@ -11,7 +11,7 @@ not noise.
 
 ```
 verification/corpus/
-  <area>/              area = arch | state | routes | perf | a11y | bundle
+  <area>/              area = arch | state | routes | perf | a11y | bundle | ds (design-system inventory, 1.8)
     <NN-name>/         one case
       <app files>      a small realistic project (or a built fixture for bundle)
       ground-truth.json

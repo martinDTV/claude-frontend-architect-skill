@@ -57,3 +57,24 @@ The corpus deliberately set out to find real limits, not perfect scores. The con
   as future work; today's numbers are an in-sample characterization.
 - Defect levels: route-attribution's signal is heuristic, routes/perf findings here are mostly heuristic; a
   heuristic is a lead to verify, not a confirmed verdict — the measurer records min-level partials separately.
+
+
+## 1.8 addendum — `ds` area (design-system inventory), development set, 2026-11-13
+
+Ten cases under `verification/corpus/ds/` for `design-system-inventory.mjs` (lexical): pass-through wrapper (positive)
+vs a wrapper with a model/emit/behaviour (trap); undocumented public vs private (trap); ejected copy drifted vs
+intact; data view missing states vs the five states; syntactic variants (interface declared after `defineProps`,
+array emits, default `defineModel`, dynamic slot name, JSDoc documentation); props spread from an import
+(insufficient context, `scenario_polarity: trap`, `props-partially-resolved` out of scope because it is info-level);
+no barrel (all public); a Nuxt layer root; a clean system.
+
+| area | cases | TP | FP | FN | clean-held | precision | recall |
+|---|---|---|---|---|---|---|---|
+| ds | 10 | 7 | 0 | 0 | 4 | 100.0% | 100.0% |
+
+**Read this as a development-set number, not generalization.** Unlike the 1.7 areas, this tool was written in the
+same increment line as its corpus: while authoring case 05 the corpus exposed a real false negative (`useFetch<Row[]>(…)`
+— a generic between the composable and its call defeated the async-signal detector) and the detector was fixed before
+measuring. That is the corpus doing its job during development, and it is also why the in-sample 100 % proves little.
+The hold-out for this area (`verification/corpus-holdout/ds/`, set B) is written by an independent agent from the
+contract alone, without reading the implementation, and is reported separately in `docs/corpus-holdout-results.md`.

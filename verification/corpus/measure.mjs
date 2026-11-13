@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const scripts = join(here, '..', '..', 'plugins', 'frontend-architect', 'skills', 'frontend-architect', 'scripts')
 const vue = join(here, '..', 'vue')
-const AREAS = ['arch', 'state', 'routes', 'perf', 'a11y', 'bundle']
+const AREAS = ['arch', 'state', 'routes', 'perf', 'a11y', 'bundle', 'ds']
 const DEFECT_LEVELS = new Set(['confirmed', 'heuristic'])
 
 const flagsFor = (tool, engine) => {

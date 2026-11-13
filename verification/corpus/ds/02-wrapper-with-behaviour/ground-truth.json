@@ -1,0 +1,10 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "negative",
+  "source_of_truth": "Read by hand: AppDialog.vue wraps UModal but declares a title prop, an open model and a close emit, and restores focus on close. A wrapper with an API and behaviour of its own is the pattern the doctrine asks for; flagging it would be a false positive. Documented with a leading comment and @example.",
+  "expected": [],
+  "forbidden": [
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppDialog.vue", "why_not_a_defect": "props, model, emit and behaviour of its own" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppDialog.vue", "why_not_a_defect": "leading doc comment with @example" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

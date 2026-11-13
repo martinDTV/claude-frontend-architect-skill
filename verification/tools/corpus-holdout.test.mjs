@@ -14,7 +14,7 @@ const root = join(here, '..', '..')
 const dev = join(root, 'verification', 'corpus')
 const holdout = join(root, 'verification', 'corpus-holdout')
 const measure = join(dev, 'measure.mjs')
-const AREAS = ['arch', 'state', 'routes', 'perf', 'a11y', 'bundle']
+const AREAS = ['arch', 'state', 'routes', 'perf', 'a11y', 'bundle', 'ds']
 const run = (args) => JSON.parse(execFileSync(process.execPath, [measure, '--json', ...args], { encoding: 'utf8', maxBuffer: 48 * 1024 * 1024 }))
 
 const holdoutCases = () => AREAS.flatMap((a) => { const d = join(holdout, a); return existsSync(d) ? readdirSync(d).filter((c) => statSync(join(d, c)).isDirectory()).map((c) => ({ area: a, name: c, gt: JSON.parse(readFileSync(join(d, c, 'ground-truth.json'), 'utf8')) })) : [] })

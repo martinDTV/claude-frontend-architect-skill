@@ -1,0 +1,7 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: AppButton.vue renders <UButton v-bind=\"$attrs\"><slot /></UButton> as its single root, declares no props, emits or models, and its script holds only defineOptions. It is a pass-through layer; derived from the file, not from the tool.",
+  "expected": [ { "id": "pass-through-wrapper", "file": "app/components/ui/AppButton.vue", "line": 1, "min_level": "confirmed", "rationale": "single library root, forwards everything, nothing of its own" } ],
+  "forbidden": [ { "id": "undocumented-public-component", "file": "app/components/ui/AppButton.vue", "why_not_a_defect": "the file starts with a doc comment" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}

@@ -1,0 +1,7 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: OrderList awaits useFetch and renders a skeleton while pending, then a v-for over rows; no empty, error or partial branch exists in the file. OrderTable switches on a status union covering loading, empty, error, partial and success. The missing states in OrderList may be handled by a parent, so the honest level is heuristic.",
+  "expected": [ { "id": "data-view-missing-states", "file": "app/components/ui/OrderList.vue", "line": 1, "min_level": "heuristic", "rationale": "renders fetched rows; only loading and success are visible in the file" } ],
+  "forbidden": [ { "id": "data-view-missing-states", "file": "app/components/ui/OrderTable.vue", "why_not_a_defect": "all five states rendered" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}

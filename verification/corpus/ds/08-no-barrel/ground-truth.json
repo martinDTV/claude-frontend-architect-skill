@@ -1,0 +1,10 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: there is no index.ts, so the public surface is every component under the root. AppKpi and AppMeter carry no doc comment, @example, .md or story; AppSpark has a sibling AppSpark.md. Two defects, one documented component.",
+  "expected": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppKpi.vue", "line": 1, "min_level": "confirmed", "rationale": "public by absence of a barrel, undocumented" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppMeter.vue", "line": 1, "min_level": "confirmed", "rationale": "public by absence of a barrel, undocumented" }
+  ],
+  "forbidden": [ { "id": "undocumented-public-component", "file": "app/components/ui/AppSpark.vue", "why_not_a_defect": "a sibling .md documents it" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}

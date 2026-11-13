@@ -207,7 +207,8 @@ function countLiterals(text) {
 function dataView(props, script, template) {
   const code = stripComments(script)
   const hasLoop = /\bv-for\s*=/.test(template)
-  const asyncSignal = /\b(?:useAsyncData|useLazyAsyncData|useFetch|useLazyFetch|useQuery|useInfiniteQuery)\s*\(/.test(code)
+  // a generic argument may sit between the composable and its call: useFetch<Row[]>('/api/orders') (corpus ds/05)
+  const asyncSignal = /\b(?:useAsyncData|useLazyAsyncData|useFetch|useLazyFetch|useQuery|useInfiniteQuery)\s*(?:<[^()]*>)?\s*\(/.test(code)
   const statusProp = props.names.some((n) => /^(?:pending|loading|status|view|state|isLoading|query)$/.test(n))
   const statusUnion = /status\s*:\s*['"](?:loading|success|error)['"]/.test(code)
   if (!hasLoop || !(asyncSignal || statusProp || statusUnion)) return null

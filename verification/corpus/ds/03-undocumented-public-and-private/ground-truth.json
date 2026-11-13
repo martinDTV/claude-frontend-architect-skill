@@ -1,0 +1,7 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: index.ts exports only AppTag. Neither file has a doc comment, @example, .md or story. The public one is a defect for people and agents alike; the private one is the folder's own business.",
+  "expected": [ { "id": "undocumented-public-component", "file": "app/components/ui/AppTag.vue", "line": 1, "min_level": "confirmed", "rationale": "exported from the barrel, no documentation of any kind" } ],
+  "forbidden": [ { "id": "undocumented-public-component", "file": "app/components/ui/AppTagInternal.vue", "why_not_a_defect": "not exported from the barrel: private" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}

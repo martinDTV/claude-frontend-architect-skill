@@ -1,0 +1,10 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: nuxt.config.ts extends ./layers/brand, whose components/ui holds BrandMark (undocumented, not exported by the app barrel → private) and BrandCard (a doc-commented pass-through around UCard with no script at all). The app root holds a documented AppTitle.",
+  "expected": [ { "id": "pass-through-wrapper", "file": "layers/brand/components/ui/BrandCard.vue", "line": 1, "min_level": "confirmed", "rationale": "single UCard root, forwards attrs and slot, no API, no script" } ],
+  "forbidden": [
+    { "id": "undocumented-public-component", "file": "layers/brand/components/ui/BrandMark.vue", "why_not_a_defect": "not exported by the app barrel: private" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppTitle.vue", "why_not_a_defect": "native root" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

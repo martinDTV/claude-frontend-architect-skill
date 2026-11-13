@@ -1,0 +1,11 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "negative",
+  "source_of_truth": "Read by hand: the component is documented (JSDoc with @example before defineProps), its props come from a local interface declared below the call, it is not a wrapper (native <label>/<select> root), and its v-for over a prop with no async/pending signal is not a data view. Nothing is a defect.",
+  "expected": [],
+  "forbidden": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppSelect.vue", "why_not_a_defect": "JSDoc with @example counts as documentation" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppSelect.vue", "why_not_a_defect": "native root, own API" },
+    { "id": "data-view-missing-states", "file": "app/components/ui/AppSelect.vue", "why_not_a_defect": "options are a prop, not fetched data" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}
