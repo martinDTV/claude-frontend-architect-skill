@@ -1,0 +1,1 @@
+{ "name": "ds-inventory-fixture", "private": true, "dependencies": { "nuxt": "^4.6.0", "@nuxt/ui": "^4.4.0", "tailwind-variants": "^1.0.0" } }

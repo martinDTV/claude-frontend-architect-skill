@@ -1,0 +1,94 @@
+{
+  "$comment": "Ground truth for design-system-inventory (1.8 increment 1), written from the sources BEFORE the script exists. Facts per component (what --json must report) and findings per file (must / mustNot / levels). Roots: app/components/ui plus the brand layer's components/ui. Public = exported from app/components/ui/index.ts.",
+  "roots": ["app/components/ui", "layers/brand/components/ui"],
+  "library": { "name": "@nuxt/ui", "source": "package.json" },
+  "components": {
+    "app/components/ui/UiButton.vue": {
+      "name": "UiButton", "owner": "project", "public": true, "documented": true,
+      "props": { "resolution": "declared", "names": ["variant", "size", "disabled", "loading"], "defaults": { "variant": "solid", "size": "md" } },
+      "emits": ["click"], "slots": ["icon", "default"], "models": [],
+      "variants": { "source": "tailwind-variants", "axes": { "variant": ["solid", "ghost", "danger"], "size": ["xs", "sm", "md"], "disabled": ["true"] } },
+      "tokens": { "used": ["--space-2", "--radius-md", "--color-brand-500", "--color-brand-600", "--color-danger-500"], "literals": 0 },
+      "dataView": null, "ejected": null
+    },
+    "app/components/ui/UiIconButton.vue": {
+      "name": "UiIconButton", "owner": "project", "public": true, "documented": true,
+      "props": { "resolution": "spread-from-import", "names": ["label", "icon"], "spreadFrom": ["./button.props"] },
+      "emits": ["click"], "slots": [], "models": [],
+      "variants": null, "tokens": { "used": ["--radius-pill", "--space-2"], "literals": 0 }, "dataView": null, "ejected": null,
+      "$why": "FN trap: the size/disabled props live in button.props.ts; a static pass must say the list is partial (heuristic), never claim two props as the whole API"
+    },
+    "app/components/ui/UiSelect.vue": {
+      "name": "UiSelect", "owner": "project", "public": true, "documented": false,
+      "props": { "resolution": "declared-type", "names": ["options", "label", "placeholder"], "defaults": { "placeholder": "Select an option" } },
+      "emits": ["change"], "slots": ["option"], "models": ["modelValue"],
+      "variants": null, "tokens": { "used": ["--space-2"], "literals": 0 }, "dataView": null, "ejected": null
+    },
+    "app/components/ui/UiCard.vue": {
+      "name": "UiCard", "owner": "library-wrapper", "wraps": "UCard", "public": true, "documented": true,
+      "props": { "resolution": "declared", "names": [] }, "emits": [], "slots": ["*"], "models": [],
+      "variants": null, "tokens": { "used": [], "literals": 0 }, "dataView": null, "ejected": null,
+      "$why": "a pass-through: no props, no emits, no behaviour, forwards every slot and attribute unchanged"
+    },
+    "app/components/ui/UiDialog.vue": {
+      "name": "UiDialog", "owner": "library-wrapper", "wraps": "UModal", "public": true, "documented": true,
+      "props": { "resolution": "declared-type", "names": ["title", "dirty"] }, "emits": ["close"], "slots": ["default", "footer"], "models": ["open"],
+      "variants": null, "tokens": { "used": [], "literals": 0 }, "dataView": null, "ejected": null,
+      "$why": "FP trap: wraps a library component but ADDS props, an emit, a model and behaviour (focus return, dirty-escape) — not a pass-through"
+    },
+    "app/components/ui/UiDataTable.vue": {
+      "name": "UiDataTable", "owner": "project", "public": true, "documented": true,
+      "props": { "resolution": "declared-type", "names": ["view", "caption"] }, "emits": ["select"], "slots": ["row", "empty"], "models": [],
+      "variants": null, "tokens": { "used": [], "literals": 0 },
+      "dataView": { "states": ["loading", "empty", "error", "partial", "success"], "missing": [] }, "ejected": null
+    },
+    "app/components/ui/UiList.vue": {
+      "name": "UiList", "owner": "project", "public": true, "documented": true,
+      "props": { "resolution": "declared-type", "names": ["items", "pending"] }, "emits": [], "slots": [], "models": [],
+      "variants": null, "tokens": { "used": ["--space-2"], "literals": 0 },
+      "dataView": { "states": ["loading", "success"], "missing": ["empty", "error"] }, "ejected": null,
+      "$why": "a data view (renders fetched items with a pending flag) that handles only loading and success"
+    },
+    "app/components/ui/UiBadge.vue": {
+      "name": "UiBadge", "owner": "ejected-copy", "public": true, "documented": true,
+      "props": { "resolution": "declared-type", "names": ["variant"] }, "emits": [], "slots": ["default"], "models": [],
+      "variants": { "source": "tailwind-variants", "axes": { "variant": ["default", "outline", "destructive"] } },
+      "tokens": { "used": ["--radius-pill", "--color-brand-500", "--color-brand-600", "--color-danger-500"], "literals": 0 },
+      "dataView": null, "ejected": { "from": "shadcn-vue/badge", "version": "0.11.0", "drifted": false }
+    },
+    "app/components/ui/UiAvatar.vue": {
+      "name": "UiAvatar", "owner": "ejected-copy", "public": true, "documented": true,
+      "props": { "resolution": "declared-type", "names": ["src", "alt", "size"] }, "emits": [], "slots": [], "models": [],
+      "variants": null, "tokens": { "used": ["--color-surface"], "literals": 0 },
+      "dataView": null, "ejected": { "from": "shadcn-vue/avatar", "version": "0.11.0", "drifted": true },
+      "$why": "the body was edited after ejecting (two-letter initials) and the marker's sha256 was not refreshed"
+    },
+    "app/components/ui/UiPill.vue": {
+      "name": "UiPill", "owner": "project", "public": false, "documented": false,
+      "props": { "resolution": "declared-type", "names": ["text"] }, "emits": [], "slots": [], "models": [],
+      "variants": null, "tokens": { "used": [], "literals": 2 }, "dataView": null, "ejected": null,
+      "$why": "private (not in the barrel): undocumented is NOT a finding here; the two colour literals are a fact for design-consistency, not an inventory finding"
+    },
+    "layers/brand/components/ui/UiBrandMark.vue": {
+      "name": "UiBrandMark", "owner": "project", "layer": "brand", "public": false, "documented": true,
+      "props": { "resolution": "declared-type", "names": ["size"] }, "emits": [], "slots": [], "models": [],
+      "variants": null, "tokens": { "used": ["--color-brand-600"], "literals": 0 }, "dataView": null, "ejected": null,
+      "$why": "a layer component is inventoried with its layer named; public is decided by the app's barrel, which does not export it"
+    }
+  },
+  "tokens": { "declared": ["--color-brand-500", "--color-brand-600", "--color-surface", "--color-danger-500", "--space-2", "--space-4", "--radius-md", "--radius-pill", "--shadow-card"], "unused": ["--space-4", "--shadow-card"] },
+  "findings": {
+    "app/components/ui/UiSelect.vue":    { "must": ["undocumented-public-component"], "mustNot": ["pass-through-wrapper", "data-view-missing-states", "ejected-copy-drifted"], "levels": { "undocumented-public-component": "confirmed" } },
+    "app/components/ui/UiCard.vue":      { "must": ["pass-through-wrapper"], "mustNot": ["undocumented-public-component"], "levels": { "pass-through-wrapper": "confirmed" } },
+    "app/components/ui/UiDialog.vue":    { "must": [], "mustNot": ["pass-through-wrapper", "undocumented-public-component"] },
+    "app/components/ui/UiDataTable.vue": { "must": [], "mustNot": ["data-view-missing-states"] },
+    "app/components/ui/UiList.vue":      { "must": ["data-view-missing-states"], "mustNot": [], "levels": { "data-view-missing-states": "heuristic" } },
+    "app/components/ui/UiBadge.vue":     { "must": [], "mustNot": ["ejected-copy-drifted"] },
+    "app/components/ui/UiAvatar.vue":    { "must": ["ejected-copy-drifted"], "mustNot": [], "levels": { "ejected-copy-drifted": "confirmed" } },
+    "app/components/ui/UiIconButton.vue":{ "must": ["props-partially-resolved"], "mustNot": ["undocumented-public-component"], "levels": { "props-partially-resolved": "info" } },
+    "app/components/ui/UiButton.vue":    { "must": [], "mustNot": ["undocumented-public-component", "pass-through-wrapper", "data-view-missing-states", "props-partially-resolved"] },
+    "app/components/ui/UiPill.vue":      { "must": [], "mustNot": ["undocumented-public-component"] },
+    "layers/brand/components/ui/UiBrandMark.vue": { "must": [], "mustNot": ["undocumented-public-component"] }
+  },
+  "summaryExpectations": { "components": 11, "public": 9, "undocumentedPublic": 1, "passThroughWrappers": 1, "ejected": 2, "drifted": 1, "dataViews": 2, "dataViewsMissingStates": 1, "exitCode": 1 }
+}

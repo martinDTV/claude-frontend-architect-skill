@@ -1,0 +1,10 @@
+// Public surface of the design system. Anything not exported here is private to the ui folder.
+export { default as UiButton } from './UiButton.vue'
+export { default as UiIconButton } from './UiIconButton.vue'
+export { default as UiSelect } from './UiSelect.vue'
+export { default as UiCard } from './UiCard.vue'
+export { default as UiDialog } from './UiDialog.vue'
+export { default as UiDataTable } from './UiDataTable.vue'
+export { default as UiList } from './UiList.vue'
+export { default as UiBadge } from './UiBadge.vue'
+export { default as UiAvatar } from './UiAvatar.vue'
