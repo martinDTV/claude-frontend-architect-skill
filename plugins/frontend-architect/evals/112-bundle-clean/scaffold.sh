@@ -12,11 +12,13 @@
 # NOT manufacture a heavy-chunk problem to look thorough. No installs, no network, no model.
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [ -z "${REPO_ROOT}" ]; then
-  d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  while [ "${d}" != "/" ] && [ ! -d "${d}/verification/tools/fixtures/route-next-app" ]; do d="$(dirname "${d}")"; done
-  REPO_ROOT="${d}"
+# Resolve the repo root from this script's own location first: `claude plugin eval` initialises a git repo in the
+# sandbox home, so `git rev-parse` there answers with the sandbox, not this repository (see 111-bundle-positive).
+d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [ "${d}" != "/" ] && [ ! -d "${d}/verification/tools/fixtures/route-next-app" ]; do d="$(dirname "${d}")"; done
+REPO_ROOT="${d}"
+if [ ! -d "${REPO_ROOT}/verification/tools/fixtures/route-next-app" ]; then
+  REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
 fi
 FIXTURE="${REPO_ROOT}/verification/tools/fixtures/route-next-app"
 if [ ! -d "${FIXTURE}/.next" ]; then

@@ -15,13 +15,15 @@
 # transferred or used. No installs, no network, no model.
 set -euo pipefail
 
-# Resolve the repo root so the committed fixture can be found regardless of the eval's working directory.
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [ -z "${REPO_ROOT}" ]; then
-  # Fallback: walk up from this script to the directory that contains the fixture.
-  d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  while [ "${d}" != "/" ] && [ ! -d "${d}/verification/tools/fixtures/route-next-app" ]; do d="$(dirname "${d}")"; done
-  REPO_ROOT="${d}"
+# Resolve the repo root from THIS script's location (the CLI runs the scaffold from its original path inside the
+# plugin, with the eval's working directory elsewhere). Do NOT trust `git rev-parse` first: `claude plugin eval`
+# initialises a git repo in the sandbox home, so it answers with the sandbox, not this repository (the first
+# real pilot run, 2026-11-13, failed exactly that way: "committed fixture build not found at <sandbox>/home/...").
+d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [ "${d}" != "/" ] && [ ! -d "${d}/verification/tools/fixtures/route-next-app" ]; do d="$(dirname "${d}")"; done
+REPO_ROOT="${d}"
+if [ ! -d "${REPO_ROOT}/verification/tools/fixtures/route-next-app" ]; then
+  REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
 fi
 FIXTURE="${REPO_ROOT}/verification/tools/fixtures/route-next-app"
 if [ ! -d "${FIXTURE}/.next" ]; then

@@ -40,3 +40,15 @@ test('every tool-using case grants Bash under execution.allowed_tools (the pilot
     assert.match(exec, /^  max_turns: \d+/m, `${c}: execution.max_turns is set`)
   }
 })
+
+test('no eval scaffold resolves the repo root with `git rev-parse` first (the eval sandbox is its own git repo)', () => {
+  const bad = []
+  for (const c of cases) {
+    const f = join(evalsDir, c, 'scaffold.sh')
+    if (!existsSync(f)) continue
+    const src = readFileSync(f, 'utf8')
+    const git = src.indexOf('git rev-parse --show-toplevel'), self = src.indexOf('BASH_SOURCE[0]')
+    if (git !== -1 && (self === -1 || git < self)) bad.push(`${c}: scaffold.sh trusts git rev-parse before its own path`)
+  }
+  assert.deepEqual(bad, [])
+})
