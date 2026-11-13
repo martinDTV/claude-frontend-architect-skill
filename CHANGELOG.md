@@ -4,28 +4,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 
 ## [Unreleased]
 
-Harness only (5B). No production script, rule, contract or manifest changed; the published version stays 1.7.0.
+## [1.8.0] - 2026-11-13
 
-### Fixed
-- CI: `verify-examples` was red on the 1.7.0 tip because `verification/evals/run-evals.sh` required the `claude`
-  CLI before honouring `DRY=1`, and that job does not install the CLI; 11 offline pilot tests failed on the runner
-  while passing locally. The CLI is now required only for a real run; `DRY` and every guard work without it, and a
-  regression test runs the harness on a PATH with no `claude`.
-
-- Eval cases: the 21 tool-using cases (39, 96–115) declared `allowed_tools`, `max_turns` and `timeout_seconds` at
-  the top level of `case.yaml`; schema 1.1 reads them under `execution:` and ignored them silently (no validator
-  objects), so the first real pilot run (2026-11-10) executed with the defaults — no Bash, 10 turns, 300 s — and
-  the plugin arm could not run an auditor. Moved under `execution:`; a test pins the placement.
-- Eval harness: `--disallow-tools` no longer names `MultiEdit` (not a built-in of CLI 2.1.x; naming it aborted the
-  run with 0 cases); `CASE=<glob>` runs one pilot case, translating the directory glob to the `name:` the CLI
-  filters on; every run's `trace.jsonl` is copied to `results/<run>/traces/` (the scaffold temp dirs are then
-  removed unless `KEEP_TEMP=1`); the audit/pilot grant is **full `Bash`** (Write/Edit/WebFetch/WebSearch still removed): three real runs of case 96 showed that `Bash(node:*)` and then a read-only allowlist both denied the exact call the pilot measures (`cd …; S=…; node $S/domain-deps.mjs`), since a rule must match every subcommand and never matches an expanded variable, and the models then gave Bash up; the containment is the throwaway cwd and read-only prompts, stated as not a sandbox. Every tool-using case gains a `subagent-activation` indicator (`Agent` with a `frontend-architect:*` subagent), because Sonnet activated the plugin through `frontend-reviewer`, which the `Skill`-only indicator missed; `summarize.mjs` reports both.
-
-### Notes
-- First real behavioural runs (E0B) of one pilot case under a personal provider, exploratory: the machinery works
-  end to end, the plugin activates (via `Skill` or the `frontend-reviewer` subagent) and runs its auditors when
-  Bash is available, and case 96 does not discriminate between arms (Δ = 0). Seven other pilot cases NOT_RUN;
-  no behavioural claim about v1.7.0 follows. `docs/review/v1.7.0-pilot-results.md`.
+An agent-ready design system for Vue/Nuxt, and the behavioural pilot's first real runs. 1.8.0 adds the sixteenth
+script (`design-system-inventory`), its doctrine reference and a copyable Nuxt layer, plus the evaluation-harness
+fixes the first real runs forced. No existing audit rule, id, level, JSON shape, exit code or frozen baseline
+changed. **Behavioural evaluations remain exploratory**: one case of the pilot ran on two models and the eight cases
+once on Haiku; nothing here claims the skill measured-better than 1.7.0 (`docs/review/v1.7.0-pilot-results.md`).
 
 ### Added
 - `scripts/design-system-inventory.mjs` (1.8, increment 2 — the sixteenth script): the project's own design system in
@@ -53,6 +38,27 @@ Harness only (5B). No production script, rule, contract or manifest changed; the
   exactly the org the operator names in `EVAL_EXPECTED_ORG_ID` (never committed), and no key, flag or endpoint of
   another provider is set. The script states plainly that under a subscription `--max-cost-usd` bounds the cost the
   CLI *estimates*, not an invoice. Eleven adversarial tests. Behavioural evals remain **NOT_RUN**.
+
+### Fixed
+- CI: `verify-examples` was red on the 1.7.0 tip because `verification/evals/run-evals.sh` required the `claude`
+  CLI before honouring `DRY=1`, and that job does not install the CLI; 11 offline pilot tests failed on the runner
+  while passing locally. The CLI is now required only for a real run; `DRY` and every guard work without it, and a
+  regression test runs the harness on a PATH with no `claude`.
+
+- Eval cases: the 21 tool-using cases (39, 96–115) declared `allowed_tools`, `max_turns` and `timeout_seconds` at
+  the top level of `case.yaml`; schema 1.1 reads them under `execution:` and ignored them silently (no validator
+  objects), so the first real pilot run (2026-11-10) executed with the defaults — no Bash, 10 turns, 300 s — and
+  the plugin arm could not run an auditor. Moved under `execution:`; a test pins the placement.
+- Eval harness: `--disallow-tools` no longer names `MultiEdit` (not a built-in of CLI 2.1.x; naming it aborted the
+  run with 0 cases); `CASE=<glob>` runs one pilot case, translating the directory glob to the `name:` the CLI
+  filters on; every run's `trace.jsonl` is copied to `results/<run>/traces/` (the scaffold temp dirs are then
+  removed unless `KEEP_TEMP=1`); the audit/pilot grant is **full `Bash`** (Write/Edit/WebFetch/WebSearch still removed): three real runs of case 96 showed that `Bash(node:*)` and then a read-only allowlist both denied the exact call the pilot measures (`cd …; S=…; node $S/domain-deps.mjs`), since a rule must match every subcommand and never matches an expanded variable, and the models then gave Bash up; the containment is the throwaway cwd and read-only prompts, stated as not a sandbox. Every tool-using case gains a `subagent-activation` indicator (`Agent` with a `frontend-architect:*` subagent), because Sonnet activated the plugin through `frontend-reviewer`, which the `Skill`-only indicator missed; `summarize.mjs` reports both.
+
+### Notes
+- First real behavioural runs (E0B) of one pilot case under a personal provider, exploratory: the machinery works
+  end to end, the plugin activates (via `Skill` or the `frontend-reviewer` subagent) and runs its auditors when
+  Bash is available, and case 96 does not discriminate between arms (Δ = 0). Seven other pilot cases NOT_RUN;
+  no behavioural claim about v1.7.0 follows. `docs/review/v1.7.0-pilot-results.md`.
 
 ## [1.7.0] - 2026-11-04
 
