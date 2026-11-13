@@ -206,7 +206,9 @@ function countLiterals(text) {
 /** A data view renders a collection (v-for) AND carries an async/pending/status signal. States are lexical signals. */
 function dataView(props, script, template) {
   const code = stripComments(script)
-  const hasLoop = /\bv-for\s*=/.test(template)
+  // "renders a collection": an explicit v-for, or a library data component bound to data (hold-out ds/B-05 showed a
+  // <UTable :data="data"> table with no loop anywhere — the same thing without the v-for)
+  const hasLoop = /\bv-for\s*=/.test(template) || /<(?:U|Prime|P)?(?:Table|DataTable|Carousel|Tree|VirtualList|Listbox)\b[^>]*\s:(?:data|rows|items|value)\s*=/.test(template)
   // a generic argument may sit between the composable and its call: useFetch<Row[]>('/api/orders') (corpus ds/05)
   const asyncSignal = /\b(?:useAsyncData|useLazyAsyncData|useFetch|useLazyFetch|useQuery|useInfiniteQuery)\s*(?:<[^()]*>)?\s*\(/.test(code)
   const statusProp = props.names.some((n) => /^(?:pending|loading|status|view|state|isLoading|query)$/.test(n))

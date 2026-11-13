@@ -98,7 +98,7 @@ Every trap held: a wrapper whose only API is a `defineModel` was not called a pa
 drifted (the contract hashes bytes); a `.stories.ts` sibling counted as documentation; `export type` lines in a
 barrel did not confuse the public set; props spread from an import stayed at info level.
 
-**The one miss (B-05):** `OrdersTable.vue` fetches with `useAsyncData` and renders rows through `<UTable :data>` —
+**The one miss (B05):** `OrdersTable.vue` fetches with `useAsyncData` and renders rows through `<UTable :data>` —
 no `v-for` anywhere — so the inventory did not recognise it as a data view at all and reported no
 `data-view-missing-states` (the file renders loading, error and empty, and lacks only `partial`). Structural
 limit of the v1 recogniser: "renders a collection" was read as "has a v-for". A library data component bound to the
@@ -106,5 +106,5 @@ fetched data (`UTable`, `UCarousel`, a `DataTable`) is the same thing without th
 
 **After this measurement** the recogniser was extended to count a library data component bound to data as the
 collection render, and a development case was added for the pattern (`verification/corpus/ds/11-library-table-data-view`).
-From that commit on, B-05 is no longer a blind case: its result after the fix is reported for completeness, not as
+From that commit on, B05 is no longer a blind case: its result after the fix is reported for completeness, not as
 generalization evidence. The 80 % above is the honest generalization number for the tool as first written.

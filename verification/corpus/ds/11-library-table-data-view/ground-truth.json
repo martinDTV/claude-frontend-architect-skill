@@ -1,0 +1,7 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: InvoiceTable fetches with useAsyncData and renders rows through <UTable :data=\"data\">; there is no v-for. The template shows loading (status === 'pending'), error and empty (!data?.length) branches and the success table; no partial branch exists. Pattern taken from the blind hold-out miss B05 and added to the development set after the fix.",
+  "expected": [ { "id": "data-view-missing-states", "file": "app/components/ui/InvoiceTable.vue", "line": 1, "min_level": "heuristic", "rationale": "a data view rendered through the library table; only partial is missing" } ],
+  "forbidden": [ { "id": "undocumented-public-component", "file": "app/components/ui/InvoiceTable.vue", "why_not_a_defect": "leading doc comment" }, { "id": "pass-through-wrapper", "file": "app/components/ui/InvoiceTable.vue", "why_not_a_defect": "native div root with branches" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}
