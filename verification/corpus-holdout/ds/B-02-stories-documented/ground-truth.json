@@ -1,0 +1,15 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "real-defect",
+  "scenario_polarity": "miss",
+  "provenance": "blind generalization: truth derived from the contract and the sources without consulting tool output or implementation",
+  "source_of_truth": "Read by hand. There is no index.ts under app/components/ui, so per the contract every root component is public. StatusPill.vue has no leading comment and no @example, but app/components/ui/StatusPill.stories.ts sits next to it, and the contract defines documented as a leading doc comment, an @example, OR a sibling *.md / *.stories.* — so StatusPill is documented. Kbd.vue has no comment, no @example and no sibling Kbd.md or Kbd.stories.*: public and undocumented. Neither wraps a library component (both roots are plain <span>), so no wrapper finding is possible.",
+  "expected": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/Kbd.vue", "line": 1, "min_level": "confirmed", "rationale": "public (no barrel) with no doc comment, no @example and no sibling .md or .stories.* file" }
+  ],
+  "forbidden": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/StatusPill.vue", "why_not_a_defect": "documented by the sibling StatusPill.stories.ts, one of the three documentation forms the contract recognises" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/StatusPill.vue", "why_not_a_defect": "its root is a plain <span>, not a library component, and it declares props" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/Kbd.vue", "why_not_a_defect": "its root is a plain <span>, not a library component, and it declares props" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

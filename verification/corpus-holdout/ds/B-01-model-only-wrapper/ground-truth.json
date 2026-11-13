@@ -1,0 +1,15 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "correct-suspicious",
+  "scenario_polarity": "trap",
+  "provenance": "blind generalization: truth derived from the contract and the sources without consulting tool output or implementation",
+  "source_of_truth": "Read by hand. AppInput.vue has a single root <UInput v-model=\"model\" v-bind=\"$attrs\" /> and its script holds defineOptions plus `const model = defineModel<string>()`; the contract's pass-through-wrapper requires no props, no emits, NO MODELS and no behaviour beyond defineOptions/$attrs, so the model alone makes it a library-wrapper that is not a pass-through. AppBadge.vue has a single root <UBadge v-bind=\"$attrs\"><slot /></UBadge>, no props/emits/models and only defineOptions in the script: a genuine pass-through. Both start with a doc comment and both are exported from index.ts.",
+  "expected": [
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppBadge.vue", "line": 1, "min_level": "confirmed", "rationale": "single library root, forwards $attrs and the default slot, declares nothing of its own" }
+  ],
+  "forbidden": [
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppInput.vue", "why_not_a_defect": "it declares a model (defineModel<string>()), which the contract lists among the things a pass-through must not have; a v-model surface is an API of its own" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppInput.vue", "why_not_a_defect": "the file starts with an HTML doc comment" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppBadge.vue", "why_not_a_defect": "the file starts with an HTML doc comment" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

@@ -1,0 +1,17 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "real-defect",
+  "scenario_polarity": "miss",
+  "provenance": "blind generalization: truth derived from the contract and the sources without consulting tool output or implementation",
+  "source_of_truth": "Written from the scaffold. Both files start with `<!-- @ds-ejected from=... version=... sha256=... -->`. AppTooltip.vue's hash is `shasum -a 256` of the exact bytes that follow the marker line, so it is not drifted. AppToast.vue's hash was computed over the original body, after which the body was re-indented (two leading spaces → four) and a blank line was appended; the marker was NOT refreshed. The contract defines drifted as sha256 of the body ≠ the marker's hash and hashes bytes, not normalised text, so a whitespace-only edit is a drift (confirmed). Both files have a one-line HTML doc comment immediately after the marker and both are exported from index.ts, so neither is undocumented. Both declare props (and AppToast an emit), so neither is a pass-through.",
+  "expected": [
+    { "id": "ejected-copy-drifted", "file": "app/components/ui/AppToast.vue", "line": 1, "min_level": "confirmed", "rationale": "marker sha256 is over the pre-edit body; the on-disk body differs in bytes (indentation and a trailing blank line), and the contract treats any byte difference as drift" }
+  ],
+  "forbidden": [
+    { "id": "ejected-copy-drifted", "file": "app/components/ui/AppTooltip.vue", "why_not_a_defect": "the marker's sha256 equals the sha256 of the file without the marker line, computed in the scaffold exactly as the contract defines it" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppToast.vue", "why_not_a_defect": "a doc comment follows the marker line" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppTooltip.vue", "why_not_a_defect": "a doc comment follows the marker line" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppTooltip.vue", "why_not_a_defect": "it declares props (text, delay) and binds them; an ejected copy is owner ejected-copy, not library-wrapper" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppToast.vue", "why_not_a_defect": "it declares props and an emit; an ejected copy is owner ejected-copy, not library-wrapper" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

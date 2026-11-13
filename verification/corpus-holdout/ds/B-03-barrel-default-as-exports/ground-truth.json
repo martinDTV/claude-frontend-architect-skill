@@ -1,0 +1,15 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "real-defect",
+  "scenario_polarity": "miss",
+  "provenance": "blind generalization: truth derived from the contract and the sources without consulting tool output or implementation",
+  "source_of_truth": "Read by hand. app/components/ui/index.ts exports Card and CardHeader with `export { default as X } from './X.vue'` and a type-only `export type { CardProps }`; CardSkeleton.vue is not exported anywhere. Per the contract public = exported from the barrel, so Card and CardHeader are public and CardSkeleton is private. Card.vue starts with a multi-line HTML comment containing an @example (documented). CardHeader.vue has no comment, no @example and no sibling .md/.stories.* (undocumented, public → finding). CardSkeleton.vue is undocumented but private; the contract says private undocumented components are never a finding. None of the three is a library wrapper: Card's root is <section>, CardHeader's is <header>, CardSkeleton's is a <div> (the USkeleton is a child, not the root).",
+  "expected": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/CardHeader.vue", "line": 1, "min_level": "confirmed", "rationale": "exported from the barrel via `export { default as CardHeader }` and carries no documentation of any recognised form" }
+  ],
+  "forbidden": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/CardSkeleton.vue", "why_not_a_defect": "not exported from index.ts, hence private; the contract states private undocumented components are never a finding" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/Card.vue", "why_not_a_defect": "leading HTML doc comment with an @example" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/CardSkeleton.vue", "why_not_a_defect": "its root is a plain <div>; the library component is a child, and it declares a prop" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

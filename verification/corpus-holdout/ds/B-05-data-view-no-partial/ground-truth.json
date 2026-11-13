@@ -1,0 +1,16 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "real-defect",
+  "scenario_polarity": "miss",
+  "provenance": "blind generalization: truth derived from the contract and the sources without consulting tool output or implementation",
+  "source_of_truth": "Read by hand. OrdersTable.vue calls useAsyncData (no generic argument) and destructures data/status/error, which per the contract makes it a data view. Its template renders four of the five doctrine states — loading (`status === 'pending'` → USkeleton), error (`v-else-if=\"error\"` → UAlert with retry), empty (`v-else-if=\"!data?.length\"`), success (UTable) — and has no partial state (no pagination, load-more, hasMore, stale or refreshing branch). The contract's five states are loading, empty, error, partial, success; so dataView.missing should be exactly [partial] and the finding is heuristic by definition. PriceTag.vue has no useAsyncData/useFetch and no async/pending/status prop (its props are amount and currency), so it is not a data view. Both are documented by a leading comment and exported from the barrel; both have plain element roots, so no wrapper finding applies.",
+  "expected": [
+    { "id": "data-view-missing-states", "file": "app/components/ui/OrdersTable.vue", "line": 1, "min_level": "heuristic", "rationale": "data view (useAsyncData) with loading, error, empty and success branches but no partial state; the contract's finding fires when missing is non-empty, and only partial is missing here" }
+  ],
+  "forbidden": [
+    { "id": "data-view-missing-states", "file": "app/components/ui/PriceTag.vue", "why_not_a_defect": "not a data view: no useAsyncData/useFetch and no async/pending/status prop; it only formats a number it receives" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/OrdersTable.vue", "why_not_a_defect": "leading HTML doc comment" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/PriceTag.vue", "why_not_a_defect": "leading HTML doc comment" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/OrdersTable.vue", "why_not_a_defect": "its root is a plain <div> and it declares a prop and fetching behaviour" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

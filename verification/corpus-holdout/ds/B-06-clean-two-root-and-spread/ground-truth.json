@@ -1,0 +1,18 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "clean",
+  "scenario_polarity": "trap",
+  "provenance": "blind generalization: truth derived from the contract and the sources without consulting tool output or implementation",
+  "source_of_truth": "Read by hand. All three components are exported from index.ts and each starts with an HTML doc comment, so none is undocumented. InlineNotice.vue has two root elements (<UAlert v-if=\"$slots.title\"> and <div v-else>) with no props, emits or models and a script holding only defineOptions; the contract's wrapper is a component that renders a library component AT ITS ROOT, and a two-root template has no single root, so it is owner project, wraps null, and cannot be a pass-through. AppSelect.vue spreads `selectProps` imported from ./select.props into defineProps: props.resolution is spread-from-import, which the contract reports only as the info-level props-partially-resolved (not a defect; listed in out_of_scope); it also declares a model, so it is not a pass-through either. AppButtonLink.vue wraps UButton at its root but declares props (to, label) and an emit (navigate) — a legitimate wrapper. No component fetches data and no file carries an @ds-ejected marker. A correct auditor raises no confirmed or heuristic finding.",
+  "expected": [],
+  "forbidden": [
+    { "id": "pass-through-wrapper", "file": "app/components/ui/InlineNotice.vue", "why_not_a_defect": "two root elements (UAlert v-if / div v-else): no single library root, so it is not a library-wrapper at all, even though it has no props, emits or models" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppSelect.vue", "why_not_a_defect": "declares props (spread plus placeholder) and a model" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppButtonLink.vue", "why_not_a_defect": "declares props and an emit and adds a click handler" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/InlineNotice.vue", "why_not_a_defect": "leading HTML doc comment" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppSelect.vue", "why_not_a_defect": "leading HTML doc comment" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppButtonLink.vue", "why_not_a_defect": "leading HTML doc comment" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/select.props.ts", "why_not_a_defect": "a .ts helper, not a component; it is not exported from the barrel either" },
+    { "id": "data-view-missing-states", "file": "app/components/ui/InlineNotice.vue", "why_not_a_defect": "no async composable and no async/pending/status prop" }
+  ],
+  "out_of_scope": [ "props-partially-resolved" ], "line_tolerance": 1
+}
