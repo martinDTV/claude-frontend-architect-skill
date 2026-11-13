@@ -48,8 +48,8 @@ const toneOf = (s: Row['status']) => (s === 'delivered' ? 'success' : s === 'fai
 
     <section aria-labelledby="h-forms" class="flex max-w-md flex-col gap-4">
       <h2 id="h-forms" class="text-lg font-medium">Form field and select</h2>
-      <DsField label="Reference" hint="As printed on the waybill" required v-slot="{ id, describedBy }">
-        <input :id="id" :aria-describedby="describedBy" class="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--fg)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]" />
+      <DsField label="Reference" hint="As printed on the waybill" required v-slot="{ id, describedBy, required: isRequired }">
+        <input :id="id" :aria-describedby="describedBy" :required="isRequired" class="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--fg)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]" />
       </DsField>
       <DsField label="Weight (kg)" error="Enter a number greater than zero" v-slot="{ id, describedBy, invalid }">
         <input :id="id" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" value="-3" class="rounded-[var(--radius-md)] border border-[var(--danger)] bg-[var(--surface)] px-3 py-2 text-[var(--fg)]" />

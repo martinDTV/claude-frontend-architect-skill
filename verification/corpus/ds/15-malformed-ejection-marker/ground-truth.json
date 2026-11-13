@@ -1,0 +1,13 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: AppShort's marker carries a 40-hex hash, AppUpper's an uppercase 64-hex hash behind indentation; neither matches the convention, so drift cannot be checked. Both have a real doc comment on the next line. From the audit of 2026-11-13 (I4).",
+  "expected": [
+    { "id": "ejected-marker-malformed", "file": "app/components/ui/AppShort.vue", "line": 1, "min_level": "confirmed", "rationale": "hash is not 64 hex" },
+    { "id": "ejected-marker-malformed", "file": "app/components/ui/AppUpper.vue", "line": 1, "min_level": "confirmed", "rationale": "uppercase hex, indented marker" }
+  ],
+  "forbidden": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppShort.vue", "why_not_a_defect": "a doc comment follows the marker" },
+    { "id": "ejected-copy-drifted", "file": "app/components/ui/AppShort.vue", "why_not_a_defect": "drift cannot be decided from a malformed marker" }
+  ],
+  "out_of_scope": [], "line_tolerance": 1
+}

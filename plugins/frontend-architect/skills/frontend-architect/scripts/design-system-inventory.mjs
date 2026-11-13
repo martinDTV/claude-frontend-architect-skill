@@ -49,6 +49,7 @@ const LIBRARIES = [
   ['reka-ui', /^(?:Dialog|Popover|Select|Combobox|Tabs|Accordion|Tooltip)[A-Z]?/],
 ]
 const MARKER_RE = /^<!-- @ds-ejected from="([^"]+)" version="([^"]+)" sha256="([0-9a-f]{64})" -->\r?\n/
+const MARKER_LOOSE_RE = /^\s*<!--\s*@ds-ejected\b[^>]*-->\r?\n?/ // something that wants to be a marker but is not well-formed (audit I4)
 const STATES = ['loading', 'empty', 'error', 'partial', 'success']
 
 /** Everything between the brace that follows `index` and its match, or null. */
@@ -100,13 +101,35 @@ function parseProps(script, imports) {
   // type-based: defineProps<{ ... }>()  (possibly wrapped by withDefaults)
   if (/^\s*</.test(after)) {
     let block = null
+    let inherits = [] // types the props type extends or intersects: the inline list is then PARTIAL (audit I1)
     const generic = /^\s*<\s*([A-Za-z_$][\w$]*)\s*>/.exec(after) // defineProps<Props>()
     if (generic) {
       const decl = code.search(new RegExp(`\\b(?:type\\s+${generic[1]}\\s*=|interface\\s+${generic[1]}\\b)`))
-      if (decl >= 0) block = braceBlock(code, decl)
-      if (!block) return { resolution: 'unresolved', names: [], defaults: {}, spreadFrom: [generic[1]] } // the type lives elsewhere
-    } else block = braceBlock(code, i)
+      if (decl >= 0) {
+        block = braceBlock(code, decl)
+        const header = code.slice(decl, block ? block.start : decl + 200)
+        const ext = /\binterface\s+\w+\s+extends\s+([^{]+)/.exec(header)
+        if (ext) inherits = ext[1].split(',').map((t) => t.trim().replace(/<.*$/, '')).filter(Boolean)
+        const inter = /\btype\s+\w+\s*=\s*([^{]*?)&\s*$/.exec(header.trimEnd()) || /\btype\s+\w+\s*=\s*([^{]*?)&/.exec(header)
+        if (inter) inherits = inter[1].split('&').map((t) => t.trim().replace(/<.*$/, '')).filter(Boolean)
+        if (block && !inter && !ext && /\btype\s+\w+\s*=\s*\{/.test(header) === false && /\btype\s+\w+\s*=/.test(header)) {
+          // type Props = Other (an alias of an alias / an imported type)
+          const rhs = /\btype\s+\w+\s*=\s*([A-Za-z_$][\w$.]*)/.exec(header)
+          if (rhs) inherits = [rhs[1]]
+        }
+      }
+      if (!block && !inherits.length) return { resolution: 'unresolved', names: [], defaults: {}, spreadFrom: [generic[1]] } // the type lives elsewhere
+    } else {
+      block = braceBlock(code, i)
+      // defineProps<Base & { … }>(): everything before the brace that is not whitespace is an intersected type
+      const inline = code.slice(i + 'defineProps'.length, block ? block.start : i).replace(/^\s*<\s*/, '')
+      if (/&/.test(inline)) inherits = inline.split('&').map((t) => t.trim().replace(/<.*$/, '')).filter(Boolean)
+    }
     const names = block ? topLevelKeys(block.text) : []
+    if (inherits.length) {
+      const from = inherits.map((id) => imports.find((imp) => imp.names?.some((n) => (typeof n === 'string' ? n : n.local ?? n.name) === id))?.source ?? id)
+      return { resolution: inherits.some((id) => imports.some((imp) => imp.names?.some((n) => (typeof n === 'string' ? n : n.local ?? n.name) === id))) ? 'spread-from-import' : 'unresolved', names, defaults: {}, spreadFrom: from }
+    }
     const defaults = {}
     const wd = code.search(/\bwithDefaults\s*\(/)
     if (wd >= 0 && block) {
@@ -232,7 +255,7 @@ function dataView(props, script, template) {
   const t = `${code}\n${template}`
   const states = []
   if (/\b(?:pending|loading|isLoading)\b|['"]loading['"]|USkeleton|aria-busy/.test(t)) states.push('loading')
-  if (/['"]empty['"]|name="empty"|\.length\s*===?\s*0|!\s*\w+(?:\.value)?\.length|v-else-if="![\w.]+"/.test(t)) states.push('empty')
+  if (/['"]empty['"]|name="empty"|\??\.length\s*===?\s*0|!\s*[\w.]+\??\.length\b|v-else-if="![\w.?]+"|\.length\s*<\s*1/.test(t)) states.push('empty')
   if (/['"]error['"]|\berror\b/.test(t)) states.push('error')
   if (/['"]partial['"]|\bpartial\b/.test(t)) states.push('partial')
   if (rendersRows) states.push('success')
@@ -240,20 +263,25 @@ function dataView(props, script, template) {
 }
 
 function documented(text, file) {
-  if (/^\s*<!--/.test(text) && !MARKER_RE.test(text)) return true
-  if (MARKER_RE.test(text) && /^\s*<!--/.test(text.replace(MARKER_RE, ''))) return true
+  const rest = MARKER_RE.test(text) ? text.replace(MARKER_RE, '') : MARKER_LOOSE_RE.test(text) ? text.replace(MARKER_LOOSE_RE, '') : text
+  if (/^\s*<!--/.test(rest)) return true
   if (/\/\*\*[\s\S]*?\*\/\s*(?:export\s+default|const\s+props|defineProps)/.test(text)) return true
   if (/@example\b/.test(text)) return true
   const base = file.replace(/\.vue$/, '')
   return ['.md', '.stories.ts', '.stories.js', '.stories.vue', '.story.vue'].some((ext) => existsSync(base + ext))
 }
 
-/** Tags of the template's root elements: the elements opened at the smallest indentation (a v-if/v-else chain yields several). */
-function rootTags(template) {
-  const lines = template.split('\n').map((l) => /^(\s*)<([A-Za-z][\w-]*)(?=[\s/>])/.exec(l)).filter(Boolean)
+/** Root elements of the template (opened at the smallest indentation; a v-if/v-else chain yields several): tag and attributes. */
+function rootElements(template) {
+  const lines = template.split('\n').map((l) => /^(\s*)<([A-Za-z][\w-]*)([^>]*)>?/.exec(l)).filter(Boolean)
   if (!lines.length) return []
   const min = Math.min(...lines.map((m) => m[1].length))
-  return lines.filter((m) => m[1].length === min).map((m) => m[2])
+  return lines.filter((m) => m[1].length === min).map((m) => ({ tag: m[2].includes('-') ? toPascalCase(m[2]) : m[2], attrs: m[3] }))
+}
+/** True when the root carries anything of its own besides forwarding attrs: a static attribute is a default the wrapper adds (audit I5). */
+function rootAddsDefaults(attrs) {
+  const cleaned = attrs.replace(/\s+v-bind="\$attrs"/g, '').replace(/\s+v-bind:?\s*=\s*"\$attrs"/g, '').trim()
+  return /[\w:-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'))?/.test(cleaned)
 }
 
 /** True when the script does nothing beyond imports, defineOptions and type declarations. */
@@ -272,13 +300,40 @@ function listVue(dir) {
   return out.sort()
 }
 
-function parseBarrel(dir) {
-  const file = ['index.ts', 'index.js', 'index.mts'].map((n) => join(dir, n)).find((f) => existsSync(f))
-  if (!file) return null
+/**
+ * The public surface from the root's barrel. Follows every form a barrel takes (audit I2): `export { default as X } from
+ * './X.vue'` (any relative path), `export { X, Y as Z } from '…'`, `import X from '…' … export { X }`, and `export * from
+ * './sub'` into a sub-barrel (recursively, cycle-safe). Returns null when the root has no barrel.
+ */
+function parseBarrel(dir, seen = new Set()) {
+  const file = ['index.ts', 'index.js', 'index.mts', 'index.mjs'].map((n) => join(dir, n)).find((f) => existsSync(f))
+  if (!file || seen.has(file)) return null
+  seen.add(file)
   const names = new Set()
-  for (const m of readText(file).matchAll(/export\s*\{\s*default\s+as\s+([A-Z]\w*)\s*\}\s*from\s*['"]\.\/([^'"]+)['"]/g)) names.add(m[1])
-  for (const m of readText(file).matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]\.\/[^'"]+\.vue['"]/g)) for (const n of m[1].split(',')) { const id = n.trim().split(/\s+as\s+/).pop(); if (/^[A-Z]/.test(id ?? '')) names.add(id) }
+  const src = stripComments(readText(file))
+  const local = new Map() // identifier -> source module of a default/named import
+  for (const m of src.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from\s*['"]([^'"]+)['"]/g)) local.set(m[1], m[2])
+  for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) for (const n of m[1].split(',')) { const id = n.trim().split(/\s+as\s+/).pop(); if (id) local.set(id, m[2]) }
+  // export { default as X } from '…' / export { A, B as C } from '…'
+  for (const m of src.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"][^'"]+['"]/g)) for (const n of m[1].split(',')) { const id = n.trim().split(/\s+as\s+/).pop(); if (/^[A-Z]/.test(id ?? '')) names.add(id) }
+  // export { X, Y as Z } (no from): the identifiers were imported above
+  for (const m of src.matchAll(/export\s*\{([^}]*)\}\s*(?!\s*from)(?=;|\n|$)/g)) for (const n of m[1].split(',')) { const parts = n.trim().split(/\s+as\s+/); const id = parts.pop(); if (/^[A-Z]/.test(id ?? '') && (local.has(parts[0] ?? id) || local.has(id))) names.add(id) }
+  // export * from './sub' -> the sub-barrel's names
+  for (const m of src.matchAll(/export\s*\*\s*from\s*['"](\.[^'"]+)['"]/g)) {
+    const target = join(dirname(file), m[1])
+    const subDir = existsSync(target) && statSync(target).isDirectory() ? target : null
+    const sub = subDir ? parseBarrel(subDir, seen) : null
+    if (sub) for (const n of sub.names) names.add(n)
+    else for (const cand of [target, `${target}.ts`, `${target}.js`]) if (existsSync(cand) && statSync(cand).isFile() && !seen.has(cand)) { seen.add(cand); for (const n of collectNames(cand, seen)) names.add(n) }
+  }
   return { file, names }
+}
+/** Names re-exported by a non-index module reached through `export *` (same forms, recursively). */
+function collectNames(file, seen) {
+  const names = new Set(); const src = stripComments(readText(file))
+  for (const m of src.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"][^'"]+['"]/g)) for (const n of m[1].split(',')) { const id = n.trim().split(/\s+as\s+/).pop(); if (/^[A-Z]/.test(id ?? '')) names.add(id) }
+  for (const m of src.matchAll(/export\s*\*\s*from\s*['"](\.[^'"]+)['"]/g)) { const t = join(dirname(file), m[1]); for (const cand of [t, `${t}.ts`, `${t}.js`, join(t, 'index.ts')]) if (existsSync(cand) && statSync(cand).isFile() && !seen.has(cand)) { seen.add(cand); for (const n of collectNames(cand, seen)) names.add(n) } }
+  return names
 }
 
 function detectLibrary(project) {
@@ -322,7 +377,8 @@ export function inventory(project, args = {}) {
       if (excludedBy(project, relFile) !== -1) continue
       const text = readText(file)
       const marker = MARKER_RE.exec(text)
-      const body = marker ? text.slice(marker[0].length) : text
+      const malformed = !marker && MARKER_LOOSE_RE.test(text) ? MARKER_LOOSE_RE.exec(text)[0] : null
+      const body = marker ? text.slice(marker[0].length) : malformed ? text.slice(malformed.length) : text
       const { script, template } = splitSfc(body)
       const imports = extractImports(script)
       const props = parseProps(script, imports)
@@ -330,11 +386,13 @@ export function inventory(project, args = {}) {
       const models = parseModels(script)
       const slots = parseSlots(script, template)
       const name = toPascalCase(basename(file, '.vue'))
-      const roots = rootTags(template)
-      const tag = roots.length === 1 ? roots[0] : null
+      const roots = rootElements(template)
+      const tag = roots.length === 1 ? roots[0].tag : null
       const wraps = tag && library.prefix && library.prefix.test(tag) && !/^Ui/.test(tag) ? tag : null
-      const owner = marker ? 'ejected-copy' : wraps ? 'library-wrapper' : 'project'
-      const ejected = marker ? { from: marker[1], version: marker[2], drifted: createHash('sha256').update(body).digest('hex') !== marker[3] } : null
+      const addsDefaults = wraps ? rootAddsDefaults(roots[0].attrs) : false
+      const owner = marker || malformed ? 'ejected-copy' : wraps ? 'library-wrapper' : 'project'
+      const ejected = marker ? { from: marker[1], version: marker[2], drifted: createHash('sha256').update(body).digest('hex') !== marker[3] }
+        : malformed ? { from: /from="([^"]*)"/.exec(malformed)?.[1] ?? null, version: /version="([^"]*)"/.exec(malformed)?.[1] ?? null, drifted: null, malformed: true } : null
       const isPublic = barrel ? barrel.names.has(name) : true
       const comp = {
         file: relFile, name, layer, owner, wraps, public: isPublic, documented: documented(text, file),
@@ -343,7 +401,7 @@ export function inventory(project, args = {}) {
         tokens: { used: tokensUsed(text, declared), literals: countLiterals(`${template}\n${splitSfc(body).styles.join('\n')}`) },
         dataView: dataView(props, script, template),
         ejected,
-        passThrough: owner === 'library-wrapper' && !props.names.length && !emits.length && !models.length && scriptIsInert(script) && (slots.includes('*') || slots.includes('default')),
+        passThrough: owner === 'library-wrapper' && !addsDefaults && !props.names.length && !emits.length && !models.length && scriptIsInert(script) && (slots.includes('*') || slots.includes('default')),
       }
       components.push(comp)
     }
@@ -385,6 +443,7 @@ export function run(argv) {
     if (c.public && !c.documented) addFinding(report, { id: 'undocumented-public-component', level: 'confirmed', severity: 'low', file: c.file, line: 1, message: `${c.name} is exported from the barrel but has no doc comment, @example, .md or story`, fix: 'a leading <!-- --> comment with one sentence and an @example is enough for people and agents' })
     if (c.passThrough) addFinding(report, { id: 'pass-through-wrapper', level: 'confirmed', severity: 'medium', file: c.file, line: 1, message: `${c.name} re-exports ${c.wraps} with no props, emits, models or behaviour of its own`, fix: `use ${c.wraps} directly, or give the wrapper the project rule it exists for (a mandatory prop, a default, a behaviour)` })
     if (c.dataView?.missing.length) addFinding(report, { id: 'data-view-missing-states', level: 'heuristic', severity: 'medium', file: c.file, line: 1, message: `${c.name} renders fetched data but no ${c.dataView.missing.join(', ')} state was found (static signals only)`, fix: 'model the view as a discriminated union and render every state; verify by reading if a state lives in a parent' })
+    if (c.ejected?.malformed) addFinding(report, { id: 'ejected-marker-malformed', level: 'confirmed', severity: 'low', file: c.file, line: 1, message: `${c.name} carries an @ds-ejected marker that is not well-formed (from, version and a 64-hex lowercase sha256 are required): drift cannot be checked`, fix: 'rewrite the first line as <!-- @ds-ejected from="<registry>/<name>" version="<v>" sha256="<hash of the file without this line>" -->' })
     if (c.ejected?.drifted) addFinding(report, { id: 'ejected-copy-drifted', level: 'confirmed', severity: 'medium', file: c.file, line: 1, message: `${c.name} was ejected from ${c.ejected.from}@${c.ejected.version} and edited since: the body no longer matches the marker's sha256`, fix: 'if the edit is intended, refresh the marker hash so the next reviewer knows the copy is owned; if not, re-eject' })
     if (c.props.resolution === 'spread-from-import' || c.props.resolution === 'unresolved') addFinding(report, { id: 'props-partially-resolved', level: 'info', severity: 'info', file: c.file, line: 1, message: `${c.name}: props ${c.props.resolution === 'spread-from-import' ? `spread from ${c.props.spreadFrom.join(', ')}` : 'built at runtime'}; the listed props are not the whole API`, fix: 'declare props inline when the component is public, or document the shared prop set next to it' })
   }

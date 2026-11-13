@@ -1,0 +1,7 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: AppBadge fixes color and variant on UBadge — a default the project chose, which the doctrine lists as a reason for a wrapper. AppLink forwards attrs and the slot to <u-link> (ULink in kebab-case) and adds nothing. From the audit of 2026-11-13 (I5, M3).",
+  "expected": [ { "id": "pass-through-wrapper", "file": "app/components/ui/AppLink.vue", "line": 1, "min_level": "confirmed", "rationale": "kebab-case library root, nothing of its own" } ],
+  "forbidden": [ { "id": "pass-through-wrapper", "file": "app/components/ui/AppBadge.vue", "why_not_a_defect": "static attributes on the root are defaults the wrapper adds" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}

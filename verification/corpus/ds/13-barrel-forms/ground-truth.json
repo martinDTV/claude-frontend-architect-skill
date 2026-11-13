@@ -1,0 +1,10 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: index.ts re-exports AppTag through import+export, AppCheckbox through `export * from ./forms` (sub-barrel), AppTitle through export-default-as; `export type` is not a component. AppTag and AppCheckbox are undocumented and public; AppTitle is documented. From the audit of 2026-11-13 (I2).",
+  "expected": [
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppTag.vue", "line": 1, "min_level": "confirmed", "rationale": "public via import/export, no documentation" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/forms/AppCheckbox.vue", "line": 1, "min_level": "confirmed", "rationale": "public via export * into the sub-barrel, no documentation" }
+  ],
+  "forbidden": [ { "id": "undocumented-public-component", "file": "app/components/ui/AppTitle.vue", "why_not_a_defect": "documented" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}

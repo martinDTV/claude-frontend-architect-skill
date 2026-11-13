@@ -18,10 +18,14 @@ once on Haiku; nothing here claims the skill measured-better than 1.7.0 (`docs/r
   (project / wrapper around the UI library / ejected copy with an `@ds-ejected` marker whose stale hash signals
   drift), public (barrel), documented, props with their resolution (a partial list is said to be partial, never
   completed by guessing), emits, models, slots, variant axes (tailwind-variants / cva), tokens used and literals
-  counted, the data-view states rendered. Five findings (`undocumented-public-component`, `pass-through-wrapper`,
-  `data-view-missing-states`, `ejected-copy-drifted`, `props-partially-resolved`); `--agents` prints the dense
-  section for `AGENTS.md`/`CLAUDE.md`. Lexical by design in v1 and says so. Fixture of eleven components with a
-  ground truth written first; 0 differences; twelve tests incl. read-only and drift refresh.
+  counted, the data-view states rendered. Six findings (`undocumented-public-component`, `pass-through-wrapper`,
+  `data-view-missing-states`, `ejected-copy-drifted`, `ejected-marker-malformed`, `props-partially-resolved`);
+  `--agents` prints the dense section for `AGENTS.md`/`CLAUDE.md`. Lexical by design in v1 and says so (known
+  limits listed in the contract). Fixture of eleven components with a ground truth written first (0 differences),
+  a sixteen-case adversarial corpus (100 %/100 % in-sample) and a six-case blind hold-out written by an independent
+  agent (precision 100 %, recall 80 % as first measured; the miss fixed and reported). An independent fresh-context
+  audit refuted five claims on inputs outside the fixtures — inherited props types, barrel forms, `!data?.length`,
+  malformed markers, wrappers that set defaults — all fixed with corpus cases (`docs/review/v1.8.0-independent-audit.md`).
 - `references/agent-ready-design-system.md` (1.8, increment 4): the four properties of a design system that people
   and agents build from alike, how each is checked by the scripts, the eject-or-wrap decision and the `@ds-ejected`
   marker; wired into the SKILL table, `index.md`, `design-systems.md` governance and the `frontend-reviewer` sweep.

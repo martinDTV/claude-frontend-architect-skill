@@ -1,0 +1,7 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "positive",
+  "source_of_truth": "Read by hand: loading (status === 'pending'), error, empty (!data?.length) and success (v-for) are rendered; no partial branch. The finding is correct at heuristic level and its evidence must name only partial — the hold-out B05 showed the empty branch was being missed. From the audit of 2026-11-13 (I3).",
+  "expected": [ { "id": "data-view-missing-states", "file": "app/components/ui/AppOrders.vue", "line": 1, "min_level": "heuristic", "rationale": "only partial is missing" } ],
+  "forbidden": [ { "id": "undocumented-public-component", "file": "app/components/ui/AppOrders.vue", "why_not_a_defect": "documented" } ],
+  "out_of_scope": [], "line_tolerance": 1
+}

@@ -12,7 +12,7 @@ Tokens in use (CSS custom properties): --font-numeric, --radius-md, --radius-lg,
 | DsField | yes | label, hint, error, required | — | — | default | — |
 | DsIconButton (wraps UButton) | yes | icon, label, tone="secondary", disabled=false | click | — | — | — |
 | DsKpi | yes | label, value, delta | — | — | — | — |
-| DsSelect | yes | options, label, placeholder="Select an option", error | change | modelValue | — | — |
+| DsSelect | yes | options, label, placeholder="Select an option", error, required=false | change | modelValue | — | — |
 | DsStatusBadge | yes | tone="neutral" | — | — | default | tone: neutral\|info\|success\|warning\|danger |
 
 Rules: import from the barrel, never from a component file; colours, spacing, radii and shadows come from the tokens above, not literals; a data view renders loading, empty, error, partial and success; to go deeper than a wrapper allows, eject the component with the `@ds-ejected` marker and refresh its hash when you edit it.

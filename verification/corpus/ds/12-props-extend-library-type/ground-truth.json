@@ -1,0 +1,12 @@
+{
+  "area": "ds", "tool": "design-system-inventory.mjs", "engine": "lexical", "category": "insufficient-context", "scenario_polarity": "trap",
+  "source_of_truth": "Read by hand: AppButton's Props extends ButtonProps (imported type) and AppInput's Props intersects InputProps; statically only label / hint are visible. The inventory must say the lists are partial (info) and must not report either component as a pass-through (both add props) or undocumented (both have doc comments). From the audit of 2026-11-13 (I1).",
+  "expected": [],
+  "forbidden": [
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppButton.vue", "why_not_a_defect": "declares a prop of its own" },
+    { "id": "pass-through-wrapper", "file": "app/components/ui/AppInput.vue", "why_not_a_defect": "declares a prop of its own; div root" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppButton.vue", "why_not_a_defect": "documented" },
+    { "id": "undocumented-public-component", "file": "app/components/ui/AppInput.vue", "why_not_a_defect": "documented" }
+  ],
+  "out_of_scope": ["props-partially-resolved"], "line_tolerance": 1
+}

@@ -4,7 +4,7 @@
   @example <DsSelect v-model="country" label="Country" :options="countries" placeholder="Choose a country" />
 -->
 <script setup lang="ts" generic="T extends string | number">
-const props = withDefaults(defineProps<{ options: ReadonlyArray<{ value: T; label: string; disabled?: boolean }>; label: string; placeholder?: string; error?: string }>(), { placeholder: 'Select an option' })
+const props = withDefaults(defineProps<{ options: ReadonlyArray<{ value: T; label: string; disabled?: boolean }>; label: string; placeholder?: string; error?: string; required?: boolean }>(), { placeholder: 'Select an option', required: false })
 const model = defineModel<T | null>({ required: true })
 const emit = defineEmits<{ change: [value: T] }>()
 function onChange(event: Event) {
@@ -17,8 +17,8 @@ function onChange(event: Event) {
 </script>
 
 <template>
-  <DsField :label="label" :error="error" v-slot="{ id, describedBy, invalid }">
-    <select :id="id" :value="model ?? ''" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" class="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--fg)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]" @change="onChange">
+  <DsField :label="label" :error="error" :required="required" v-slot="{ id, describedBy, invalid, required: isRequired }">
+    <select :id="id" :value="model ?? ''" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" :required="isRequired" class="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--fg)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]" @change="onChange">
       <option value="" disabled>{{ placeholder }}</option>
       <option v-for="o in options" :key="String(o.value)" :value="o.value" :disabled="o.disabled">{{ o.label }}</option>
     </select>
