@@ -85,6 +85,15 @@ for (const [project, target] of [['nuxt', join('app', 'lib', 'ui')], ['next', jo
   writeFileSync(join(here, 'nuxt', 'app', 'design', 'ember.json'), JSON.stringify(ember, null, 2))
   count += 9
 }
+// 1.8 increment 5: the design-system starter (a Nuxt layer shipped under the skill's assets) is extended by the Nuxt
+// reference app, so the gate type-checks its components, renders them on /design-system and audits them in the browser.
+{
+  const starter = join(pluginRoot, 'frontend-architect', 'assets', 'design-system-starter')
+  const target = join(here, 'nuxt', 'layers', 'ds-starter')
+  rmSync(target, { recursive: true, force: true })
+  cpSync(starter, target, { recursive: true, filter: (src) => !/\/(?:node_modules|README\.md|AGENTS\.md|package\.json)$/.test(src) })
+  count++
+}
 // Harness-only files (layouts, pages, entry points) that are not documentation live in
 // <project>/harness and are copied on top, so builds can run end to end.
 for (const project of Object.keys(srcRoots)) {

@@ -1,0 +1,29 @@
+/* design contract "ds-starter": Nuxt UI variables follow the contract's roles (light and dark through the role variables) */
+:root, .dark, [data-contract] {
+  --ui-bg: var(--canvas);
+  --ui-bg-muted: var(--surface);
+  --ui-bg-elevated: var(--surface-raised);
+  --ui-bg-accented: var(--surface-raised);
+  --ui-text: var(--fg);
+  --ui-text-highlighted: var(--fg);
+  --ui-text-muted: var(--fg-muted);
+  --ui-text-dimmed: var(--fg-muted);
+  --ui-border: var(--border);
+  --ui-border-muted: var(--border);
+  --ui-border-accented: var(--border-strong);
+  --ui-primary: var(--accent);
+  --ui-success: var(--success);
+  --ui-warning: var(--warning);
+  --ui-error: var(--danger);
+  --ui-info: var(--info);
+  --ui-radius: var(--radius-md);
+}
+
+/*
+// app.config.ts (Nuxt UI 4): semantic colours map onto the Tailwind colour names the contract's ramps define
+export default defineAppConfig({
+  // "neutral" names Tailwind's own grey to Nuxt UI (it keeps that palette as old-neutral): the contract's tinted neutral
+  // ramp is emitted a second time as contract-neutral (emitTailwind with nuxtUiNeutralAlias) and mapped from there
+  ui: { colors: { primary: 'accent', secondary: 'contract-neutral', neutral: 'contract-neutral', success: 'success', warning: 'warning', error: 'danger', info: 'info' } },
+})
+*/

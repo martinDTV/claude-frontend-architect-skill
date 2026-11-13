@@ -37,6 +37,17 @@ Harness only (5B). No production script, rule, contract or manifest changed; the
   `data-view-missing-states`, `ejected-copy-drifted`, `props-partially-resolved`); `--agents` prints the dense
   section for `AGENTS.md`/`CLAUDE.md`. Lexical by design in v1 and says so. Fixture of eleven components with a
   ground truth written first; 0 differences; twelve tests incl. read-only and drift refresh.
+- `references/agent-ready-design-system.md` (1.8, increment 4): the four properties of a design system that people
+  and agents build from alike, how each is checked by the scripts, the eject-or-wrap decision and the `@ds-ejected`
+  marker; wired into the SKILL table, `index.md`, `design-systems.md` governance and the `frontend-reviewer` sweep.
+- `assets/design-system-starter/` (1.8, increment 5): a copyable Nuxt 4 layer — nine components on Nuxt UI carrying
+  the rules (loading blocks clicks, mandatory accessible names and titles, linked hint/error, dirty-dialog guard
+  with focus return, the five-state `DataView` union, status by name not colour), tokens emitted from a design
+  contract, a barrel, no-prefix registration, a generated `AGENTS.md`. Verified in the gate: extended by the Nuxt
+  reference app, type-checked, rendered on `/design-system`, `browser-audit` 0 confirmed / 0 heuristic (axe,
+  keyboard, responsive at mobile, desktop and 320 px with text at 200 %); inventory pinned clean; generated files
+  byte-identical to a fresh emission. The inventory also learned Tailwind v4 colour utilities as token use, and
+  slot-delegated data regions as data views, while building it.
 - `EVAL_PROVIDER=claude-ai`: run the evals with the CLI's own claude.ai subscription login. Accepted only when
   `claude auth status` (parsed, not trusted by exit code) reports a logged-in, first-party claude.ai login of
   exactly the org the operator names in `EVAL_EXPECTED_ORG_ID` (never committed), and no key, flag or endpoint of

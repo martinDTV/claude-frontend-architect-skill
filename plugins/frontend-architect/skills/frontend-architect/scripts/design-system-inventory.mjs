@@ -191,8 +191,20 @@ function parseVariants(script) {
   return Object.keys(axes).length ? { source: /\bcva\s*\(/.test(code) ? 'cva' : 'tailwind-variants', axes } : null
 }
 
-function tokensUsed(text) {
-  return [...new Set([...text.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1]))]
+/**
+ * Tokens a component consumes: `var(--x)` references, plus — for a Tailwind v4 `@theme` layer — the colour utilities
+ * that resolve to a declared `--color-*` token (`bg-accent-500`, `text-neutral-700`, `border-danger-500/40`, with any
+ * variant prefix). Only tokens the project declares are matched, so a utility of a colour the project never defined
+ * (Tailwind's own palette) is not counted as a token.
+ */
+function tokensUsed(text, declared = []) {
+  const used = new Set([...text.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1]))
+  const colours = declared.filter((t) => t.startsWith('--color-')).map((t) => t.slice('--color-'.length))
+  if (colours.length) {
+    const re = new RegExp(`(?:^|[\\s"'\`:(\\[])(?:[\\w-]+:)*(?:bg|text|border|ring|outline|fill|stroke|from|to|via|accent|caret|decoration|divide|placeholder|shadow)-(${colours.map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?:\\/\\d+)?(?=[\\s"'\`)\\]]|$)`, 'g')
+    for (const m of text.matchAll(re)) used.add(`--color-${m[1]}`)
+  }
+  return [...used]
 }
 
 /** Colour literals outside var(): hex, rgb()/hsl() in classes, inline styles and <style> blocks. */
@@ -213,14 +225,17 @@ function dataView(props, script, template) {
   const asyncSignal = /\b(?:useAsyncData|useLazyAsyncData|useFetch|useLazyFetch|useQuery|useInfiniteQuery)\s*(?:<[^()]*>)?\s*\(/.test(code)
   const statusProp = props.names.some((n) => /^(?:pending|loading|status|view|state|isLoading|query)$/.test(n))
   const statusUnion = /status\s*:\s*['"](?:loading|success|error)['"]/.test(code)
-  if (!hasLoop || !(asyncSignal || statusProp || statusUnion)) return null
+  // a region that switches on a status prop and hands the rows to a scoped slot is a data view without a loop of its own
+  const switchesOnStatus = /\b(?:view|state|query)\.status\b|\bstatus\s*===?\s*['"]/.test(template)
+  const rendersRows = hasLoop || /<slot\b[^>]*\s:(?:rows|items|data)\s*=/.test(template) || /['"]success['"]/.test(template)
+  if (!(hasLoop && (asyncSignal || statusProp || statusUnion)) && !(switchesOnStatus && (statusProp || statusUnion))) return null
   const t = `${code}\n${template}`
   const states = []
   if (/\b(?:pending|loading|isLoading)\b|['"]loading['"]|USkeleton|aria-busy/.test(t)) states.push('loading')
   if (/['"]empty['"]|name="empty"|\.length\s*===?\s*0|!\s*\w+(?:\.value)?\.length|v-else-if="![\w.]+"/.test(t)) states.push('empty')
   if (/['"]error['"]|\berror\b/.test(t)) states.push('error')
   if (/['"]partial['"]|\bpartial\b/.test(t)) states.push('partial')
-  if (hasLoop) states.push('success')
+  if (rendersRows) states.push('success')
   return { states, missing: STATES.filter((s) => !states.includes(s)) }
 }
 
@@ -298,6 +313,7 @@ export function inventory(project, args = {}) {
   if (!roots.length) return { error: `no design-system root found (looked in ${looked.join(', ')}); pass --roots or set designSystem.roots in .frontend-audit.json` }
   const library = detectLibrary(project)
   const barrel = parseBarrel(join(project.root, roots[0]))
+  const declared = declaredTokens(project)
   const components = []
   for (const root of roots) {
     const layer = /^layers\/([^/]+)\//.exec(root)?.[1] ?? (project.nuxt?.extends ?? []).find((e) => root.startsWith(`${e.replace(/^\.\//, '')}/`))?.split('/').pop() ?? null
@@ -324,7 +340,7 @@ export function inventory(project, args = {}) {
         file: relFile, name, layer, owner, wraps, public: isPublic, documented: documented(text, file),
         props, emits, slots, models,
         variants: parseVariants(script),
-        tokens: { used: tokensUsed(text), literals: countLiterals(`${template}\n${splitSfc(body).styles.join('\n')}`) },
+        tokens: { used: tokensUsed(text, declared), literals: countLiterals(`${template}\n${splitSfc(body).styles.join('\n')}`) },
         dataView: dataView(props, script, template),
         ejected,
         passThrough: owner === 'library-wrapper' && !props.names.length && !emits.length && !models.length && scriptIsInert(script) && (slots.includes('*') || slots.includes('default')),
@@ -332,7 +348,6 @@ export function inventory(project, args = {}) {
       components.push(comp)
     }
   }
-  const declared = declaredTokens(project)
   const used = new Set(components.flatMap((c) => c.tokens.used))
   return { roots, library: { name: library.name, version: library.version, source: library.source }, barrel: barrel ? rel(project.root, barrel.file) : null, components, tokens: { declared, unused: declared.filter((t) => !used.has(t)) } }
 }

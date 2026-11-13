@@ -116,6 +116,46 @@ export async function runDesignChecks(chromium, { url, label, contractPath, evid
     report.audit = { findings: auditReport.findings.map((f) => ({ id: f.id, level: f.level, viewport: f.viewport ?? null })), coverage: pageRecord?.checks?.axe?.coverage ?? null, rulesRun: pageRecord?.checks?.axe?.rulesRun ?? null }
     const heur = auditReport.findings.filter((f) => f.level === 'heuristic')
     ok(`${label}: browser-audit on /design: 0 confirmed, ${heur.length} heuristic (${[...new Set(heur.map((f) => f.id))].join(', ') || 'none'}); axe coverage ${JSON.stringify(report.audit.coverage)}`)
+    // 5. (nuxt, 1.8 increment 5) the design-system starter layer rendered on /design-system: the five data-view states
+    // exist in the DOM, the loading region announces busy, the dialog opens, traps focus on its title and returns focus
+    // to its opener; then the same browser audit over the page.
+    if (label === 'nuxt') {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'light' })
+      const ds = await ctx.newPage()
+      const dsProblems = []
+      ds.on('pageerror', (e) => dsProblems.push(`pageerror: ${String(e.message).slice(0, 200)}`))
+      ds.on('response', (r) => { if (r.status() >= 400) dsProblems.push(`HTTP ${r.status()} ${r.url().slice(0, 160)}`) })
+      await ds.goto(`${url}/design-system`, { waitUntil: 'load' })
+      await ds.waitForSelector('[data-ds-starter] [data-view-state="success"] tbody tr')
+      const states = await ds.evaluate(() => [...document.querySelectorAll('[data-view-state]')].map((e) => e.getAttribute('data-view-state')))
+      expect(['loading', 'empty', 'error', 'partial', 'success'].every((s) => states.includes(s)), `the five data-view states are rendered (${states.join(', ')})`)
+      const busy = await ds.evaluate(() => document.querySelector('[data-view-state="loading"] [role="region"]')?.getAttribute('aria-busy'))
+      expect(busy === 'true', `the loading region announces aria-busy (got ${busy})`)
+      const rows = await ds.evaluate(() => document.querySelectorAll('[data-view-state="success"] tbody tr').length)
+      expect(rows === 3, `the success region renders its rows through the slot (${rows})`)
+      const partialAlert = await ds.evaluate(() => document.querySelector('[data-view-state="partial"] [role="alert"], [data-view-state="partial"] [role="status"]') !== null || /could not be loaded/.test(document.querySelector('[data-view-state="partial"]')?.textContent ?? ''))
+      expect(partialAlert, 'the partial region names the failed rows')
+      const opener = ds.getByRole('button', { name: 'Open dialog' })
+      await opener.focus()
+      await opener.click()
+      const dialog = ds.getByRole('dialog', { name: 'Edit shipment' })
+      await dialog.waitFor({ state: 'visible' })
+      await ds.keyboard.press('Escape')
+      await dialog.waitFor({ state: 'hidden' })
+      const focusedAfter = await ds.evaluate(() => document.activeElement?.textContent?.trim())
+      expect(focusedAfter === 'Open dialog', `focus returns to the opener after closing the dialog (active: ${focusedAfter})`)
+      expect(dsProblems.length === 0, `design-system page problems: ${dsProblems.join(' | ')}`)
+      await ctx.close()
+      const out2 = mkdtempSync(join(tmpdir(), 'fa-ds-audit-'))
+      const audit2 = spawnSync(process.execPath, [join(scripts, 'browser-audit.mjs'), url, '--playwright', playwrightDir, '--paths', '/design-system', '--checks', 'axe,keyboard,responsive', '--viewports', 'mobile,desktop,reflow', '--text-scale', '2', '--out', out2, '--format', 'json', '--fail-on', 'none'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+      let auditReport2 = null
+      try { auditReport2 = JSON.parse(audit2.stdout) } catch { throw new Error(`browser-audit did not return JSON on /design-system: ${audit2.stderr.slice(0, 400)}`) }
+      const confirmed2 = auditReport2.findings.filter((f) => f.level === 'confirmed')
+      expect(confirmed2.length === 0, `browser-audit confirmed findings on /design-system: ${confirmed2.map((f) => `${f.id} ${f.selector ?? ''} ${(f.message ?? '').slice(0, 80)}`).join(' | ')}`)
+      const heur2 = auditReport2.findings.filter((f) => f.level === 'heuristic')
+      report.designSystem = { states, rows, findings: auditReport2.findings.map((f) => ({ id: f.id, level: f.level, viewport: f.viewport ?? null })) }
+      ok(`${label}: design-system starter on /design-system: five states, busy region, slot rows, dialog focus return; browser-audit 0 confirmed, ${heur2.length} heuristic (${[...new Set(heur2.map((f) => f.id))].join(', ') || 'none'})`)
+    }
   } finally {
     await browser.close()
     writeFileSync(join(evidence, `${label}-design.json`), JSON.stringify(report, null, 2))
