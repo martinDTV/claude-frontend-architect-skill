@@ -28,6 +28,15 @@ Harness only (5B). No production script, rule, contract or manifest changed; the
   no behavioural claim about v1.7.0 follows. `docs/review/v1.7.0-pilot-results.md`.
 
 ### Added
+- `scripts/design-system-inventory.mjs` (1.8, increment 2 — the sixteenth script): the project's own design system in
+  the shape people and agents both read — per component under the design-system roots (incl. Nuxt layers): owner
+  (project / wrapper around the UI library / ejected copy with an `@ds-ejected` marker whose stale hash signals
+  drift), public (barrel), documented, props with their resolution (a partial list is said to be partial, never
+  completed by guessing), emits, models, slots, variant axes (tailwind-variants / cva), tokens used and literals
+  counted, the data-view states rendered. Five findings (`undocumented-public-component`, `pass-through-wrapper`,
+  `data-view-missing-states`, `ejected-copy-drifted`, `props-partially-resolved`); `--agents` prints the dense
+  section for `AGENTS.md`/`CLAUDE.md`. Lexical by design in v1 and says so. Fixture of eleven components with a
+  ground truth written first; 0 differences; twelve tests incl. read-only and drift refresh.
 - `EVAL_PROVIDER=claude-ai`: run the evals with the CLI's own claude.ai subscription login. Accepted only when
   `claude auth status` (parsed, not trusted by exit code) reports a logged-in, first-party claude.ai login of
   exactly the org the operator names in `EVAL_EXPECTED_ORG_ID` (never committed), and no key, flag or endpoint of

@@ -5,7 +5,7 @@
   "components": {
     "app/components/ui/UiButton.vue": {
       "name": "UiButton", "owner": "project", "public": true, "documented": true,
-      "props": { "resolution": "declared", "names": ["variant", "size", "disabled", "loading"], "defaults": { "variant": "solid", "size": "md" } },
+      "props": { "resolution": "declared", "names": ["variant", "size", "disabled", "loading"], "defaults": { "variant": "solid", "size": "md", "disabled": false, "loading": false } },
       "emits": ["click"], "slots": ["icon", "default"], "models": [],
       "variants": { "source": "tailwind-variants", "axes": { "variant": ["solid", "ghost", "danger"], "size": ["xs", "sm", "md"], "disabled": ["true"] } },
       "tokens": { "used": ["--space-2", "--radius-md", "--color-brand-500", "--color-brand-600", "--color-danger-500"], "literals": 0 },
@@ -46,7 +46,7 @@
       "name": "UiList", "owner": "project", "public": true, "documented": true,
       "props": { "resolution": "declared-type", "names": ["items", "pending"] }, "emits": [], "slots": [], "models": [],
       "variants": null, "tokens": { "used": ["--space-2"], "literals": 0 },
-      "dataView": { "states": ["loading", "success"], "missing": ["empty", "error"] }, "ejected": null,
+      "dataView": { "states": ["loading", "success"], "missing": ["empty", "error", "partial"] }, "ejected": null,
       "$why": "a data view (renders fetched items with a pending flag) that handles only loading and success"
     },
     "app/components/ui/UiBadge.vue": {

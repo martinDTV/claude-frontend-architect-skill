@@ -46,7 +46,7 @@ test('the ejection markers agree with the truth: Badge intact, Avatar drifted (h
 test('facts are internally consistent with the sources (spot checks written by hand)', () => {
   const c = truth.components
   assert.deepEqual(c['app/components/ui/UiDataTable.vue'].dataView.missing, [])
-  assert.deepEqual(c['app/components/ui/UiList.vue'].dataView.missing, ['empty', 'error'])
+  assert.deepEqual(c['app/components/ui/UiList.vue'].dataView.missing, ['empty', 'error', 'partial'])
   const sel = readFileSync(join(fixture, 'app/components/ui/UiSelect.vue'), 'utf8')
   assert.doesNotMatch(sel, /^<!--/, 'UiSelect has no leading doc comment (undocumented)')
   const card = readFileSync(join(fixture, 'app/components/ui/UiCard.vue'), 'utf8')
