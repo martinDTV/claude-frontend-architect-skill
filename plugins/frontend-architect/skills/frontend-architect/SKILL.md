@@ -62,6 +62,7 @@ Load two or three files per task. The full catalog with one-line descriptions is
 | Audit of an existing codebase | `auditing.md`, the scripts, `frontend-reviewer` |
 | UI libraries and design system structure | `component-libraries.md`, `design-systems.md`, `accessibility.md` |
 | Turning a brief into a visual direction that can be checked and built: requirements → decisions → scales → colour roles, validated and emitted as tokens | `design-contract.md` (with `scripts/design-contract.mjs`) |
+| Making the project's own design system legible to people and agents: one barrel, tokens not literals, wrap vs eject with the `@ds-ejected` marker, the five data-view states, a generated `AGENTS.md` section | `agent-ready-design-system.md` (with `scripts/design-system-inventory.mjs --agents`), `design-systems.md` |
 | Accessibility, forms, responsive and visual verification of built screens | `ui-verification.md`, `accessibility.md`, `forms.md` |
 | Visual design, motion, 3D | the `creative-frontend` skill |
 | Which capabilities a task needs and whether an external design skill may collaborate | `capabilities.md` |

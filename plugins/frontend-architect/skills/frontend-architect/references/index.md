@@ -54,6 +54,7 @@ Every reference of the `frontend-architect` skill with the situation that justif
 | `references/component-libraries.md` | Nuxt UI, shadcn/ui and alternatives |
 | `references/design-systems.md` | Tokens, theming, multi-brand, component API conventions, governance, UI states |
 | `references/design-contract.md` | Turning a brief into a visual direction that can be checked and built: requirements, decisions, scales and colour roles validated by `scripts/design-contract.mjs` and emitted as tokens (CSS, Tailwind v4, Nuxt UI, DTCG), scoped when a second contract lives inside an app |
+| `references/agent-ready-design-system.md` | Making the project's own design system one reference for people and agents: barrel as public surface, tokens as the only source of style, wrap vs eject with the `@ds-ejected` drift marker, five data-view states, a generated `AGENTS.md` section (`design-system-inventory.mjs --agents`) |
 | `references/accessibility.md` | Accessible components, forms, focus, motion, audits |
 | `references/ui-verification.md` | Verifying built screens: the static UI audit and its verification levels, the opt-in browser mode (axe-core, keyboard, dialogs, forms, responsive, hydration, visual regression), what each can and cannot prove, authorization and evidence rules, human-review criteria that no tool replaces |
 
@@ -88,4 +89,4 @@ Every reference of the `frontend-architect` skill with the situation that justif
 
 ## Scripts
 
-Twelve read-only Node scripts under `scripts/`: `domain-deps`, `component-complexity`, `state-audit`, `routes-audit`, `leak-patterns`, `contracts-check`, `bundle-budget`, `ui-audit`, `browser-audit` (opt-in browser mode), `capabilities`, `design-contract` and `design-consistency`. Documented in `scripts/README.md`: flags, exit codes, configuration keys, confidence levels and typical false positives of the audit scripts and of the capability planner.
+Sixteen read-only Node scripts under `scripts/`: `domain-deps`, `component-complexity`, `state-audit`, `routes-audit`, `leak-patterns`, `contracts-check`, `bundle-budget`, `ui-audit`, `browser-audit` (opt-in browser mode), `capabilities`, `design-contract`, `design-consistency`, `perf-audit`, `route-attribution`, `perf-budget` and `design-system-inventory`. Documented in `scripts/README.md`: flags, exit codes, configuration keys, confidence levels and typical false positives of the audit scripts and of the capability planner.
